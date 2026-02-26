@@ -42,11 +42,11 @@ export default function AddAdminPage() {
       return;
     }
 
-    if (admin.role !== "Super") {
-      toast.error("Only Super Admin Allowed ❌");
-      router.replace("/admin/orbiters");
-      return;
-    }
+    // if (admin.role !== "Super") {
+    //   toast.error("Only Super Admin Allowed ❌");
+    //   router.replace("/admin/orbiters");
+    //   return;
+    // }
 
   }, []);
 
