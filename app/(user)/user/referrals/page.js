@@ -22,7 +22,7 @@ import Link from "next/link";
 import { COLLECTIONS } from "@/lib/utility_collection";
 // import "../src/app/styles/user.scss";
 import { CheckCircle, Inbox, Mail, Phone, Send, X } from "lucide-react";
-
+import { useAuth } from "@/context/authContext";
 import {
     Search,
     Filter,
@@ -190,14 +190,13 @@ const UserReferrals = () => {
         { name: "Passed Referrals", key: "passed" },
     ];
 
+
+
+    const { user: sessionUser, loading: authLoading } = useAuth();
+    const currentUJB = sessionUser?.profile?.ujbCode;
     // Firestore realtime subscriptions (lists + counts)
     useEffect(() => {
-        const storedUJB = localStorage.getItem("mmUJBCode");
-        if (!storedUJB) {
-            console.warn("UJB code not found in localStorage");
-            setLoading(false);
-            return;
-        }
+        if (authLoading || !currentUJB) return;
 
         setLoading(true);
 
@@ -205,58 +204,50 @@ const UserReferrals = () => {
 
         const myQuery = query(
             referralsCol,
-            where("cosmoOrbiter.ujbCode", "==", storedUJB),
+            where("cosmoOrbiter.ujbCode", "==", currentUJB),
             orderBy("timestamp", "desc")
         );
 
         const passedQuery = query(
             referralsCol,
-            where("orbiter.ujbCode", "==", storedUJB),
+            where("orbiter.ujbCode", "==", currentUJB),
             orderBy("timestamp", "desc")
         );
 
-        const unsubMy = onSnapshot(
-            myQuery,
-            (snapshot) => {
-                const myReferrals = snapshot.docs.map((d) => ({
-                    id: d.id,
-                    ...d.data(),
-                }));
-                setAllReferrals((prev) => ({ ...prev, my: myReferrals }));
-                setNtMeetCount(myReferrals.length);
-                setLoading(false);
-            },
-            (error) => {
-                console.error("Error fetching my referrals:", error);
-                setLoading(false);
-            }
-        );
+        let loadedCount = 0;
+        const markLoaded = () => {
+            loadedCount += 1;
+            if (loadedCount === 2) setLoading(false);
+        };
 
-        const unsubPassed = onSnapshot(
-            passedQuery,
-            (snapshot) => {
-                const passedReferrals = snapshot.docs.map((d) => ({
-                    id: d.id,
-                    ...d.data(),
-                }));
-                setAllReferrals((prev) => ({
-                    ...prev,
-                    passed: passedReferrals,
-                }));
-                setMonthlyMetCount(passedReferrals.length);
-                setLoading(false);
-            },
-            (error) => {
-                console.error("Error fetching passed referrals:", error);
-                setLoading(false);
-            }
-        );
+        const unsubMy = onSnapshot(myQuery, (snapshot) => {
+            const myReferrals = snapshot.docs.map((d) => ({
+                id: d.id,
+                ...d.data(),
+            }));
+
+            setAllReferrals((prev) => ({ ...prev, my: myReferrals }));
+            setNtMeetCount(myReferrals.length);
+            markLoaded();
+        });
+
+        const unsubPassed = onSnapshot(passedQuery, (snapshot) => {
+            const passedReferrals = snapshot.docs.map((d) => ({
+                id: d.id,
+                ...d.data(),
+            }));
+
+            setAllReferrals((prev) => ({ ...prev, passed: passedReferrals }));
+            setMonthlyMetCount(passedReferrals.length);
+            markLoaded();
+        });
 
         return () => {
             unsubMy();
             unsubPassed();
         };
-    }, []);
+
+    }, [currentUJB, authLoading]);
 
     // Handle deal status change (My Referrals)
     const handleStatusChange = async (referral, newStatus) => {
