@@ -5,7 +5,8 @@ import { getStorage } from "firebase/storage";
 import { 
   getAuth, 
   RecaptchaVerifier, 
-  signInWithPhoneNumber 
+  signInWithPhoneNumber,
+  OAuthProvider
 } from "firebase/auth";
 
 const firebaseConfig = {
@@ -18,20 +19,25 @@ const firebaseConfig = {
   measurementId: "G-26KEDXQKK9"
 };
 
-// ✅ Initialize Firebase only once (prevents duplicate-app error)
 const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 
-// ✅ Services
 const auth = getAuth(app);
 const db = getFirestore(app);
 const storage = getStorage(app);
 
-// ✅ EXPORT EVERYTHING NEEDED FOR OTP LOGIN
+// ⭐ MICROSOFT LOGIN PROVIDER
+export const microsoftProvider = new OAuthProvider("microsoft.com");
+
+microsoftProvider.setCustomParameters({
+  prompt: "select_account"
+});
+
 export {
   app,
   auth,
   db,
   storage,
+  microsoftProvider,
   RecaptchaVerifier,
   signInWithPhoneNumber
 };

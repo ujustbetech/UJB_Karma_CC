@@ -14,7 +14,7 @@ import FormField from "@/components/ui/FormField";
 import TagsInput from "@/components/ui/TagsInput";
 import { useToast } from "@/components/ui/ToastProvider";
 import FilePreview from "@/components/ui/FilePreview";
-
+import { COLLECTIONS } from "@/lib/utility_collection";
 import { Eye, User, Layers, Tag, Upload, Rocket, AlignLeft, Shapes, Type, Hash, FileText, Folder, Users, Video, Link } from "lucide-react";
 
 import { db, storage } from "@/firebaseConfig";
@@ -36,7 +36,7 @@ export default function AddContentPage() {
     const toast = useToast(); // object-style API
 
     const firstFieldRef = useRef(null);
-
+const [imageItems, setImageItems] = useState([]);
     const [loading, setLoading] = useState(false);
     const [uploading, setUploading] = useState(false);
     const [progress, setProgress] = useState(0);
@@ -55,7 +55,9 @@ export default function AddContentPage() {
     const [lpProfile, setLpProfile] = useState("");
     const [partnerNamelp, setPartnerNamelp] = useState("");
     const [tags, setTags] = useState([]);
-
+    const [ownershipType, setOwnershipType] = useState("UjustBe");
+const [partnerSearch, setPartnerSearch] = useState("");
+const [filteredPartners, setFilteredPartners] = useState([]);
     // Links
     const [videoUrl, setVideoUrl] = useState("");
     const [blogUrl, setBlogUrl] = useState("");
@@ -91,19 +93,54 @@ export default function AddContentPage() {
     }, []);
 
     // Parallel load
-    useEffect(() => {
-        const fetchData = async () => {
-            const [contentSnap, userSnap] = await Promise.all([
-                getDocs(collection(db, "ContentCategory")),
-                getDocs(collection(db, "UsersData"))
-            ]);
+ useEffect(() => {
+  const fetchData = async () => {
+    const [contentSnap, userSnap] = await Promise.all([
+      getDocs(collection(db, "ContentCategory")),
+      getDocs(collection(db, COLLECTIONS.userDetail)) // ✅ usersdetail DB
+    ]);
 
-            setContentData(contentSnap.docs.map(d => ({ ...d.data(), id: d.id })));
-            setUserdata(userSnap.docs.map(d => ({ ...d.data(), id: d.id })));
-        };
-        fetchData();
-    }, []);
+    setContentData(contentSnap.docs.map(d => ({ ...d.data(), id: d.id })));
 
+    setUserdata(userSnap.docs.map(doc => {
+      const data = doc.data();
+      return {
+        id: doc.id,
+        partnerName: data["Name"] || "",
+        PartnerType: data["Category"] || "",
+        lpProfileimg: data["ProfilePhotoURL"] || "", // ✅ YOUR FIELD
+        ujbCode: data["ujbCode"] || data["UJBCode"] || ""
+      };
+    }));
+  };
+
+  fetchData();
+}, []);
+const handlePartnerSearch = (value) => {
+  setPartnerSearch(value);
+
+  if (!value.trim()) {
+    setFilteredPartners([]);
+    return;
+  }
+
+  const filtered = Userdata.filter(u =>
+    u.partnerName.toLowerCase().includes(value.toLowerCase())
+  );
+
+  setFilteredPartners(filtered);
+};
+const selectPartner = (u) => {
+  setParternameId(u.id);
+  setPartnerNamelp(u.partnerName);
+  setPartnerDesig(u.PartnerType);
+  setLpProfile(u.lpProfileimg);
+
+  setPartnerSearch(u.partnerName);
+  setFilteredPartners([]);
+
+  setErrors(prev => ({ ...prev, parternameId: "" }));
+};
     const categoryOptions = useMemo(
         () => [
             { label: "Select category", value: "" },
@@ -127,7 +164,8 @@ export default function AddContentPage() {
         if (!contentFormat) newErrors.contentFormat = "Required";
         if (!contentName) newErrors.contentName = "Required";
         if (!contentCategoryId) newErrors.contentCategoryId = "Required";
-        if (!parternameId) newErrors.parternameId = "Required";
+      if (ownershipType === "Partner" && !parternameId)
+  newErrors.parternameId = "Required";
         if (!contDiscription) newErrors.contDiscription = "Required";
         if (!contentFiles.length) newErrors.contentFiles = "Content file required";
         if (!thumbnailFiles.length) newErrors.thumbnailFiles = "Thumbnail required";
@@ -157,16 +195,22 @@ export default function AddContentPage() {
         return false;
     };
 
-    const handlePartnerChange = async (id) => {
-        setParternameId(id);
-        const docRef = doc(db, "UsersData", id);
-        const docSnap = await getDoc(docRef);
-        if (docSnap.exists()) {
-            setLpProfile(docSnap.data().lpProfileimg);
-            setPartnerNamelp(docSnap.data().partnerName);
-            setPartnerDesig(docSnap.data().PartnerType);
-        }
-    };
+const handlePartnerChange = async (id) => {
+  setParternameId(id);
+
+  const docRef = doc(db, COLLECTIONS.userDetail, id);
+  const docSnap = await getDoc(docRef);
+
+  if (docSnap.exists()) {
+    const data = docSnap.data();
+
+    setLpProfile(data["ProfilePhotoURL"] || "");
+    setPartnerNamelp(data["Name"] || "");
+    setPartnerDesig(data["Category"] || "");
+  }
+
+  setErrors(prev => ({ ...prev, parternameId: "" }));
+};
 
     const handleCategoryChange = (id) => {
         setContentCategoryId(id);
@@ -183,30 +227,36 @@ export default function AddContentPage() {
         return null;
     };
 
-    const handleMainFile = (file) => {
-        if (!file || !isValidMainFile(file)) {
-            toast.error("Invalid file for selected format");
-            return;
-        }
+const handleMainFile = (file) => {
+  if (!file || !isValidMainFile(file)) {
+    toast.error("Invalid file for selected format");
+    return;
+  }
 
-        setMainFile(file);
+  setMainFile(file);
+  setContentFiles([file]); // ✅ VERY IMPORTANT
 
-        if (file.type.startsWith("image/") || file.type.startsWith("video/")) {
-            setMainPreview(URL.createObjectURL(file));
-        } else {
-            setMainPreview(null);
-        }
-    };
+  if (file.type.startsWith("image/") || file.type.startsWith("video/")) {
+    setMainPreview(URL.createObjectURL(file));
+  } else {
+    setMainPreview(null);
+  }
 
-    const handleThumbnail = (file) => {
-        if (!file?.type.startsWith("image/")) {
-            toast.error("Thumbnail must be an image");
-            return;
-        }
+  setErrors(prev => ({ ...prev, contentFiles: "" }));
+};
 
-        setThumbnailFile(file);
-        setThumbnailPreview(URL.createObjectURL(file));
-    };
+ const handleThumbnail = (file) => {
+  if (!file?.type.startsWith("image/")) {
+    toast.error("Thumbnail must be an image");
+    return;
+  }
+
+  setThumbnailFile(file);
+  setThumbnailFiles([file]); // ✅ VERY IMPORTANT
+  setThumbnailPreview(URL.createObjectURL(file));
+
+  setErrors(prev => ({ ...prev, thumbnailFiles: "" }));
+};
 
     const uploadFiles = async (files) => {
         if (!files.length) return [];
@@ -245,18 +295,24 @@ export default function AddContentPage() {
         return urls;
     };
 
-    const resetForm = () => {
-        setContentName("");
-        setVideoUrl("");
-        setBlogUrl("");
-        setContDiscription("");
-        setTags([]);
-        setSwitchValue(true);
-        setContentFiles([]);
-        setThumbnailFiles([]);
-        setContentFileUrls([]);
-        setThumbnailUrls([]);
-    };
+   const resetForm = () => {
+  setContentName("");
+  setVideoUrl("");
+  setBlogUrl("");
+  setContDiscription("");
+  setTags([]);
+  setSwitchValue(true);
+
+  setMainFile(null);
+  setMainPreview(null);
+  setThumbnailFile(null);
+  setThumbnailPreview(null);
+
+  setContentFiles([]);
+  setThumbnailFiles([]);
+  setContentFileUrls([]);
+  setThumbnailUrls([]);
+};
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -379,7 +435,10 @@ export default function AddContentPage() {
                 contentType,
                 contentName,
                 comments: [],
-                parternameId,
+              ownershipType,
+parternameId: ownershipType === "Partner" ? parternameId : "",
+partnerNamelp: ownershipType === "Partner" ? partnerNamelp : "UjustBe",
+lpProfile: ownershipType === "Partner" ? lpProfile : "",
                 contDiscription,
                 contentCategoryId,
                 contentCategoryName,
@@ -813,8 +872,36 @@ export default function AddContentPage() {
                             <div className="flex items-center gap-2 pb-3">
                                 <Folder className="w-5 h-5 text-muted-foreground" />
                                 <Text as="h2" className="font-semibold">Classification</Text>
+  
                             </div>
+                              <FormField
+  label={
+    <div className="flex items-center gap-2">
+      <Rocket className="w-4 h-4 text-muted-foreground" />
+      Content Ownership
+    </div>
+  }
+  required
+>
+  <RadioGroup
+    value={ownershipType}
+    onChange={(val) => {
+      setOwnershipType(val);
 
+      if (val === "UjustBe") {
+        setParternameId("");
+        setPartnerNamelp("");
+        setPartnerDesig("");
+        setLpProfile("");
+        setPartnerSearch("");
+      }
+    }}
+    options={[
+      { label: "UjustBe", value: "UjustBe" },
+      { label: "Partner", value: "Partner" }
+    ]}
+  />
+</FormField>
                             {/* Grid */}
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
 
@@ -837,26 +924,55 @@ export default function AddContentPage() {
                                 </FormField>
 
                                 {/* Partner */}
-                                <FormField
-                                    label={
-                                        <div className="flex items-center gap-2">
-                                            <Users className="w-4 h-4 text-muted-foreground" />
-                                            Partner
-                                        </div>
-                                    }
-                                    error={errors.parternameId}
-                                    required
-                                >
-                                    <Select
-                                        value={parternameId}
-                                        onChange={(v) => {
-                                            handlePartnerChange(v);
-                                            setErrors(prev => ({ ...prev, parternameId: "" }));
-                                        }}
-                                        options={partnerOptions}
-                                    />
-                                </FormField>
+                           {ownershipType === "Partner" && (
+<FormField
+  label={
+    <div className="flex items-center gap-2">
+      <Users className="w-4 h-4 text-muted-foreground" />
+      Select Partner
+    </div>
+  }
+  error={errors.parternameId}
+  required
+>
+  <div className="relative">
+    <Input
+      value={partnerSearch}
+      onChange={(e) => handlePartnerSearch(e.target.value)}
+      error={!!errors.parternameId}
+      placeholder="Type partner name"
+    />
 
+    {filteredPartners.length > 0 && (
+      <div className="absolute z-20 w-full mt-2 bg-white border border-slate-200 rounded-lg shadow max-h-56 overflow-auto">
+
+        {filteredPartners.map((u) => (
+          <div
+            key={u.id}
+            onClick={() => selectPartner(u)}
+            className="px-4 py-2 cursor-pointer hover:bg-gray-50 flex items-center gap-2"
+          >
+
+            {u.lpProfileimg && (
+              <img
+                src={u.lpProfileimg}
+                className="w-7 h-7 rounded-full object-cover"
+              />
+            )}
+
+            <div>
+              <div className="text-sm font-medium">{u.partnerName}</div>
+              <div className="text-xs text-gray-500">{u.ujbCode}</div>
+            </div>
+
+          </div>
+        ))}
+
+      </div>
+    )}
+  </div>
+</FormField>
+)}
                                 {/* Hashtags - Full Width */}
                                 <FormField
                                     className="md:col-span-2"
@@ -882,34 +998,34 @@ export default function AddContentPage() {
                             </div>
 
                             {/* Thumbnail */}
-                            <div style={{ marginBottom: 12 }}>
-                                {thumbnailFiles && thumbnailFiles.length > 0 ? (
-                                    <img
-                                        src={URL.createObjectURL(thumbnailFiles[0])}
-                                        alt="thumbnail preview"
-                                        style={{
-                                            width: "100%",
-                                            borderRadius: 8,
-                                            objectFit: "cover",
-                                            maxHeight: 220
-                                        }}
-                                    />
-                                ) : (
-                                    <div
-                                        style={{
-                                            width: "100%",
-                                            height: 180,
-                                            borderRadius: 8,
-                                            display: "flex",
-                                            alignItems: "center",
-                                            justifyContent: "center",
-                                            border: "1px dashed #d0d5dd"
-                                        }}
-                                    >
-                                        <Text variant="muted">Thumbnail preview will appear here</Text>
-                                    </div>
-                                )}
-                            </div>
+                           <div style={{ marginBottom: 12 }}>
+  {thumbnailPreview ? (
+    <img
+      src={thumbnailPreview}
+      alt="thumbnail preview"
+      style={{
+        width: "100%",
+        borderRadius: 8,
+        objectFit: "cover",
+        maxHeight: 220
+      }}
+    />
+  ) : (
+    <div
+      style={{
+        width: "100%",
+        height: 180,
+        borderRadius: 8,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        border: "1px dashed #d0d5dd"
+      }}
+    >
+      <Text variant="muted">Thumbnail preview will appear here</Text>
+    </div>
+  )}
+</div>
 
                             {/* Title */}
                             <Text as="h3">
@@ -924,28 +1040,48 @@ export default function AddContentPage() {
                             </Text>
 
                             {/* Meta info */}
-                            <div style={{ marginTop: 14, display: "flex", flexDirection: "column", gap: 6 }}>
-                                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                                    <User size={14} />
-                                    <Text variant="muted">
-                                        {partnerNamelp || "Partner name"}
-                                    </Text>
-                                </div>
+                        <div style={{ marginTop: 14, display: "flex", flexDirection: "column", gap: 6 }}>
 
-                                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                                    <Layers size={14} />
-                                    <Text variant="muted">
-                                        {contentCategoryName || "Category"}
-                                    </Text>
-                                </div>
+  {/* Partner Name */}
+  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+    <User size={14} />
+    <Text variant="muted">
+      {partnerNamelp || "Partner name"}
+    </Text>
+  </div>
 
-                                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                                    <Tag size={14} />
-                                    <Text variant="muted">
-                                        {tags && tags.length ? tags.join(", ") : "No tags added"}
-                                    </Text>
-                                </div>
-                            </div>
+  {/* ⭐⭐⭐ ADD THIS LP PROFILE IMAGE HERE ⭐⭐⭐ */}
+  {lpProfile && (
+    <img
+      src={lpProfile}
+      alt="Partner Profile"
+      style={{
+        width: 36,
+        height: 36,
+        borderRadius: "50%",
+        objectFit: "cover",
+        marginTop: 6
+      }}
+    />
+  )}
+
+  {/* Category */}
+  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+    <Layers size={14} />
+    <Text variant="muted">
+      {contentCategoryName || "Category"}
+    </Text>
+  </div>
+
+  {/* Tags */}
+  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+    <Tag size={14} />
+    <Text variant="muted">
+      {tags && tags.length ? tags.join(", ") : "No tags added"}
+    </Text>
+  </div>
+
+</div>
                         </Card>
 
                         <Card className="p-6 space-y-6">

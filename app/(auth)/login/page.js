@@ -27,7 +27,27 @@ export default function LoginPage() {
     phone.length === 10
       ? `+91 ${phone.slice(0, 2)}****${phone.slice(6)}`
       : "";
+useEffect(() => {
 
+  const checkSession = async () => {
+
+    try {
+
+      const res = await fetch("/api/session/validate");
+
+      if (res.status === 200) {
+        router.replace("/user");
+      }
+
+    } catch (err) {
+      console.log("No active session");
+    }
+
+  };
+
+  checkSession();
+
+}, []);
   /* ⏳ Countdown */
   useEffect(() => {
     if (countdown <= 0) return;
@@ -113,7 +133,7 @@ export default function LoginPage() {
         return;
       }
 
-      router.push("/user");
+    router.replace("/user");
     } catch (err) {
       setError("Verification failed");
     }
