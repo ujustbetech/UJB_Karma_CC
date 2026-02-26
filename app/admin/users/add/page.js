@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useEffect, useState, useRef } from "react";
+import { useRouter } from "next/navigation";
 import { db } from "@/firebaseConfig";
 import { collection, addDoc, Timestamp } from "firebase/firestore";
 
@@ -15,6 +16,7 @@ import { useToast } from "@/components/ui/ToastProvider";
 
 export default function AddAdminPage() {
 
+  const router = useRouter();
   const toast = useToast();
   const firstErrorRef = useRef(null);
 
@@ -29,6 +31,24 @@ export default function AddAdminPage() {
   });
 
   const [errors, setErrors] = useState({});
+
+  // 🔴 LOGIN + ROLE CHECK
+  useEffect(() => {
+
+    const admin = JSON.parse(sessionStorage.getItem("AdminData"));
+
+    if (!admin) {
+      router.replace("/");
+      return;
+    }
+
+    if (admin.role !== "Super") {
+      toast.error("Only Super Admin Allowed ❌");
+      router.replace("/admin/orbiters");
+      return;
+    }
+
+  }, []);
 
   const validate = () => {
 
@@ -45,10 +65,12 @@ export default function AddAdminPage() {
 
   const openConfirm = (e) => {
     e.preventDefault();
+
     if (!validate()) {
       firstErrorRef.current?.focus();
       return;
     }
+
     setConfirmOpen(true);
   };
 
