@@ -22,7 +22,7 @@ import {
     Layers,
     Building2
 } from "lucide-react";
-import { useAuth } from "@/context/authContext";
+
 import { useReferral } from "@/hooks/useReferral";
 import { useToast } from "@/components/ui/ToastProvider";
 
@@ -35,8 +35,7 @@ import ServiceDetailModal from "@/components/cosmorbiters/ServiceDetailModal";
 import ReferralModal from "@/components/cosmorbiters/ReferralModal";
 
 const db = getFirestore(app);
-const { user: sessionUser } = useAuth();
-const currentUserUjbCode = sessionUser?.profile?.ujbCode;
+
 // Loader
 
 function BusinessProfileSkeleton() {
@@ -193,34 +192,31 @@ export default function ReferralDetails() {
         fetchBusiness();
     }, [id]);
 
-useEffect(() => {
+    /* ================= FETCH ORBITER ================= */
+    useEffect(() => {
+        const storedUjbCode = localStorage.getItem("mmUJBCode");
+        if (!storedUjbCode) return;
 
-    if (!currentUserUjbCode) return;
+        const fetchOrbiter = async () => {
+            const snap = await getDoc(
+                doc(db, COLLECTIONS.userDetail, storedUjbCode)
+            );
+            if (!snap.exists()) return;
 
-    const fetchOrbiter = async () => {
+            const data = snap.data();
 
-        const snap = await getDoc(
-            doc(db, COLLECTIONS.userDetail, currentUserUjbCode)
-        );
+            setOrbiterDetails({
+                name: data.Name || "",
+                email: data.Email || "",
+                phone: data.MobileNo || "",
+                ujbCode: data.UJBCode || "",
+                mentorName: data.MentorName || "",
+                mentorPhone: data.MentorPhone || "",
+            });
+        };
 
-        if (!snap.exists()) return;
-
-        const data = snap.data();
-
-        setOrbiterDetails({
-            name: data.Name || "",
-            email: data.Email || "",
-            phone: data.MobileNo || "",
-            ujbCode: data.UJBCode || "",
-            mentorName: data.MentorName || "",
-            mentorPhone: data.MentorPhone || "",
-        });
-
-    };
-
-    fetchOrbiter();
-
-}, [currentUserUjbCode]);
+        fetchOrbiter();
+    }, []);
 
     /* ================= HANDLE REFERRAL ================= */
     const handlePassReferral = async (payload) => {
@@ -245,58 +241,55 @@ useEffect(() => {
         }
     };
 
-   const toggleFavorite = async () => {
+    const toggleFavorite = async () => {
+        try {
+            const storedUjbCode = localStorage.getItem("mmUJBCode");
+            if (!storedUjbCode) return;
 
-    try {
+            const favRef = doc(
+                db,
+                "favorites",
+                `${storedUjbCode}_${userDetails.ujbCode}`
+            );
 
-        if (!currentUserUjbCode) return;
+            if (isFavorite) {
+                await deleteDoc(favRef);
+                setIsFavorite(false);
+            } else {
+                await setDoc(favRef, {
+                    orbiter: storedUjbCode,
+                    cosmoUjbCode: userDetails.ujbCode,
+                    timestamp: new Date(),
+                });
+                setIsFavorite(true);
+            }
 
-        const favRef = doc(
-            db,
-            "favorites",
-            `${currentUserUjbCode}_${userDetails.ujbCode}`
-        );
-
-        if (isFavorite) {
-
-            await deleteDoc(favRef);
-            setIsFavorite(false);
-
-        } else {
-
-            await setDoc(favRef, {
-                orbiter: currentUserUjbCode,
-                cosmoUjbCode: userDetails.ujbCode,
-                timestamp: new Date(),
-            });
-
-            setIsFavorite(true);
+        } catch (err) {
+            console.error("Favorite toggle error:", err);
         }
-
-    } catch (err) {
-        console.error("Favorite toggle error:", err);
-    }
-};
-useEffect(() => {
-
-    if (!userDetails?.ujbCode || !currentUserUjbCode) return;
-
-    const checkFavorite = async () => {
-
-        const favRef = doc(
-            db,
-            "favorites",
-            `${currentUserUjbCode}_${userDetails.ujbCode}`
-        );
-
-        const snap = await getDoc(favRef);
-        setIsFavorite(snap.exists());
-
     };
 
-    checkFavorite();
+    // Referral Count
+    useEffect(() => {
+        if (!userDetails?.ujbCode) return;
 
-}, [userDetails?.ujbCode, currentUserUjbCode]);
+        const fetchReferralCount = async () => {
+            try {
+                const q = query(
+                    collection(db, COLLECTIONS.referral),
+                    where("cosmoUjbCode", "==", userDetails.ujbCode)
+                );
+
+                const snapshot = await getDocs(q);
+                setReferralCount(snapshot.size);
+
+            } catch (error) {
+                console.error("Error fetching referral count:", error);
+            }
+        };
+
+        fetchReferralCount();
+    }, [userDetails?.ujbCode]);
 
     const calculateAverageCommission = () => {
         const allItems = [...services, ...products];
