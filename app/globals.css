@@ -1,0 +1,117 @@
+/* @tailwind base; */
+/* @tailwind components; */
+/* @tailwind utilities; */
+/* @import "tailwindcss";
+ */
+
+ @import "tailwindcss";
+
+@import "slick-carousel/slick/slick.css";
+@import "slick-carousel/slick/slick-theme.css";
+
+/* Tell Tailwind where the config is */
+@config "../tailwind.config.js";
+
+/* =================================================
+   CRM DESIGN TOKENS (SINGLE SOURCE OF TRUTH)
+   ================================================= */
+
+:root {
+  /* Brand */
+   --brand-primary: 22 39 79;
+  --brand-secondary: 129 158 176;
+  --brand-light: 162 203 218;
+  --brand-accent: 255 111 6;
+
+  --neutral-900: 0 0 0;
+  --neutral-700: 50 50 50;
+  --neutral-300: 233 233 233;
+  --neutral-100: 247 247 247;
+  --neutral-white: 255 255 255;
+
+  /* Radius */
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+
+  /* Motion */
+  --motion-fast: 150ms;
+  --motion-normal: 200ms;
+
+  /* Typography */
+  --font-primary: "Inter", system-ui, -apple-system, sans-serif;
+
+  --sidebar-bg: #fbfbfc;
+  --sidebar-border: #eceef1;
+
+  --foreground: #1e293b;
+  --muted-foreground: #64748b;
+  --muted: #f1f3f5;
+}
+
+/* =================================================
+   BASE STYLES (CRM DEFAULTS)
+   ================================================= */
+
+body {
+  font-family: var(--font-primary);
+  background-color: var(--neutral-100);
+  color: var(--neutral-700);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+@keyframes slideUp {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+
+.animate-slideUp {
+  animation: slideUp 0.25s ease-out;
+}
+
+.animate-glow {
+  animation: pulse 2.5s infinite;
+}
+
+@keyframes pulse {
+  0% { box-shadow: 0 0 0 0 rgba(255,115,0,0.6); }
+  70% { box-shadow: 0 0 0 10px rgba(255,115,0,0); }
+  100% { box-shadow: 0 0 0 0 rgba(255,115,0,0); }
+}
+
+/* Remove default slick dot icon */
+.slick-dots li button:before {
+  display: none;
+}
+
+/* Container */
+.slick-dots {
+  bottom: -28px;
+  display: flex !important;
+  justify-content: center;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Dot base */
+.slick-dots li {
+  margin: 0;
+}
+
+.slick-dots li button {
+  width: 6px;
+  height: 6px;
+  border-radius: 9999px;
+  padding: 0;
+  background-color: #cbd5e1; /* slate-300 */
+  transition: all 0.25s ease;
+}
+
+/* Active dot */
+.slick-dots li.slick-active button {
+  width: 16px;
+  height: 6px;
+  border-radius: 9999px;
+  background-color: #f97316; /* orange-500 */
+}

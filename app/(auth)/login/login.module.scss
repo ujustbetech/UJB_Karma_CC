@@ -1,0 +1,147 @@
+.page {
+  position: relative;
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  font-family: var(--font-mukta);
+  overflow: hidden;
+}
+
+.background {
+  position: absolute;
+  inset: 0;
+  background-image: url("/space.jpeg");
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+
+.overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(7, 44, 80, 0.85); // #072c50
+}
+
+.container {
+  position: relative;
+  z-index: 10;
+  width: 100%;
+  max-width: 420px;
+}
+
+.card {
+  background: rgba(7, 44, 80, 0.6);
+  backdrop-filter: blur(20px);
+  border-radius: 24px;
+  padding: 48px 40px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.header {
+  text-align: center;
+  margin-bottom: 40px;
+
+  img {
+    width: 64px;
+    margin-bottom: 24px;
+  }
+
+  h1 {
+    font-family: var(--font-forum);
+    font-size: 36px;
+    color: #ffffff;
+    letter-spacing: 1px;
+  }
+
+  p {
+    margin-top: 16px;
+    font-size: 14px;
+    color: #a1ebd9;
+    letter-spacing: 0.5px;
+  }
+}
+
+.label {
+  font-size: 14px;
+  color: #a1ebd9;
+  margin-bottom: 8px;
+  display: block;
+}
+
+.inputWrapper {
+  display: flex;
+  align-items: center;
+  background: rgba(0, 0, 0, 0.4);
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  padding: 0 16px;
+  transition: all 0.3s ease;
+
+  &:focus-within {
+    border-color: #a1ebd9;
+    box-shadow: 0 0 0 2px rgba(161, 235, 217, 0.3);
+  }
+
+  span {
+    color: #a1ebd9;
+    margin-right: 8px;
+  }
+
+  input {
+    flex: 1;
+    background: transparent;
+    border: none;
+    padding: 16px 0;
+    color: #ffffff;
+    font-size: 16px;
+
+    &::placeholder {
+      color: rgba(255, 255, 255, 0.5);
+    }
+
+    &:focus {
+      outline: none;
+    }
+  }
+}
+
+.button {
+  width: 100%;
+  margin-top: 32px;
+  padding: 16px;
+  border-radius: 14px;
+  border: none;
+  background: #fe6f06;
+  color: #ffffff;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 8px 25px rgba(254, 111, 6, 0.6);
+
+  &:hover {
+    background: #ff7f1f;
+    transform: translateY(-2px);
+  }
+
+  &:active {
+    transform: scale(0.97);
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+}
+
+.footer {
+  margin-top: 40px;
+  padding-top: 20px;
+  text-align: center;
+  font-size: 12px;
+  color: rgba(161, 235, 217, 0.8);
+}
