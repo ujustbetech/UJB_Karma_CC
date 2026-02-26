@@ -2,7 +2,7 @@
 
 import { NextResponse } from "next/server";
 import jwt from "jsonwebtoken";
-import { db } from "@/lib/firebase";
+import { db } from "@/firebaseConfig";
 import { doc, updateDoc } from "firebase/firestore";
 
 export async function POST(req) {

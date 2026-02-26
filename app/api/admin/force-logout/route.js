@@ -1,7 +1,7 @@
 // /app/api/admin/force-logout/route.js
 
 import { NextResponse } from "next/server";
-import { db } from "@/lib/firebase";
+import { db } from "@/firebaseConfig";
 import { collection, query, where, getDocs, updateDoc } from "firebase/firestore";
 
 export async function POST(req) {
