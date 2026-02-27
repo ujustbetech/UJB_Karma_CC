@@ -219,7 +219,7 @@ export default function MobileHeader() {
 
               <button
                 onClick={() => {
-                  router.push(`/cp-details/${user.phone}`);
+                  router.push(`/contribuitionpoint`);
                   setShowProfileMenu(false);
                 }}
                 className="flex items-center gap-3 w-full py-2 text-left text-gray-700 hover:text-orange-500 transition"
