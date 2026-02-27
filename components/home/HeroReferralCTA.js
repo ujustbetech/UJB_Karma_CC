@@ -20,7 +20,7 @@ export default function HeroReferralCTA() {
       <div className="flex gap-3 mt-4">
 
         <button
-          onClick={() => router.push("/Search")}
+          onClick={() => router.push("/user/cosmorbiters")}
           className="flex-1 bg-gradient-to-br 
                      from-orange-400 via-orange-500 to-orange-600
                      text-white py-3 rounded-xl 
@@ -32,7 +32,7 @@ export default function HeroReferralCTA() {
         </button>
 
         <button
-          onClick={() => router.push("/UsersProspect")}
+          onClick={() => router.push("/user/prospects/add")}
           className="flex-1 bg-slate-100 text-slate-700
                      py-3 rounded-xl 
                      flex items-center justify-center gap-2

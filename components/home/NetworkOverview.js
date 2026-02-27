@@ -41,13 +41,20 @@ export default function NetworkOverview() {
         const totalOrbiters = userSnap.size; // ✅ total usersDetail docs
 
         let totalCosmOrbiters = 0;
-        let totalBusiness = 0;
+     let totalBusiness = 0;
 
-        userSnap.forEach((doc) => {
-          if (doc.data().Category === "CosmOrbiter") {
-            totalCosmOrbiters++;
-          }
-        });
+referralSnap.forEach((doc) => {
+  const payments = doc.data().payments || [];
+
+  payments.forEach((p) => {
+    if (p.paymentFrom === "CosmoOrbiter") {
+      const amount = parseFloat(p.amountReceived);
+      if (!isNaN(amount)) {
+        totalBusiness += amount;
+      }
+    }
+  });
+});
 
         referralSnap.forEach((doc) => {
           totalBusiness += Number(doc.data().amount || 0);
