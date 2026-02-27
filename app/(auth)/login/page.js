@@ -33,8 +33,10 @@ useEffect(() => {
 
     try {
 
-      const res = await fetch("/api/session/validate");
-
+      
+const res = await fetch("/api/session/validate", {
+  credentials: "include",
+});
       if (res.status === 200) {
         router.replace("/user");
       }

@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef, } from "react";
 import { useParams, useRouter } from "next/navigation";
 
-
+import { useAuth } from "@/context/authContext";
 import {
     ArrowLeft,
     Heart,
@@ -96,7 +96,8 @@ export default function ReferralDetails() {
 
     const { submitReferral, loading } = useReferral();
     const toast = useToast();
-
+const { user: sessionUser } = useAuth();
+const currentUserUjbCode = sessionUser?.profile?.ujbCode;
     const [userDetails, setUserDetails] = useState(null);
     const [orbiterDetails, setOrbiterDetails] = useState(null);
     const [services, setServices] = useState([]);
@@ -192,31 +193,31 @@ export default function ReferralDetails() {
         fetchBusiness();
     }, [id]);
 
-    /* ================= FETCH ORBITER ================= */
-    useEffect(() => {
-        const storedUjbCode = localStorage.getItem("mmUJBCode");
-        if (!storedUjbCode) return;
+useEffect(() => {
+    if (!currentUserUjbCode) return;
 
-        const fetchOrbiter = async () => {
-            const snap = await getDoc(
-                doc(db, COLLECTIONS.userDetail, storedUjbCode)
-            );
-            if (!snap.exists()) return;
+    const fetchOrbiter = async () => {
+        const snap = await getDoc(
+            doc(db, COLLECTIONS.userDetail, currentUserUjbCode)
+        );
 
-            const data = snap.data();
+        if (!snap.exists()) return;
 
-            setOrbiterDetails({
-                name: data.Name || "",
-                email: data.Email || "",
-                phone: data.MobileNo || "",
-                ujbCode: data.UJBCode || "",
-                mentorName: data.MentorName || "",
-                mentorPhone: data.MentorPhone || "",
-            });
-        };
+        const data = snap.data();
 
-        fetchOrbiter();
-    }, []);
+        setOrbiterDetails({
+            name: data.Name || "",
+            email: data.Email || "",
+            phone: data.MobileNo || "",
+            ujbCode: data.UJBCode || "",
+            mentorName: data.MentorName || "",
+            mentorPhone: data.MentorPhone || "",
+        });
+    };
+
+    fetchOrbiter();
+
+}, [currentUserUjbCode]);
 
     /* ================= HANDLE REFERRAL ================= */
     const handlePassReferral = async (payload) => {
@@ -240,34 +241,55 @@ export default function ReferralDetails() {
             toast.error("Failed to create referral");
         }
     };
+useEffect(() => {
+    if (!currentUserUjbCode || !userDetails?.ujbCode) return;
 
-    const toggleFavorite = async () => {
+    const checkFavorite = async () => {
         try {
-            const storedUjbCode = localStorage.getItem("mmUJBCode");
-            if (!storedUjbCode) return;
-
             const favRef = doc(
                 db,
                 "favorites",
-                `${storedUjbCode}_${userDetails.ujbCode}`
+                `${currentUserUjbCode}_${userDetails.ujbCode}`
             );
 
-            if (isFavorite) {
-                await deleteDoc(favRef);
-                setIsFavorite(false);
-            } else {
-                await setDoc(favRef, {
-                    orbiter: storedUjbCode,
-                    cosmoUjbCode: userDetails.ujbCode,
-                    timestamp: new Date(),
-                });
-                setIsFavorite(true);
-            }
+            const snap = await getDoc(favRef);
+
+            setIsFavorite(snap.exists());
 
         } catch (err) {
-            console.error("Favorite toggle error:", err);
+            console.error("Favorite check error:", err);
         }
     };
+
+    checkFavorite();
+
+}, [currentUserUjbCode, userDetails?.ujbCode]);
+const toggleFavorite = async () => {
+    try {
+        if (!currentUserUjbCode || !userDetails?.ujbCode) return;
+
+        const favRef = doc(
+            db,
+            "favorites",
+            `${currentUserUjbCode}_${userDetails.ujbCode}`
+        );
+
+        if (isFavorite) {
+            await deleteDoc(favRef);
+            setIsFavorite(false);
+        } else {
+            await setDoc(favRef, {
+                orbiter: currentUserUjbCode,
+                cosmoUjbCode: userDetails.ujbCode,
+                timestamp: new Date(),
+            });
+            setIsFavorite(true);
+        }
+
+    } catch (err) {
+        console.error("Favorite toggle error:", err);
+    }
+};
 
     // Referral Count
     useEffect(() => {
@@ -310,36 +332,7 @@ export default function ReferralDetails() {
 
     const averageCommission = calculateAverageCommission();
 
-    // favriout
-    useEffect(() => {
-        if (!userDetails?.ujbCode) return;
-
-        const checkFavorite = async () => {
-            try {
-                const storedUjbCode = localStorage.getItem("mmUJBCode");
-                if (!storedUjbCode) return;
-
-                const favRef = doc(
-                    db,
-                    "favorites",
-                    `${storedUjbCode}_${userDetails.ujbCode}`
-                );
-
-                const snap = await getDoc(favRef);
-
-                if (snap.exists()) {
-                    setIsFavorite(true);
-                } else {
-                    setIsFavorite(false);
-                }
-
-            } catch (err) {
-                console.error("Favorite check error:", err);
-            }
-        };
-
-        checkFavorite();
-    }, [userDetails?.ujbCode]);
+   
 
     const getMainImage = () => {
         if (
