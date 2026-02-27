@@ -127,16 +127,16 @@ export default function EventsListingPage() {
     }, [nameFilter]);
 
     const copyEventLink = (id) => {
-        const link = `${window.location.origin}/events/${id}`;
+        const link = `${window.location.origin}/monthlymeeting/${id}`;
         navigator.clipboard.writeText(link);
         toast.success("Event link copied");
     };
 
     const openRegistrations = (id) =>
-        (window.location.href = `/admin/event/${id}?tab=registered`);
+        (window.location.href = `/admin/monthlymeeting/${id}?tab=registered`);
 
     const openAddUser = (id) =>
-        (window.location.href = `/admin/event/${id}?tab=add-users`);
+        (window.location.href = `/admin/monthlymeeting/${id}?tab=add-users`);
 
     const openDelete = (e) => {
         setEventToDelete(e);
@@ -224,7 +224,7 @@ export default function EventsListingPage() {
                         <div className="flex items-center gap-2">
                             <Button
                                 onClick={() =>
-                                    (window.location.href = "/admin/events/add")
+                                    (window.location.href = "/admin/monthlymeeting/add")
                                 }
                             >
                                 Add Event
@@ -315,7 +315,7 @@ export default function EventsListingPage() {
                                                 <ActionButton
                                                     icon={Pencil}
                                                     onClick={() =>
-                                                        (window.location.href = `/admin/event/${e.id}`)
+                                                        (window.location.href = `/admin/monthlymeeting/${e.id}`)
                                                     }
                                                 />
                                             </Tooltip>

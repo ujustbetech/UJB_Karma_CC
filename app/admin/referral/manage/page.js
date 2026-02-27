@@ -186,7 +186,7 @@ export default function ManageReferralsPage() {
     };
 
     const handleEdit = (id) => {
-        router.push(`/referral/${id}`);
+        router.push(`/admin/referral/${id}`);
     };
 
 

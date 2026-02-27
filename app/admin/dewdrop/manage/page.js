@@ -308,7 +308,7 @@ export default function ContentListingPage() {
                                                 <ActionButton
                                                     icon={Pencil}
                                                     onClick={() =>
-                                                        (window.location.href = `/admin/content/${c.id}`)
+                                                        (window.location.href = `/admin/dewdrop/${c.id}`)
                                                     }
                                                 />
                                             </Tooltip>
