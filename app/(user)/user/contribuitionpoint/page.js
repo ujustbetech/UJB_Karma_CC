@@ -165,7 +165,7 @@ export default function CPBoardDetails() {
 
           <button
             disabled={!canRedeem}
-            onClick={() => router.push("/Dealsforyou")}
+            onClick={() => router.push("/user/deals")}
             className={`w-full py-3 rounded-xl text-sm font-medium transition ${
               canRedeem
                 ? "bg-orange-600 text-white hover:bg-orange-700"

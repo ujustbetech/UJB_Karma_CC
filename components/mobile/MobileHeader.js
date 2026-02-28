@@ -129,7 +129,7 @@ export default function MobileHeader() {
 
           {/* CP */}
           <button
-            onClick={() => router.push(`/cp-details/${user.phone}`)}
+            onClick={() => router.push(`/user/contribuitionpoint`)}
             className="flex items-center gap-1 text-xs px-3 py-1.5 rounded-full 
                        bg-orange-500/10 border border-orange-400/20 
                        text-orange-400 transition active:scale-95"
