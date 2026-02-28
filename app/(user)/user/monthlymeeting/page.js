@@ -10,7 +10,7 @@ import {
 } from "firebase/firestore";
 import { app } from "@/firebaseConfig";
 import Link from "next/link";
-import { CalendarDays, Clock, Video } from "lucide-react";
+import { CalendarDays, Video } from "lucide-react";
 
 const db = getFirestore(app);
 
@@ -107,9 +107,10 @@ export default function AllEvents() {
               event.e2aSections?.length || 0;
 
             return (
-              <div
+              <Link
                 key={event.id}
-                className="bg-white rounded-3xl shadow-lg border border-gray-100 overflow-hidden hover:shadow-2xl transition duration-300"
+                href={`/user/monthlymeeting/${event.id}`}
+                className="block bg-white rounded-3xl shadow-lg border border-gray-100 overflow-hidden hover:shadow-2xl hover:-translate-y-1 transition duration-300 cursor-pointer"
               >
 
                 {/* EVENT IMAGE */}
@@ -162,62 +163,20 @@ export default function AllEvents() {
                   {/* IMPACT METRICS */}
                   <div className="grid grid-cols-3 gap-4 text-center mb-6">
 
-                    <div className="bg-indigo-50 p-3 rounded-xl">
-                      <p className="text-lg font-bold text-indigo-600">
-                        {referralCount}
-                      </p>
-                      <p className="text-xs text-gray-500">
-                        Referrals
-                      </p>
-                    </div>
-
-                    <div className="bg-green-50 p-3 rounded-xl">
-                      <p className="text-lg font-bold text-green-600">
-                        {prospectCount}
-                      </p>
-                      <p className="text-xs text-gray-500">
-                        Prospects
-                      </p>
-                    </div>
-
-                    <div className="bg-purple-50 p-3 rounded-xl">
-                      <p className="text-lg font-bold text-purple-600">
-                        {oneToOneCount}
-                      </p>
-                      <p className="text-xs text-gray-500">
-                        1-2-1
-                      </p>
-                    </div>
-
-                    <div className="bg-orange-50 p-3 rounded-xl">
-                      <p className="text-lg font-bold text-orange-600">
-                        {requirementCount}
-                      </p>
-                      <p className="text-xs text-gray-500">
-                        Requirements
-                      </p>
-                    </div>
-
-                    <div className="bg-pink-50 p-3 rounded-xl">
-                      <p className="text-lg font-bold text-pink-600">
-                        {e2aCount}
-                      </p>
-                      <p className="text-xs text-gray-500">
-                        E2A
-                      </p>
-                    </div>
+                    <MetricBox color="indigo" value={referralCount} label="Referrals" />
+                    <MetricBox color="green" value={prospectCount} label="Prospects" />
+                    <MetricBox color="purple" value={oneToOneCount} label="1-2-1" />
+                    <MetricBox color="orange" value={requirementCount} label="Requirements" />
+                    <MetricBox color="pink" value={e2aCount} label="E2A" />
 
                   </div>
 
                   {/* ACTIONS */}
                   <div className="mt-auto flex justify-between items-center">
 
-                    <Link
-                      href={`/user/monthlymeeting/${event.id}`}
-                      className="text-indigo-600 text-sm font-semibold hover:underline"
-                    >
+                    <span className="text-indigo-600 text-sm font-semibold">
                       View Details →
-                    </Link>
+                    </span>
 
                     {isEnded ? (
                       event.isUserRegistered && (
@@ -230,29 +189,53 @@ export default function AllEvents() {
                         href={event.zoomLink}
                         target="_blank"
                         rel="noopener noreferrer"
+                        onClick={(e) => e.stopPropagation()}
                         className="flex items-center gap-2 bg-green-600 text-white text-xs px-4 py-2 rounded-xl hover:bg-green-700 transition"
                       >
                         <Video size={14} />
-                        Join Meeting
+                        Join
                       </a>
                     ) : event.isUserRegistered ? (
                       <span className="text-xs text-green-600 font-semibold">
                         ✅ Registered
                       </span>
                     ) : (
-                      <button className="bg-indigo-600 text-white text-xs px-4 py-2 rounded-xl hover:bg-indigo-700 transition">
+                      <button
+                        onClick={(e) => e.stopPropagation()}
+                        className="bg-indigo-600 text-white text-xs px-4 py-2 rounded-xl hover:bg-indigo-700 transition"
+                      >
                         Register
                       </button>
                     )}
 
                   </div>
+
                 </div>
-              </div>
+              </Link>
             );
           })}
 
         </div>
       </div>
     </main>
+  );
+}
+
+/* ================= METRIC COMPONENT ================= */
+
+function MetricBox({ color, value, label }) {
+  const bg = {
+    indigo: "bg-indigo-50 text-indigo-600",
+    green: "bg-green-50 text-green-600",
+    purple: "bg-purple-50 text-purple-600",
+    orange: "bg-orange-50 text-orange-600",
+    pink: "bg-pink-50 text-pink-600",
+  };
+
+  return (
+    <div className={`p-3 rounded-xl ${bg[color]}`}>
+      <p className="text-lg font-bold">{value}</p>
+      <p className="text-xs text-gray-500">{label}</p>
+    </div>
   );
 }

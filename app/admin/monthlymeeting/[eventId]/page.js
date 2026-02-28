@@ -2,16 +2,11 @@
 
 import { useParams } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, collection, onSnapshot } from 'firebase/firestore';
 import { db } from '@/firebaseConfig';
 import { COLLECTIONS } from '@/lib/utility_collection';
-import { collection, onSnapshot } from 'firebase/firestore';
-import Card from '@/components/ui/Card';
-import Text from '@/components/ui/Text';
-import Button from '@/components/ui/Button';
 
 /* ================= SECTIONS ================= */
-// import BasicInfoSection from '@/components/admin/monthlymeeting/sections/BasicInfoSection';
 import TopicSection from '@/components/admin/monthlymeeting/sections/TopicSection';
 import ParticipantSection from '@/components/admin/monthlymeeting/sections/ParticipantSection';
 import E2ASection from '@/components/admin/monthlymeeting/sections/E2ASection';
@@ -25,7 +20,6 @@ import AddUserSection from '@/components/admin/monthlymeeting/sections/AddUserSe
 import ConclaveSection from '@/components/admin/monthlymeeting/sections/ConclaveSection';
 import EventInfoSection from '@/components/admin/monthlymeeting/sections/EventInfoSection';
 import EventInfoSkeleton from '@/components/skeleton/EventInfoSkeleton';
-import EventSummaryPanel from '@/components/admin/monthlymeeting/sections/EventSummaryPanel';
 
 import {
   Info,
@@ -40,7 +34,6 @@ import {
   Network
 } from 'lucide-react';
 
-
 export default function MonthlyMeetingDetailsPage() {
   const { eventId } = useParams();
 
@@ -50,7 +43,6 @@ export default function MonthlyMeetingDetailsPage() {
   const [refreshKey, setRefreshKey] = useState(0);
   const [savingAll, setSavingAll] = useState(false);
 
-  /* ================= SECTION REFS ================= */
   const basicRef = useRef();
   const topicRef = useRef();
   const participantRef = useRef();
@@ -58,10 +50,11 @@ export default function MonthlyMeetingDetailsPage() {
   const prospectRef = useRef();
   const knowledgeRef = useRef();
   const requirementRef = useRef();
+
   const [registeredCount, setRegisteredCount] = useState(0);
   const [presentCount, setPresentCount] = useState(0);
 
-  /* ================= FETCH ================= */
+  /* ================= FETCH EVENT ================= */
   const fetchData = async () => {
     if (!eventId) return;
     setLoading(true);
@@ -73,6 +66,11 @@ export default function MonthlyMeetingDetailsPage() {
   };
 
   useEffect(() => {
+    fetchData();
+  }, [eventId]);
+
+  /* ================= REALTIME REGISTERED USERS ================= */
+  useEffect(() => {
     if (!eventId) return;
 
     const unsub = onSnapshot(
@@ -81,10 +79,7 @@ export default function MonthlyMeetingDetailsPage() {
         let present = 0;
 
         snapshot.forEach(doc => {
-          const data = doc.data();
-          if (data.attendanceStatus === true) {
-            present++;
-          }
+          if (doc.data().attendanceStatus === true) present++;
         });
 
         setRegisteredCount(snapshot.size);
@@ -93,10 +88,6 @@ export default function MonthlyMeetingDetailsPage() {
     );
 
     return () => unsub();
-  }, [eventId]);
-
-  useEffect(() => {
-    fetchData();
   }, [eventId]);
 
   /* ================= SAVE ALL ================= */
@@ -126,279 +117,133 @@ export default function MonthlyMeetingDetailsPage() {
     setSavingAll(false);
   };
 
-  /* ================= SIDEBAR MENU ================= */
-
-  const menuGroups = [
-    {
-      title: 'EVENT PROFILE',
-      items: [
-        { id: 'basic', label: 'Basic Info', icon: Info },
-        { id: 'topic', label: 'Topic', icon: BookOpen },
-        { id: 'participants', label: '121 Interaction', icon: Users },
-        { id: 'knowledge', label: 'Knowledge Sharing', icon: Brain },
-        { id: 'e2a', label: 'E2A', icon: Network },
-        { id: 'prospects', label: 'Prospects', icon: Target },
-        { id: 'requirements', label: 'Requirements', icon: ClipboardList },
-      ]
-    },
-    {
-      title: 'MEDIA',
-      items: [
-        { id: 'documents', label: 'Documents', icon: FileText },
-        { id: 'images', label: 'Images', icon: Image },
-      ]
-    },
-    {
-      title: 'USERS',
-      items: [
-        { id: 'registered', label: 'Registered Users', icon: Users },
-        { id: 'adduser', label: 'Add User', icon: UserPlus },
-      ]
-    },
-    {
-      title: 'OTHER',
-      items: [
-        { id: 'conclave', label: 'Conclave', icon: Network },
-      ]
-    }
+  /* ================= TABS ================= */
+  const tabs = [
+    { id: 'basic', label: 'Basic', icon: Info },
+    { id: 'topic', label: 'Topic', icon: BookOpen },
+    { id: 'participants', label: '121', icon: Users },
+    { id: 'knowledge', label: 'Knowledge', icon: Brain },
+    { id: 'e2a', label: 'E2A', icon: Network },
+    { id: 'prospects', label: 'Prospects', icon: Target },
+    { id: 'requirements', label: 'Requirements', icon: ClipboardList },
+    { id: 'documents', label: 'Documents', icon: FileText },
+    { id: 'images', label: 'Images', icon: Image },
+    { id: 'registered', label: 'Users', icon: Users },
+    { id: 'adduser', label: 'Add User', icon: UserPlus },
+    { id: 'conclave', label: 'Conclave', icon: Network }
   ];
 
-
-
-  /* ================= ACTIVE SECTION ================= */
+  /* ================= SECTION RENDER ================= */
   const renderSection = () => {
     switch (activeSection) {
       case 'basic':
-        return (
-          <EventInfoSection
-            ref={basicRef}
-            eventId={eventId}
-            data={data}
-            fetchData={fetchData}
-            key={`basic-${refreshKey}`}
-          />
-        );
-
+        return <EventInfoSection ref={basicRef} eventId={eventId} data={data} fetchData={fetchData} key={refreshKey} />;
       case 'topic':
-        return (
-          <TopicSection
-            ref={topicRef}
-            eventID={eventId}
-            data={data}
-            fetchData={fetchData}
-            key={`topic-${refreshKey}`}
-          />
-        );
-
+        return <TopicSection ref={topicRef} eventID={eventId} data={data} fetchData={fetchData} />;
       case 'participants':
-        return (
-          <ParticipantSection
-            ref={participantRef}
-            eventID={eventId}
-            data={data}
-            fetchData={fetchData}
-            key={`participants-${refreshKey}`}
-          />
-        );
-
+        return <ParticipantSection ref={participantRef} eventID={eventId} data={data} fetchData={fetchData} />;
       case 'knowledge':
-        return (
-          <KnowledgeSharingSection
-            ref={knowledgeRef}
-            eventId={eventId}
-            data={data}
-            fetchData={fetchData}
-            key={`knowledge-${refreshKey}`}
-          />
-        );
-
+        return <KnowledgeSharingSection ref={knowledgeRef} eventId={eventId} data={data} fetchData={fetchData} />;
       case 'e2a':
-        return (
-          <E2ASection
-            ref={e2aRef}
-            eventId={eventId}
-            data={data}
-            fetchData={fetchData}
-            key={`e2a-${refreshKey}`}
-          />
-        );
-
+        return <E2ASection ref={e2aRef} eventId={eventId} data={data} fetchData={fetchData} />;
       case 'prospects':
-        return (
-          <ProspectSection
-            ref={prospectRef}
-            eventId={eventId}
-            data={data}
-            fetchData={fetchData}
-            key={`prospects-${refreshKey}`}
-          />
-        );
-
+        return <ProspectSection ref={prospectRef} eventId={eventId} data={data} fetchData={fetchData} />;
       case 'requirements':
-        return (
-          <RequirementSection
-            ref={requirementRef}
-            eventId={eventId}
-            data={data}
-            fetchData={fetchData}
-            key={`requirements-${refreshKey}`}
-          />
-        );
-
+        return <RequirementSection ref={requirementRef} eventId={eventId} data={data} fetchData={fetchData} />;
       case 'documents':
-        return (
-          <DocumentUploadSection
-            eventID={eventId}
-            data={data}
-            fetchData={fetchData}
-            key={`documents-${refreshKey}`}
-          />
-        );
-
+        return <DocumentUploadSection eventID={eventId} data={data} fetchData={fetchData} />;
       case 'images':
-        return (
-          <ImageUploadSection
-            eventID={eventId}
-            data={data}
-            fetchData={fetchData}
-            key={`images-${refreshKey}`}
-          />
-        );
-
+        return <ImageUploadSection eventID={eventId} data={data} fetchData={fetchData} />;
       case 'registered':
-        return (
-          <RegisteredUsersSection
-            eventId={eventId}
-            data={data}
-            key={`registered-${refreshKey}`}
-          />
-        );
-
+        return <RegisteredUsersSection eventId={eventId} data={data} />;
       case 'adduser':
-        return (
-          <AddUserSection
-            eventId={eventId}
-            data={data}
-            fetchData={fetchData}
-            key={`adduser-${refreshKey}`}
-          />
-        );
-
+        return <AddUserSection eventId={eventId} data={data} fetchData={fetchData} />;
       case 'conclave':
-        return (
-          <ConclaveSection
-            eventId={eventId}
-            data={data}
-            fetchData={fetchData}
-            key={`conclave-${refreshKey}`}
-          />
-        );
+        return <ConclaveSection eventId={eventId} data={data} fetchData={fetchData} />;
+      default:
+        return null;
     }
   };
 
   return (
-    <div className="grid grid-cols-[260px_1fr_300px] gap-6 min-h-screen pb-32">
+    <div className="min-h-screen bg-[#0b1120] pb-20">
 
-      {/* ================= LEFT SIDEBAR ================= */}
-      <Card className="px-3 py-4 h-fit sticky top-4 bg-[#f3f4f6] border-0 shadow-none rounded-2xl">
-        <Text variant="h3" className="mb-3">Profile</Text>
-
-        {menuGroups.map(group => (
-          <div key={group.title} className="mb-5">
-
-            {/* GROUP TITLE */}
-            <div className="text-xs font-semibold text-slate-400 mb-2 tracking-wide">
-              {group.title}
-            </div>
-
-            {/* ITEMS */}
-            <div className="space-y-1">
-              {group.items.map(item => {
-                const Icon = item.icon;
-                const isActive = activeSection === item.id;
-
-                return (
-                  <div
-                    key={item.id}
-                    onClick={() => setActiveSection(item.id)}
-                    className={`
-                relative flex items-center gap-3 px-3 py-2 rounded-lg text-sm cursor-pointer transition-all
-                
-                ${isActive
-                        ? 'bg-gray-200 text-slate-900 font-medium'
-                        : 'text-slate-600 hover:bg-gray-100'}
-              `}
-                  >
-                    {/* LEFT ACTIVE BAR */}
-                    {isActive && (
-                      <div className="absolute left-0 top-1 bottom-1 w-1 bg-slate-800 rounded-r" />
-                    )}
-
-                    <Icon size={16} />
-                    {item.label}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        ))}
-      </Card>
-
-
-
-      {/* ================= CENTER ================= */}
-      <div className="space-y-6">
-
-        <Card className="flex items-center justify-between">
-          <div>
-            <Text variant="h1">Monthly Meeting Details</Text>
-            <Text variant="muted">Event ID: {eventId}</Text>
-          </div>
-
-          <Button onClick={handleSaveAll}>
-            {savingAll ? 'Saving...' : 'Save All Changes'}
-          </Button>
-        </Card>
-
-        <Card className="">
-          {loading ? (
-            <EventInfoSkeleton />
-          ) : (
-            renderSection()
-          )}
-        </Card>
-
-      </div>
-
-      {/* ================= RIGHT SUMMARY PANEL ================= */}
-      <div className="space-y-4">
-        <EventSummaryPanel
-          data={data}
-          activeSection={activeSection}
-          registeredCount={registeredCount}
-          presentCount={presentCount}
+      {/* ================= HERO ================= */}
+      <div className="relative h-[280px] w-full">
+        <img
+          src="/space.jpeg"
+          className="absolute inset-0 w-full h-full object-cover opacity-70"
         />
+        <div className="absolute inset-0 bg-gradient-to-b from-black/40 to-[#0b1120]" />
 
-      </div>
+        <div className="relative z-10 flex flex-col items-center justify-center h-full text-white text-center px-6">
+          <h1 className="text-2xl font-bold">
+            {data?.Eventname || 'Monthly Meeting'}
+          </h1>
 
+          <p className="text-sm mt-2 opacity-80">
+            {data?.time
+              ? new Date(data.time.seconds * 1000).toLocaleString()
+              : 'Event Date'}
+          </p>
 
-      {/* STICKY SAVE BAR */}
-      <div className="fixed bottom-0 left-0 right-0 z-40">
-        <div className="max-w-[1400px] mx-auto px-6 pb-4">
-          <Card className="flex items-center justify-between px-4 py-3 shadow-lg border">
-
-            <Text className="text-sm text-slate-600">
-              Don’t forget to save your changes
-            </Text>
-
-            <Button onClick={handleSaveAll}>
-              {savingAll ? 'Saving...' : 'Save All Changes'}
-            </Button>
-
-          </Card>
+          <div className="mt-4 bg-green-500/20 text-green-400 px-4 py-1 rounded-full text-xs font-medium">
+            In Progress
+          </div>
         </div>
       </div>
 
+      {/* ================= BODY ================= */}
+      <div className="max-w-3xl mx-auto px-5 -mt-8">
+
+        {/* USERS CARD */}
+        <div className="bg-white/10 backdrop-blur-md border border-white/10 rounded-2xl p-4 flex items-center justify-between text-white mb-6">
+          <div className="text-sm">
+            👥 {registeredCount} people joining
+          </div>
+          <div className="text-xs opacity-70">
+            Present: {presentCount}
+          </div>
+        </div>
+
+        {/* TABS */}
+        <div className="flex flex-wrap gap-3 mb-6">
+          {tabs.map(tab => {
+            const Icon = tab.icon;
+            const isActive = activeSection === tab.id;
+
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setActiveSection(tab.id)}
+                className={`flex items-center gap-2 px-4 py-2 rounded-full text-xs font-medium transition ${
+                  isActive
+                    ? 'bg-indigo-600 text-white shadow-md'
+                    : 'bg-white/10 text-white border border-white/20 hover:bg-white/20'
+                }`}
+              >
+                <Icon size={14} />
+                {tab.label}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* CONTENT */}
+        <div className="bg-white rounded-3xl shadow-xl p-6 min-h-[400px]">
+          {loading ? <EventInfoSkeleton /> : renderSection()}
+        </div>
+
+        {/* SAVE BUTTON */}
+        <div className="mt-6 flex justify-center">
+          <button
+            onClick={handleSaveAll}
+            className="bg-indigo-600 text-white px-6 py-3 rounded-xl text-sm font-medium hover:bg-indigo-700 transition"
+          >
+            {savingAll ? 'Saving...' : 'Save Changes'}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

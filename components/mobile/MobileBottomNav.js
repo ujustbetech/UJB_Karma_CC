@@ -152,7 +152,7 @@ export default function MobileBottomNav() {
             >
               <button
                 onClick={() => {
-                  router.push("/ConclaveMeeting");
+                  router.push("/user/conclave");
                   setShowEventsMenu(false);
                 }}
                 className="flex items-center gap-3 w-full
