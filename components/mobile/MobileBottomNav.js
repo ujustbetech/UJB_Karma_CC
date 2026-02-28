@@ -18,7 +18,7 @@ export default function MobileBottomNav() {
   const menuRef = useRef(null);
 
   const navItemsLeft = [
-    { label: "Dewdrop", icon: Droplet, path: "/dewdrop" },
+    { label: "Dewdrop", icon: Droplet, path: "/user/dewdrop/content" },
     { label: "Prospects", icon: UserPlus, path: "/user/prospects" },
   ];
 
@@ -167,7 +167,7 @@ export default function MobileBottomNav() {
 
               <button
                 onClick={() => {
-                  router.push("/Monthlymeetdetails");
+                  router.push("/user/monthlymeeting");
                   setShowEventsMenu(false);
                 }}
                 className="flex items-center gap-3 w-full
