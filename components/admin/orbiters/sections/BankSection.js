@@ -10,19 +10,30 @@ import Button from '@/components/ui/Button';
 import { Landmark } from 'lucide-react';
 
 export default function BankSection({ profile }) {
-  const { formData = {}, handleChange } = profile || {};
+  const {
+    formData = {},
+    setFormData,
+    handleBankProofChange,
+    bankProofPreview
+  } = profile || {};
+
   const bank = formData?.bankDetails || {};
 
   const [errors, setErrors] = useState({});
   const [showAccount, setShowAccount] = useState(false);
 
-  const updateBank = (field, value) => {
-    handleChange('bankDetails', {
-      ...bank,
-      [field]: value,
-    });
+  /* ---------------- SAFE NESTED UPDATE ---------------- */
 
-    setErrors((prev) => ({ ...prev, [field]: '' }));
+  const updateBank = (field, value) => {
+    setFormData(prev => ({
+      ...prev,
+      bankDetails: {
+        ...(prev.bankDetails || {}),
+        [field]: value,
+      }
+    }));
+
+    setErrors(prev => ({ ...prev, [field]: '' }));
   };
 
   /* ---------------- VALIDATIONS ---------------- */
@@ -45,27 +56,25 @@ export default function BankSection({ profile }) {
   const handleIFSCChange = (value) => {
     const upper = value.toUpperCase();
     updateBank('ifscCode', upper);
-    setErrors((prev) => ({ ...prev, ifscCode: validateIFSC(upper) }));
+    setErrors(prev => ({ ...prev, ifscCode: validateIFSC(upper) }));
   };
 
   const handleAccountChange = (value) => {
     updateBank('accountNumber', value);
-    setErrors((prev) => ({ ...prev, accountNumber: validateAccount(value) }));
+    setErrors(prev => ({ ...prev, accountNumber: validateAccount(value) }));
   };
 
   /* ---------------- BANK PROOF ---------------- */
 
   const handleProofTypeChange = (value) => {
     updateBank('proofType', value);
-    updateBank('proofFile', null);
-    updateBank('proofPreview', '');
   };
 
   const handleProofUpload = (file) => {
     if (!file) return;
 
-    updateBank('proofFile', file);
-    updateBank('proofPreview', URL.createObjectURL(file));
+    // 🔥 DO NOT store file in formData
+    handleBankProofChange(file);
   };
 
   const isPDF = (url) => url?.toLowerCase()?.includes('.pdf');
@@ -126,7 +135,7 @@ export default function BankSection({ profile }) {
         <FormField label="Bank Proof Type">
           <Select
             value={bank.proofType || ''}
-            onChange={(value) => handleProofTypeChange(value)}
+            onChange={handleProofTypeChange}
             options={[
               { value: '', label: 'Select Proof Type' },
               { value: 'cheque', label: 'Cancelled Cheque' },
@@ -139,24 +148,27 @@ export default function BankSection({ profile }) {
         {/* -------- FILE UPLOAD -------- */}
         <FormField label="Upload Bank Proof">
           <div className="space-y-2">
-            <Input
+            <input
               type="file"
               accept="image/*,.pdf"
               onChange={(e) => handleProofUpload(e.target.files[0])}
+              className="block w-full text-sm border rounded-lg p-2"
             />
 
-            {bank.proofPreview && (
-              isPDF(bank.proofPreview) ? (
+            {bankProofPreview && (
+              isPDF(bankProofPreview) ? (
                 <a
-                  href={bank.proofPreview}
+                  href={bankProofPreview}
                   target="_blank"
+                  rel="noopener noreferrer"
                   className="text-sm text-blue-600 underline"
                 >
                   View Uploaded PDF
                 </a>
               ) : (
                 <img
-                  src={bank.proofPreview}
+                  src={bankProofPreview}
+                  alt="Bank Proof"
                   className="w-32 rounded-lg border"
                 />
               )

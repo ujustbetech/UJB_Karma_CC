@@ -158,20 +158,19 @@ export default function useOrbiterProfile(ujbcode, toast) {
           if (data.bankDetails?.proofFile?.url) {
             setBankProofPreview(data.bankDetails.proofFile.url);
           }
-
-          /* DECRYPT BANK */
-          if (data.bankDetails) {
-            setFormData(prev => ({
-              ...prev,
-              bankDetails: {
-                accountHolderName: decryptData(data.bankDetails.accountHolderName),
-                bankName: decryptData(data.bankDetails.bankName),
-                accountNumber: decryptData(data.bankDetails.accountNumber),
-                ifscCode: decryptData(data.bankDetails.ifscCode),
-                proofFile: data.bankDetails.proofFile || null
-              }
-            }));
-          }
+if (data.bankDetails) {
+  setFormData(prev => ({
+    ...prev,
+    bankDetails: {
+      ...data.bankDetails, // 🔥 keep all existing fields
+      accountHolderName: decryptData(data.bankDetails.accountHolderName),
+      bankName: decryptData(data.bankDetails.bankName),
+      accountNumber: decryptData(data.bankDetails.accountNumber),
+      ifscCode: decryptData(data.bankDetails.ifscCode),
+    }
+  }));
+}
+       
 
           if (data.achievementCertificates?.length) {
             setAchievementPreviews(
@@ -410,25 +409,43 @@ export default function useOrbiterProfile(ujbcode, toast) {
       }
 
       /* BANK */
-      let encryptedBankDetails = formData.bankDetails || null;
+   /* ---------------- BANK ---------------- */
 
-      if (encryptedBankDetails) {
-        encryptedBankDetails = {
-          accountHolderName: encryptData(encryptedBankDetails.accountHolderName),
-          bankName: encryptData(encryptedBankDetails.bankName),
-          accountNumber: encryptData(encryptedBankDetails.accountNumber),
-          ifscCode: encryptData(encryptedBankDetails.ifscCode),
-          proofFile: formData.bankDetails?.proofFile || null
-        };
-      }
+let encryptedBankDetails = null;
 
-      if (bankProofFile) {
-        const fileName = generateFileName(ujbcode, "bank", "proof", bankProofFile);
-        encryptedBankDetails.proofFile = await uploadWithMeta(
-          bankProofFile,
-          `${basePath}/Bank/${fileName}`
-        );
-      }
+if (formData.bankDetails) {
+  encryptedBankDetails = {
+    accountHolderName: encryptData(formData.bankDetails.accountHolderName || ''),
+    bankName: encryptData(formData.bankDetails.bankName || ''),
+    accountNumber: encryptData(formData.bankDetails.accountNumber || ''),
+    ifscCode: encryptData(formData.bankDetails.ifscCode || ''),
+    proofType: formData.bankDetails.proofType || '',
+    proofFile: null
+  };
+}
+
+/* Upload new file if selected */
+if (bankProofFile) {
+  const fileName = generateFileName(
+    ujbcode,
+    "bank",
+    "proof",
+    bankProofFile
+  );
+
+  const meta = await uploadWithMeta(
+    bankProofFile,
+    `${basePath}/Bank/${fileName}`
+  );
+
+  encryptedBankDetails.proofFile = meta; // ✅ store metadata only
+}
+
+/* If no new file but old metadata exists */
+if (!bankProofFile && formData.bankDetails?.proofFile?.url) {
+  encryptedBankDetails.proofFile =
+    formData.bankDetails.proofFile;
+}
 
       const finalServices = await Promise.all(
         (formData.services || []).map(async (srv, index) => {
