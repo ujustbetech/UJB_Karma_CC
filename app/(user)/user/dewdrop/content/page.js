@@ -16,6 +16,7 @@ import {
   FileText,
   Tag,
 } from "lucide-react";
+import Link from "next/link";
 
 export default function ContentPage() {
   const [contents, setContents] = useState([]);
@@ -80,11 +81,11 @@ export default function ContentPage() {
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-10">
 
           {contents.map((content) => (
-            <div
+            <Link
+              href={`/user/dewdrop/content/${content.id}`}
               key={content.id}
-              className="bg-white rounded-3xl shadow-md border overflow-hidden hover:shadow-xl transition duration-300"
+              className="block bg-white rounded-3xl shadow-md border overflow-hidden hover:shadow-xl hover:-translate-y-1 transition duration-300"
             >
-
               {/* THUMBNAIL */}
               <div className="relative h-48 bg-gray-100">
                 <img
@@ -145,9 +146,7 @@ export default function ContentPage() {
 
                 {/* STATS */}
                 <div className="flex justify-between items-center text-xs text-gray-500 border-t pt-4">
-
                   <div className="flex items-center gap-4">
-
                     <span className="flex items-center gap-1">
                       <Eye size={14} />
                       {content.totalViews || 0}
@@ -162,11 +161,10 @@ export default function ContentPage() {
                   <span className="font-medium text-indigo-600">
                     CP {content.totalCp || 0}
                   </span>
-
                 </div>
 
               </div>
-            </div>
+            </Link>
           ))}
 
         </div>
