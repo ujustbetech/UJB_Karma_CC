@@ -167,12 +167,12 @@ export default function PaymentSummary({
             </Text>
           </div>
 
-          <div className="flex justify-between">
+          {/* <div className="flex justify-between">
             <Text variant="body">UJB Balance</Text>
             <Text variant="body">
               ₹{ujbBalance.toLocaleString("en-IN")}
             </Text>
-          </div>
+          </div> */}
         </div>
       )}
 

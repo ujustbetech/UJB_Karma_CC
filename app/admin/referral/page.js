@@ -175,10 +175,10 @@ export default function ReferralDashboard() {
 
       {/* TOP STRIP */}
       <div className="grid grid-cols-4 gap-4">
-        <KPI title="Total Business" value={`₹${totalBusiness}`} icon={IndianRupee}/>
-        <KPI title="UJB Revenue" value={`₹${totalUJB}`} icon={TrendingUp}/>
-        <KPI title="Active Orbiters" value={orbiterData.length} icon={Users}/>
-        <KPI title="Categories" value={categoryData.length} icon={Activity}/>
+        <KPI title=" Total Business" value={` ₹${totalBusiness}`} icon={IndianRupee}/>
+        <KPI title=" UJB Revenue" value={` ₹${totalUJB}`} icon={TrendingUp}/>
+        <KPI title=" Active Orbiters" value={orbiterData.length} icon={Users}/>
+        <KPI title=" Categories" value={categoryData.length} icon={Activity}/>
       </div>
 
       <Chart title="Monthly Revenue Trend" data={monthlyData}/>

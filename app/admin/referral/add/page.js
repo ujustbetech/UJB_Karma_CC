@@ -380,7 +380,36 @@ export default function AddReferralPage() {
         });
     };
 
+const resetForm = () => {
+    setOrbiterSearch('');
+    setCosmoSearch('');
 
+    setSelectedOrbiter(null);
+    setSelectedCosmo(null);
+
+    setFilteredOrbiters([]);
+    setFilteredCosmos([]);
+
+    setServices([]);
+    setProducts([]);
+
+    setSelectedService(null);
+    setSelectedProduct(null);
+
+    setDealStatus('Pending');
+    setRefType('Self');
+
+    setLeadDescription('');
+
+    setReferralSource('MonthlyMeeting');
+    setOtherReferralSource('');
+
+    setOtherName('');
+    setOtherPhone('');
+    setOtherEmail('');
+
+    setErrors({});
+};
     const handleSubmit = async () => {
         if (!validate()) return;
 
@@ -521,9 +550,12 @@ export default function AddReferralPage() {
                     `You received referral from ${orbiterData.Name} for ${serviceOrProductName}`
                 ),
             ]);
+toast.success("Referral submitted successfully");
 
-            toast.success("Referral submitted successfully");
-            setSaving(false);
+resetForm(); // clear form
+
+setSaving(false);
+firstFieldRef.current?.focus(); // focus back to first field
         } catch (err) {
             console.error(err);
             toast.error("Submission failed");

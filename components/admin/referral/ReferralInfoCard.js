@@ -1,4 +1,4 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import {
   FileText,
   Upload,
@@ -8,26 +8,36 @@ import {
   Package,
   Image as ImageIcon,
   Hash,
-  FolderOpen
+  FolderOpen,
+  Trash2
 } from "lucide-react";
 
 import Card from "@/components/ui/Card";
 import Text from "@/components/ui/Text";
 import Button from "@/components/ui/Button";
 
-export default function ReferralInfoCard({ referralData, onUploadLeadDoc }) {
+export default function ReferralInfoCard({
+  referralData,
+  onUploadLeadDoc,
+  onDeleteLeadDoc
+}) {
   const [uploading, setUploading] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [docs, setDocs] = useState([]);
   const fileInputRef = useRef(null);
+
+  useEffect(() => {
+    const filtered = (referralData.supportingDocs || []).filter(
+      (d) => d.type === "lead"
+    );
+    setDocs(filtered);
+  }, [referralData]);
 
   const description =
     referralData.description ||
     referralData.dealDescription ||
     referralData.leadDescription ||
     "";
-
-  const leadDocs = (referralData.supportingDocs || []).filter(
-    (d) => d.type === "lead"
-  );
 
   const createdAt =
     referralData.createdAt?.seconds
@@ -41,9 +51,42 @@ export default function ReferralInfoCard({ referralData, onUploadLeadDoc }) {
     if (!file || !onUploadLeadDoc) return;
 
     setUploading(true);
-    const res = await onUploadLeadDoc(file);
-    if (res?.error) alert(res.error);
+
+    try {
+      const res = await onUploadLeadDoc(file);
+      if (res?.error) alert(res.error);
+    } catch (err) {
+      console.error(err);
+      alert("Upload failed");
+    }
+
     setUploading(false);
+    e.target.value = "";
+  };
+
+  const handleDeleteDoc = async (docItem) => {
+    if (!onDeleteLeadDoc) return;
+
+    const confirmDelete = confirm(
+      "Are you sure you want to delete this document?"
+    );
+
+    if (!confirmDelete) return;
+
+    setDeleting(true);
+
+    try {
+      const res = await onDeleteLeadDoc(docItem);
+      if (res?.error) alert(res.error);
+
+      // remove instantly from UI
+      setDocs((prev) => prev.filter((d) => d.url !== docItem.url));
+    } catch (err) {
+      console.error(err);
+      alert("Delete failed");
+    }
+
+    setDeleting(false);
   };
 
   return (
@@ -51,7 +94,9 @@ export default function ReferralInfoCard({ referralData, onUploadLeadDoc }) {
       {/* Header */}
       <div className="flex items-center gap-2">
         <FolderOpen size={18} />
-        <Text as="h3" variant="h3">Referral Info</Text>
+        <Text as="h3" variant="h3">
+          Referral Info
+        </Text>
       </div>
 
       {/* Info Grid */}
@@ -109,7 +154,9 @@ export default function ReferralInfoCard({ referralData, onUploadLeadDoc }) {
         <div className="mt-5 pt-4 border-t border-slate-200">
           <div className="flex items-center gap-2 mb-2">
             <Package size={16} />
-            <Text as="h3" variant="h3">Service / Product</Text>
+            <Text as="h3" variant="h3">
+              Service / Product
+            </Text>
           </div>
 
           <div className="flex gap-4 items-start">
@@ -152,12 +199,14 @@ export default function ReferralInfoCard({ referralData, onUploadLeadDoc }) {
       <div className="mt-5 pt-4 border-t border-slate-200">
         <div className="flex items-center gap-2 mb-2">
           <FileText size={16} />
-          <Text as="h3" variant="h3">Lead Documents</Text>
+          <Text as="h3" variant="h3">
+            Lead Documents
+          </Text>
         </div>
 
-        {leadDocs.length ? (
+        {docs.length ? (
           <div className="space-y-2">
-            {leadDocs.map((d, i) => (
+            {docs.map((d, i) => (
               <div
                 key={i}
                 className="flex items-center justify-between border border-slate-200 rounded px-3 py-2"
@@ -169,14 +218,25 @@ export default function ReferralInfoCard({ referralData, onUploadLeadDoc }) {
                   </Text>
                 </div>
 
-                <a
-                  href={d.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-sm underline"
-                >
-                  View
-                </a>
+                <div className="flex items-center gap-4">
+                  <a
+                    href={d.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-sm underline"
+                  >
+                    View
+                  </a>
+
+                  <button
+                    onClick={() => handleDeleteDoc(d)}
+                    disabled={deleting}
+                    className="flex items-center gap-1 text-red-600 text-sm hover:underline"
+                  >
+                    <Trash2 size={14} />
+                    Delete
+                  </button>
+                </div>
               </div>
             ))}
           </div>
@@ -191,7 +251,9 @@ export default function ReferralInfoCard({ referralData, onUploadLeadDoc }) {
           <Button
             variant="outline"
             disabled={uploading}
-            className={`flex items-center gap-2 ${uploading ? "opacity-70" : ""}`}
+            className={`flex items-center gap-2 ${
+              uploading ? "opacity-70" : ""
+            }`}
             onClick={() => fileInputRef.current?.click()}
           >
             <Upload size={16} />

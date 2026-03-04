@@ -57,7 +57,7 @@ export default function ReferralDetailsPage() {
   const { id } = useParams();
   const [activeTab, setActiveTab] = useState("overview");
   const [participantTab, setParticipantTab] = useState("orbiter");
-
+const today = new Date().toISOString().split("T")[0];
   const {
     loading,
     referralData,
@@ -1119,11 +1119,12 @@ export default function ReferralDetailsPage() {
 
             <FormField label="Payment Date">
               <DateInput
-                value={payment.newPayment.paymentDate}
-                onChange={(v) =>
-                  payment.updateNewPayment("paymentDate", v)
-                }
-              />
+  value={payment.newPayment.paymentDate}
+  max={today}
+  onChange={(v) =>
+    payment.updateNewPayment("paymentDate", v)
+  }
+/>
             </FormField>
           </div>
 
@@ -1312,10 +1313,11 @@ export default function ReferralDetailsPage() {
             {/* DATE */}
             <div>
               <Text variant="label">Payment Date</Text>
-              <input
-                type="date"
-                className="w-full border border-slate-200 rounded-lg p-2 mt-1"
-                value={payoutModal.paymentDate}
+          <input
+  type="date"
+  max={today}
+  className="w-full border border-slate-200 rounded-lg p-2 mt-1"
+  value={payoutModal.paymentDate}
                 onChange={(e) =>
                   setPayoutModal((p) => ({
                     ...p,
@@ -1323,6 +1325,7 @@ export default function ReferralDetailsPage() {
                   }))
                 }
               />
+              
             </div>
           </div>
 
