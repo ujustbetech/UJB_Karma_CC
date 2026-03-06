@@ -358,7 +358,7 @@ export default function ProspectsListingPage() {
                           icon={Pencil}
                           onClick={() =>
                             (window.location.href =
-                              `/prospectadmin/event/editprospect/${p.id}`)
+                              `/admin/prospect/edit/${p.id}`)
                           }
                         />
                       </Tooltip>
