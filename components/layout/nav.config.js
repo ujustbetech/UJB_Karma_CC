@@ -46,6 +46,15 @@ export const NAV_ITEMS = [
       { label: "Add Referral", href: "/admin/referral/add" },
     ],
   },
+  {
+    label: "Prospect",
+    icon: Share2,
+    children: [
+      { label: "Prospect Dashboard", href: "/admin/prospect" },
+      { label: "Manage Prospect", href: "/admin/prospect/manage" },
+      { label: "Add Prospect", href: "/admin/prospect/add" },
+    ],
+  },
   // ⭐ Monthly Meeting Section
   {
     label: "Monthly Meeting",
