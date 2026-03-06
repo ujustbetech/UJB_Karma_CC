@@ -416,9 +416,11 @@ export default function ReferralDetailsPage() {
           payments: arrayUnion(adjustmentOnlyEntry),
         });
 
-        // Update UI immediately
-        setPayments((prev = []) => [...prev, adjustmentOnlyEntry]);
-
+      setPayments((prev = []) => {
+  const exists = prev.find(p => p.paymentId === adjustmentOnlyEntry.paymentId);
+  if (exists) return prev;
+  return [...prev, adjustmentOnlyEntry];
+});
         closePayoutModal();
         return;
       }
