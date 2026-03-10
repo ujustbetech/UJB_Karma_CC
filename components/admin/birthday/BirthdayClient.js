@@ -17,7 +17,6 @@ import { db } from "@/firebaseConfig";
 import { COLLECTIONS } from "@/lib/utility_collection";
 
 import AdminLayout from "@/components/layout/AdminLayout";
-import ConfirmModal from "@/components/ui/ConfirmModal";
 import { useToast } from "@/components/ui/ToastProvider";
 
 /* ---------------- HELPERS ---------------- */
@@ -74,7 +73,6 @@ export default function BirthdayClient() {
 
   const [users, setUsers] = useState([]);
   const [sentMessages, setSentMessages] = useState([]);
-  const [confirmUser, setConfirmUser] = useState(null);
   const [sendingUserId, setSendingUserId] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -86,30 +84,36 @@ export default function BirthdayClient() {
   const fetchBirthdayUsers = async () => {
     setLoading(true);
 
-    const snapshot = await getDocs(
-      collection(db, COLLECTIONS.birthdayCanva)
-    );
+    try {
+      const snapshot = await getDocs(
+        collection(db, COLLECTIONS.birthdayCanva)
+      );
 
-    const result = [];
+      const result = [];
 
-    snapshot.forEach((docSnap) => {
-      const data = docSnap.data();
-      if (!data.dob) return;
+      snapshot.forEach((docSnap) => {
+        const data = docSnap.data();
+        if (!data.dob) return;
 
-      const dobDate =
-        data.dob?.toDate ? data.dob.toDate() : new Date(data.dob);
+        const dobDate =
+          data.dob?.toDate ? data.dob.toDate() : new Date(data.dob);
 
-      const dayMonth = `${String(dobDate.getDate()).padStart(
-        2,
-        "0"
-      )}/${String(dobDate.getMonth() + 1).padStart(2, "0")}`;
+        const dayMonth = `${String(dobDate.getDate()).padStart(
+          2,
+          "0"
+        )}/${String(dobDate.getMonth() + 1).padStart(2, "0")}`;
 
-      if (dayMonth === today || dayMonth === tomorrow) {
-        result.push({ id: docSnap.id, ...data, dayMonth });
-      }
-    });
+        if (dayMonth === today || dayMonth === tomorrow) {
+          result.push({ id: docSnap.id, ...data, dayMonth });
+        }
+      });
 
-    setUsers(result);
+      setUsers(result);
+    } catch (error) {
+      console.error(error);
+      toast.error("Failed to load birthday users");
+    }
+
     setLoading(false);
   };
 
@@ -124,13 +128,15 @@ export default function BirthdayClient() {
 
     try {
       await axios.post("/api/send-birthday", { user });
+
       setSentMessages((prev) => [...prev, user.id]);
-      toast.success(`Message sent to ${user.name}`);
-    } catch {
+
+      toast.success(`WhatsApp sent to ${user.name}`);
+    } catch (error) {
+      console.error(error);
       toast.error("Failed to send WhatsApp message");
     } finally {
       setSendingUserId(null);
-      setConfirmUser(null);
     }
   };
 
@@ -160,9 +166,7 @@ export default function BirthdayClient() {
             <div className="text-sm font-medium text-slate-900">
               {user.name}
             </div>
-            <div className="text-xs text-slate-500">
-              {user.phone}
-            </div>
+            <div className="text-xs text-slate-500">{user.phone}</div>
           </div>
         </div>
 
@@ -171,15 +175,14 @@ export default function BirthdayClient() {
           <Status sent={isSent} sending={isSending} />
 
           <button
-            onClick={() => setConfirmUser(user)}
+            onClick={() => sendWhatsAppMessage(user)}
             disabled={isSent || isSending}
             className="p-2 rounded-md hover:bg-slate-100 disabled:opacity-40"
-            title={isSent ? "Already sent" : "Send WhatsApp"}
           >
             {isSending ? (
               <Loader2 size={16} className="animate-spin" />
             ) : isSent ? (
-              <CheckCircle size={16} />
+              <CheckCircle size={16} className="text-green-600" />
             ) : (
               <Send size={16} />
             )}
@@ -248,36 +251,8 @@ export default function BirthdayClient() {
       </div>
 
       {/* SECTIONS */}
-      <Section
-        title="Today"
-        icon={CalendarDays}
-        list={todayList}
-      />
-
-      <Section
-        title="Tomorrow"
-        icon={CalendarClock}
-        list={tomorrowList}
-      />
-
-      {/* CONFIRM */}
-      {confirmUser && (
-        <ConfirmModal
-          title="Send WhatsApp message?"
-          message={
-            <div className="space-y-1">
-              <div className="font-medium">{confirmUser.name}</div>
-              <div className="text-sm text-slate-500">
-                {confirmUser.phone}
-              </div>
-            </div>
-          }
-          confirmText="Send"
-          loading={sendingUserId === confirmUser.id}
-          onConfirm={() => sendWhatsAppMessage(confirmUser)}
-          onCancel={() => setConfirmUser(null)}
-        />
-      )}
+      <Section title="Today" icon={CalendarDays} list={todayList} />
+      <Section title="Tomorrow" icon={CalendarClock} list={tomorrowList} />
     </>
   );
 }
