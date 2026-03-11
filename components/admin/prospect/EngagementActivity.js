@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { doc, getDoc, updateDoc, collection, getDocs } from 'firebase/firestore';
 import axios from 'axios';
 import { COLLECTIONS } from "@/lib/utility_collection";
 import emailjs from '@emailjs/browser';
+import { doc, getDoc, updateDoc, collection, getDocs, addDoc,deleteDoc } from "firebase/firestore";
 import { db } from '@/firebaseConfig';
 
 const Followup = ({ id, data = { followups: [], comments: [] ,event: [] }, fetchData }) => {
@@ -26,7 +26,17 @@ const Followup = ({ id, data = { followups: [], comments: [] ,event: [] }, fetch
   const [rescheduleMode, setRescheduleMode] = useState(false);
   const WHATSAPP_API_URL = 'https://graph.facebook.com/v22.0/527476310441806/messages';
   const WHATSAPP_API_TOKEN = 'Bearer EAAHwbR1fvgsBOwUInBvR1SGmVLSZCpDZAkn9aZCDJYaT0h5cwyiLyIq7BnKmXAgNs0ZCC8C33UzhGWTlwhUarfbcVoBdkc1bhuxZBXvroCHiXNwZCZBVxXlZBdinVoVnTB7IC1OYS4lhNEQprXm5l0XZAICVYISvkfwTEju6kV4Aqzt4lPpN8D3FD7eIWXDhnA4SG6QZDZD';
+useEffect(() => {
 
+  if (!id) return;
+
+  const loadMeetings = async () => {
+    await fetchMeetings();
+  };
+
+  loadMeetings();
+
+}, [id]);
   // Format a readable date from ISO or timestamp
   const formatReadableDate = (inputDate) => {
     if (!inputDate) return '';
@@ -73,40 +83,34 @@ const Followup = ({ id, data = { followups: [], comments: [] ,event: [] }, fetch
     venue: '',
     reason: ''
   });
-  // === END NEW ===
+  
 
-useEffect(() => {
-  const fetchDataLocal = async () => {
-    try {
-      const docRef = doc(db, COLLECTIONS.prospect, id);
-      const docSnap = await getDoc(docRef);
+const deleteAccordionEvent = async (meetingId) => {
 
-      if (docSnap.exists()) {
-        const d = docSnap.data();
-        setDocData(d);
-        setFollowup(d.followup || []);
-        setComments(d.comments || []);
+  const meetingRef = doc(db, COLLECTIONS.prospect, id, "intromeetings", meetingId);
 
-       
-        // === NEW ===
-        // Load introevent array ONLY if it exists
-        if (Array.isArray(d.introevent)) {
-          setIntroEvents(d.introevent);
-        } else {
-          // Do NOT convert old event to new array
-          setIntroEvents([]);
-        }
-        // === END NEW ===
-      }
+  await deleteDoc(meetingRef);
 
-    } catch (err) {
-      console.error('fetchDataLocal error:', err);
-    }
-  };
+  setIntroEvents(prev => prev.filter(m => m.id !== meetingId));
 
-  if (id) fetchDataLocal();
+};
+const fetchMeetings = async () => {
+  try {
 
-}, [id]);
+    const meetingRef = collection(db, COLLECTIONS.prospect, id, "intromeetings");
+    const snapshot = await getDocs(meetingRef);
+
+    const meetings = snapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    }));
+
+    setIntroEvents(meetings);
+
+  } catch (err) {
+    console.error("Error fetching meetings:", err);
+  }
+};
 
   const handleSendComment = async () => {
     if (!comment.trim()) return;
@@ -156,126 +160,127 @@ useEffect(() => {
   };
   // === END NEW ===
 
-  const handleCreateOrReschedule = async () => {
-    if (!eventDate.trim()) return alert('Please select a date');
-    const formattedEventDate = formatReadableDate(eventDate);
+const handleCreateOrReschedule = async () => {
 
-    const eventDetails = {
-      date: formattedEventDate,
-      mode: eventMode,
-      zoomLink: eventMode === 'online' ? zoomLink : '',
-      venue: eventMode === 'offline' ? venue : '',
-      reason: rescheduleMode ? rescheduleReason : '',
-    };
+  if (!eventDate.trim()) return alert("Please select a date");
 
-    try {
-      const docRef = doc(db,  COLLECTIONS.prospect, id);
-      // Update legacy event field as before
+  const formattedEventDate = formatReadableDate(eventDate);
 
+  try {
 
-      // === NEW ===
-      // Compose introevent object (richer)
-      const newIntroObj = {
-        id: introEvents.length, // index-based id
-        date: formattedEventDate,
-        dateRaw: localToISO(eventDate) || (eventDate ? new Date(eventDate).toISOString() : ''),
-        mode: eventMode,
-        zoomLink: eventMode === 'online' ? zoomLink : '',
-        venue: eventMode === 'offline' ? venue : '',
-        reason: rescheduleMode ? rescheduleReason : '',
-        completed: false,
-        createdAt: Date.now(),
-        rescheduleHistory: []
-      };
+    const meetingCollection = collection(
+      db,
+      COLLECTIONS.prospect,
+      id,
+      "intromeetings"
+    );
 
-      if (rescheduleMode) {
-        // If rescheduling via old UI, update last item in introEvents (if exists) and add reschedule log
-        let updated = [];
-        if (introEvents && introEvents.length > 0) {
-          const lastIndex = introEvents.length - 1;
-          const prev = introEvents[lastIndex];
-          const rescheduleEntry = {
-            oldDate: prev.dateRaw || (prev.date ? prev.date : ''),
-            newDate: newIntroObj.dateRaw,
-            reason: rescheduleReason || '',
-            changedAt: Date.now()
-          };
-          const updatedLast = {
-            ...prev,
-            date: newIntroObj.date,
-            dateRaw: newIntroObj.dateRaw,
-            mode: newIntroObj.mode,
-            zoomLink: newIntroObj.zoomLink,
-            venue: newIntroObj.venue,
-            reason: newIntroObj.reason,
-            rescheduleHistory: [...(prev.rescheduleHistory || []), rescheduleEntry]
-          };
-          updated = [...introEvents.slice(0, lastIndex), updatedLast];
-        } else {
-          // nothing to reschedule; push new object
-          updated = [...introEvents, newIntroObj];
-        }
-        await persistIntroEvents(updated, true, updated[updated.length - 1]);
-      } else {
-        // New meeting: append to introevent and also update legacy event
-        const updated = [...(introEvents || []), newIntroObj];
-        await persistIntroEvents(updated, true, newIntroObj);
-      }
-      // === END NEW ===
+    let meetingId = null;
 
-      alert(rescheduleMode ? 'Event rescheduled successfully!' : 'Event created successfully!');
-      setCreateMode(false);
-      setRescheduleMode(false);
-      setRescheduleReason('');
-      // clear the create form
-      setEventDate('');
-      setEventMode('online');
-      setZoomLink('');
-      setVenue('');
+    // RESCHEDULE CASE
+    if (rescheduleMode && editingIndex !== null) {
 
-      // WhatsApp messages (unchanged)
-    const messages = [
-  {
-    name: data.prospectName,
-    phone: data.prospectPhone,
-    date: formattedEventDate,
-    zoomLink: eventMode === 'online' ? zoomLink : '',
-    venue: eventMode === 'offline' ? venue : ''
-  },
-  {
-    name: Name,        // NT Member selected
-    phone: NTphone,    // NT Member phone
-    date: formattedEventDate,
-    zoomLink: eventMode === 'online' ? zoomLink : '',
-    venue: eventMode === 'offline' ? venue : ''
-  }
-];
-
-
-      for (const msg of messages) {
-        await sendWhatsAppMessage({
-          ...msg,
-          isReschedule: rescheduleMode,
-          reason: rescheduleReason,
-          venue: eventMode === 'offline' ? venue : ''
-        });
-      }
-
-      // Send email to prospect
-      await sendEmailToProspect(
-        data.prospectName,
-        data.email,
-        formattedEventDate,
-        eventMode === 'online' ? zoomLink : '',
-        rescheduleMode,
-        rescheduleReason,
-        eventMode === 'offline' ? venue : ''
+      const meetingDocRef = doc(
+        db,
+        COLLECTIONS.prospect,
+        id,
+        "intromeetings",
+        editingIndex
       );
-    } catch (error) {
-      console.error('Error saving event or sending messages:', error);
-    }
-  };
 
+      await updateDoc(meetingDocRef, {
+        date: formattedEventDate,
+        dateRaw: localToISO(eventDate),
+        mode: eventMode,
+        zoomLink: eventMode === "online" ? zoomLink : "",
+        venue: eventMode === "offline" ? venue : "",
+        reason: rescheduleReason || "",
+        updatedAt: new Date()
+      });
+
+      meetingId = editingIndex;
+
+    } else {
+
+      // NEW MEETING
+      const newMeeting = await addDoc(meetingCollection, {
+
+        date: formattedEventDate,
+        dateRaw: localToISO(eventDate),
+        mode: eventMode,
+        zoomLink: eventMode === "online" ? zoomLink : "",
+        venue: eventMode === "offline" ? venue : "",
+        NTMemberName: Name,
+        NTMemberPhone: NTphone,
+        completed: false,
+        createdAt: new Date()
+
+      });
+
+      meetingId = newMeeting.id;
+
+    }
+
+    alert(rescheduleMode ? "Meeting rescheduled successfully!" : "Meeting scheduled successfully!");
+
+    setCreateMode(false);
+    setRescheduleMode(false);
+    setRescheduleReason("");
+
+    setEventDate("");
+    setEventMode("online");
+    setZoomLink("");
+    setVenue("");
+
+    // WhatsApp messages
+
+    const messages = [
+      {
+        name: data.prospectName,
+        phone: data.prospectPhone,
+        date: formattedEventDate,
+        zoomLink: eventMode === "online" ? zoomLink : "",
+        venue: eventMode === "offline" ? venue : ""
+      },
+      {
+        name: Name,
+        phone: NTphone,
+        date: formattedEventDate,
+        zoomLink: eventMode === "online" ? zoomLink : "",
+        venue: eventMode === "offline" ? venue : ""
+      }
+    ];
+
+    for (const msg of messages) {
+      await sendWhatsAppMessage({
+        ...msg,
+        isReschedule: rescheduleMode,
+        reason: rescheduleReason,
+        venue: eventMode === "offline" ? venue : ""
+      });
+    }
+
+    // Email
+
+    await sendEmailToProspect(
+  data.prospectName,
+  data.email,
+  formattedEventDate,
+  eventMode === "online" ? zoomLink : "",
+  rescheduleMode,
+  rescheduleReason,
+  eventMode === "offline" ? venue : ""
+);
+
+await fetchMeetings(); // ADD THIS
+
+  } catch (error) {
+
+    console.error("Error saving meeting:", error);
+
+  }
+
+};
   const sendEmailToProspect = async (prospectName, email, date, zoomLink, isReschedule = false, reason = '', venue = '') => {
     const scheduleDetails = zoomLink
       ? `Zoom Link: ${zoomLink}`
@@ -517,8 +522,9 @@ Regardless of your choice, we are grateful for the opportunity to connect with y
   const toggleOpen = (idx) => setOpenIndex(openIndex === idx ? null : idx);
 
   const startAccordionEdit = (idx) => {
-    const ev = introEvents[idx];
-    setEditingIndex(idx);
+  const ev = introEvents[idx];
+  setEditingIndex(ev.id);
+
     setAccordionForm({
       dateRaw: ev.dateRaw || '',
       mode: ev.mode || 'online',
@@ -581,19 +587,7 @@ Regardless of your choice, we are grateful for the opportunity to connect with y
     }
   };
 
-  const deleteAccordionEvent = async (idx) => {
-    if (!window.confirm('Delete this meeting?')) return;
-    const updated = introEvents.filter((_, i) => i !== idx).map((ev, i) => ({ ...ev, id: i }));
-    try {
-      const latestEvent = updated.length ? updated[updated.length - 1] : null;
-      await persistIntroEvents(updated, true, latestEvent);
-      alert('Deleted.');
-    } catch (err) {
-      console.error('deleteAccordionEvent', err);
-      alert('Failed to delete.');
-    }
-  };
-  // === END NEW ===
+
 
 return (
 <div className="max-w-6xl mx-auto p-6 text-black">
@@ -857,7 +851,7 @@ No meetings scheduled yet.
 
 introEvents.map((ev, idx) => (
 
-<div key={idx} className="border rounded-xl p-4 bg-white shadow-sm">
+<div key={ev.id} className="border rounded-xl p-4 bg-white shadow-sm">
 
 <div className="flex justify-between items-center">
 
@@ -899,7 +893,7 @@ Done
 
 
 <button
-onClick={() => deleteAccordionEvent(idx)}
+onClick={() => deleteAccordionEvent(ev.id)}
 className="bg-red-600 text-white px-3 py-1 rounded"
 >
 Delete
