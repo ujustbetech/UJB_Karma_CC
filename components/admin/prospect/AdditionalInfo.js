@@ -1,283 +1,254 @@
-import React, { useState, useEffect } from 'react';
-import { doc, getDoc, updateDoc,collection,addDoc } from 'firebase/firestore';
-import { db } from '@/firebaseConfig';
+"use client";
+
+import React, { useState, useEffect } from "react";
+import { doc, updateDoc } from "firebase/firestore";
+import { db } from "@/firebaseConfig";
 import { COLLECTIONS } from "@/lib/utility_collection";
-import 'react-quill/dist/quill.snow.css';
-import emailjs from '@emailjs/browser';
-import axios from 'axios';
-import dynamic from 'next/dynamic';
+import "react-quill-new/dist/quill.snow.css";
+import emailjs from "@emailjs/browser";
+import axios from "axios";
+import dynamic from "next/dynamic";
 
-// Dynamically import ReactQuill with SSR disabled
-const ReactQuill = dynamic(() => import('react-quill'), { ssr: false });
+const ReactQuill = dynamic(() => import("react-quill-new"), {
+  ssr: false,
+  loading: () => <p>Loading editor...</p>,
+});
 
-
-
-const AditionalInfo = ({ id, data = { sections: [] }, fetchData })     => {
+const AditionalInfo = ({ id, data = { sections: [] }, fetchData }) => {
   const [section, setSection] = useState({
-    lived: '',
-    overviewOfUJB: '',
-    whyUJB: '',
-    selectionRational: '',
-    tangible: '',
-    intangible: '',
-    vision: '',
-    happyFace: '',
+    lived: "",
+    overviewOfUJB: "",
+    whyUJB: "",
+    selectionRational: "",
+    tangible: "",
+    intangible: "",
+    vision: "",
+    happyFace: "",
   });
-  
-  
+
+  const [mounted, setMounted] = useState(false);
   const [loading, setLoading] = useState(false);
-  const WHATSAPP_API_URL = 'https://graph.facebook.com/v22.0/527476310441806/messages';
-  const WHATSAPP_API_TOKEN = 'Bearer EAAHwbR1fvgsBOwUInBvR1SGmVLSZCpDZAkn9aZCDJYaT0h5cwyiLyIq7BnKmXAgNs0ZCC8C33UzhGWTlwhUarfbcVoBdkc1bhuxZBXvroCHiXNwZCZBVxXlZBdinVoVnTB7IC1OYS4lhNEQprXm5l0XZAICVYISvkfwTEju6kV4Aqzt4lPpN8D3FD7eIWXDhnA4SG6QZDZD';
+
+  const WHATSAPP_API_URL =
+    "https://graph.facebook.com/v22.0/527476310441806/messages";
+
+  const WHATSAPP_API_TOKEN =
+    "Bearer EAAHwbR1fvgsBOwUInBvR1SGmVLSZCpDZAkn9aZCDJYaT0h5cwyiLyIq7BnKmXAgNs0ZCC8C33UzhGWTlwhUarfbcVoBdkc1bhuxZBXvroCHiXNwZCZBVxXlZBdinVoVnTB7IC1OYS4lhNEQprXm5l0XZAICVYISvkfwTEju6kV4Aqzt4lPpN8D3FD7eIWXDhnA4SG6QZDZD";
+
   useEffect(() => {
-    console.log('Received data:', data);
+    setMounted(true);
+  }, []);
+
+  useEffect(() => {
     if (data.sections?.[0]) {
       setSection(data.sections[0]);
     }
   }, [data]);
-  
 
   const handleInputChange = (value, field) => {
     setSection((prev) => ({ ...prev, [field]: value }));
   };
 
- const handleSave = async () => {
-  setLoading(true);
-  console.log('Saving sections:', section);
+  const handleSave = async () => {
+    setLoading(true);
 
-  try {
-    // Update sections in an existing Prospect document
-    const existingDocRef = doc(db, COLLECTIONS.prospect, id);
-    await updateDoc(existingDocRef, { sections: [section] });
+    try {
+      const existingDocRef = doc(db, COLLECTIONS.prospect, id);
 
+      await updateDoc(existingDocRef, { sections: [section] });
 
-  
-      // 3. Generate Form Link dynamically
-     const formLink = `https://otc-app.vercel.app/prospectfeedbackform/${id}`;
+      const formLink = `https://otc-app.vercel.app/prospectfeedbackform/${id}`;
 
-      console.log("Send this form link to Orbiter: ", formLink);
-  
-      // 4. Prepare data for Email and WhatsApp
-      const orbiterName = data.orbiterName || 'Orbiter';
-      const prospectEmail = data.email || 'orbiter@example.com';
-      const prospectName = data.prospectName || 'Prospect';
-      const formattedDate = new Date().toLocaleDateString('en-GB'); // DD/MM/YYYY
-      const phone = data.prospectPhone || '9999999999';
-  
+      const orbiterName = data.orbiterName || "Orbiter";
+      const prospectEmail = data.email || "orbiter@example.com";
+      const prospectName = data.prospectName || "Prospect";
+      const phone = data.prospectPhone || "9999999999";
+
       const emailBody = `
-  Dear ${prospectName},
-  
-  It was a pleasure connecting with you and introducing UJustBe! 
-  
-  We truly appreciate your time and the insights you shared.
-  
-  To help us move forward meaningfully, we’d love to hear your feedback.
-  
-  Please take a few minutes to fill out this form: ${formLink}
-  
-  Thank you!
-      `;
-  
-      // 5. Send Email
-      await sendAssessmentEmail(orbiterName, prospectEmail, prospectName, formattedDate, formLink);
-  
-      // 6. Send WhatsApp Message
-      await sendAssesmentMessage(orbiterName, prospectName, emailBody, phone);
-  
+Dear ${prospectName},
+
+It was a pleasure connecting with you and introducing UJustBe!
+
+Please take a few minutes to fill out this form: ${formLink}
+
+Thank you!
+`;
+
+      await sendAssessmentEmail(
+        orbiterName,
+        prospectEmail,
+        prospectName,
+        formLink
+      );
+
+      await sendAssesmentMessage(
+        orbiterName,
+        prospectName,
+        emailBody,
+        phone
+      );
     } catch (error) {
-      console.error('Error saving section or sending notifications:', error);
+      console.error("Error saving section:", error);
     }
-  
+
     setLoading(false);
   };
-  
+
   const sanitizeText = (text) => {
     return text
-      .replace(/[\n\t]/g, ' ')          // Replace newlines and tabs with spaces
-      .replace(/ {5,}/g, '    ')        // Reduce any 5+ spaces to 4 spaces
+      .replace(/[\n\t]/g, " ")
+      .replace(/ {5,}/g, "    ")
       .trim();
   };
-  const sendAssesmentMessage = async (orbiterName, prospectName, bodyText, phone) => {
+
+  const sendAssesmentMessage = async (
+    orbiterName,
+    prospectName,
+    bodyText,
+    phone
+  ) => {
     const payload = {
-      messaging_product: 'whatsapp',
+      messaging_product: "whatsapp",
       to: `91${phone}`,
-      type: 'template',
+      type: "template",
       template: {
-        name: 'enrollment_journey',
-        language: { code: 'en' },
+        name: "enrollment_journey",
+        language: { code: "en" },
         components: [
           {
-            type: 'body',
+            type: "body",
             parameters: [
-          
-              { type: 'text', text: sanitizeText(bodyText) },
-              { type: 'text', text: sanitizeText(orbiterName) }
-            ]
-          }
-        ]
-      }
+              { type: "text", text: sanitizeText(bodyText) },
+              { type: "text", text: sanitizeText(orbiterName) },
+            ],
+          },
+        ],
+      },
     };
-  
+
     try {
       await axios.post(WHATSAPP_API_URL, payload, {
         headers: {
           Authorization: WHATSAPP_API_TOKEN,
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
         },
       });
-      console.log(`✅ WhatsApp message sent to ${prospectName}`);
+
+      console.log("WhatsApp message sent");
     } catch (error) {
-      console.error(`❌ Failed to send WhatsApp to ${prospectName}`, error.response?.data || error.message);
+      console.error("WhatsApp failed", error);
     }
   };
-  
-  const sendAssessmentEmail = async (orbiterName, prospectEmail, prospectName, formattedDate, formLink) => {
-    const body = `
-   Dear  ${prospectName}, 
 
- 
-
-It was a pleasure connecting with you and introducing UJustBe. We truly appreciate your time and the insights you shared during our conversation. 
-
- 
-
-To help us enhance our engagement and proceed further, we would love to hear your feedback. Please take a few moments to fill out the attached feedback form/link and share your thoughts with us within the next two working days. 
-
-Form Link : ${formLink}
- 
-
-Your input is valuable, and we look forward to continuing this journey with you. 
-    `;
-    
-      const templateParams = {
-        prospect_name: prospectName,
-        to_email: prospectEmail,
-        body,
-        orbiter_name: orbiterName,
-      };
-    
-      try {
-        await emailjs.send(
-          'service_acyimrs',
-          'template_cdm3n5x',
-          templateParams,
-          'w7YI9DEqR9sdiWX9h'
-        );
-        console.log("📧 Assessment email sent successfully.");
-      } catch (error) {
-        console.error("❌ Failed to send assessment email:", error);
-      }
+  const sendAssessmentEmail = async (
+    orbiterName,
+    prospectEmail,
+    prospectName,
+    formLink
+  ) => {
+    const templateParams = {
+      prospect_name: prospectName,
+      to_email: prospectEmail,
+      body: `Please fill feedback form ${formLink}`,
+      orbiter_name: orbiterName,
     };
-  
-  return (
-<div>
-  <div className="prospect-container">
-    <h2 className="form-title">UJB Pre Enrollment Assesment Form</h2>
-    <ul className="prospect-list">
-    <li className='form-row'>
-        <h4 className="prospect-label">As lived Experience:<sup>*</sup></h4>
-        <div className="editor-wrapper">
-          <ReactQuill
-            theme="snow"
-            placeholder="Lived"
-            value={section.lived}
-            onChange={(value) => handleInputChange(value, 'lived')}
-          />
-        </div>
-      </li>
-   
 
-      <li className='form-row'>
-        <h4 className="prospect-label">Overview of UJustBe:<sup>*</sup></h4>
-        <div className="editor-wrapper">
-          <ReactQuill
-            theme="snow"
-            value={section.overviewOfUJB}
-            onChange={(value) => handleInputChange(value, 'overviewOfUJB')}
-          />
-        </div>
-      </li>
+    try {
+      await emailjs.send(
+        "service_acyimrs",
+        "template_cdm3n5x",
+        templateParams,
+        "w7YI9DEqR9sdiWX9h"
+      );
+    } catch (error) {
+      console.error("Email failed", error);
+    }
+  };
 
-      <li className='form-row'>
-        <h4 className="prospect-label">Why UJustBe for Prospect:<sup>*</sup></h4>
-        <div className="editor-wrapper">
-          <ReactQuill
-            theme="snow"
-            value={section.whyUJB}
-            onChange={(value) => handleInputChange(value, 'whyUJB')}
-          />
-        </div>
-      </li>
-
-      <li className='form-row'>
-        <h4 className="prospect-label">Selection Rationale:<sup>*</sup></h4>
-        <div className="editor-wrapper">
-          <ReactQuill
-            theme="snow"
-            value={section.selectionRational}
-            onChange={(value) => handleInputChange(value, 'selectionRational')}
-          />
-        </div>
-      </li>
-
-      <li className='form-row'>
-        <h4 className="prospect-label">Tangible Aspects:<sup>*</sup></h4>
-        <div className="editor-wrapper">
-          <ReactQuill
-            theme="snow"
-            placeholder="Tangible"
-            value={section.tangible}
-            onChange={(value) => handleInputChange(value, 'tangible')}
-          />
-        </div>
-      </li>
-
-      <li className='form-row'>
-        <h4 className="prospect-label">Intangible Aspects:<sup>*</sup></h4>
-        <div className="editor-wrapper">
-          <ReactQuill
-            theme="snow"
-            placeholder="Intangible"
-            value={section.intangible}
-            onChange={(value) => handleInputChange(value, 'intangible')}
-          />
-        </div>
-      </li>
-
-      <li className='form-row'>
-        <h4 className="prospect-label">Vision Statement:<sup>*</sup></h4>
-        <div className="editor-wrapper">
-          <ReactQuill
-            theme="snow"
-            placeholder="Vision"
-            value={section.vision}
-            onChange={(value) => handleInputChange(value, 'vision')}
-          />
-        </div>
-      </li>
-
-      <li className='form-row'>
-        <h4 className="prospect-label">Happy Face:<sup>*</sup></h4>
-        <div className="editor-wrapper">
-          <ReactQuill
-            theme="snow"
-            placeholder="Happy Face"
-            value={section.happyFace}
-            onChange={(value) => handleInputChange(value, 'happyFace')}
-          />
-        </div>
-      </li>
-    </ul>
-
-    <div className="button-group">
-      <button onClick={handleSave} className="save-button" disabled={loading}>
-        {loading ? 'Saving...' : 'Save'}
-      </button>
+  const renderEditor = (field, placeholder) => (
+    <div className="editor-wrapper">
+      {mounted && (
+        <ReactQuill
+          theme="snow"
+          placeholder={placeholder}
+          value={section[field]}
+          onChange={(value) => handleInputChange(value, field)}
+        />
+      )}
     </div>
-  </div>
-</div>
-
-
   );
+
+return (
+  <div className="max-w-5xl mx-auto p-6">
+
+    <div className="bg-white border rounded-xl shadow-sm p-6">
+
+      <h2 className="text-2xl font-semibold mb-8">
+        UJB Pre Enrollment Assessment Form
+      </h2>
+
+      <div className="space-y-8">
+
+        <div>
+          <h4 className="text-lg font-medium mb-2">As lived Experience</h4>
+          {renderEditor("lived", "Lived")}
+        </div>
+
+        <div>
+          <h4 className="text-lg font-medium mb-2">Overview of UJustBe</h4>
+          {renderEditor("overviewOfUJB", "")}
+        </div>
+
+        <div>
+          <h4 className="text-lg font-medium mb-2">Why UJustBe</h4>
+          {renderEditor("whyUJB", "")}
+        </div>
+
+        <div>
+          <h4 className="text-lg font-medium mb-2">Selection Rationale</h4>
+          {renderEditor("selectionRational", "")}
+        </div>
+
+        <div>
+          <h4 className="text-lg font-medium mb-2">Tangible Aspects</h4>
+          {renderEditor("tangible", "Tangible")}
+        </div>
+
+        <div>
+          <h4 className="text-lg font-medium mb-2">Intangible Aspects</h4>
+          {renderEditor("intangible", "Intangible")}
+        </div>
+
+        <div>
+          <h4 className="text-lg font-medium mb-2">Vision Statement</h4>
+          {renderEditor("vision", "Vision")}
+        </div>
+
+        <div>
+          <h4 className="text-lg font-medium mb-2">Happy Face</h4>
+          {renderEditor("happyFace", "Happy Face")}
+        </div>
+
+      </div>
+
+      <div className="mt-8 flex justify-end">
+        <button
+          onClick={handleSave}
+          disabled={loading}
+          className={`px-6 py-2 rounded-lg text-white transition ${
+            loading
+              ? "bg-gray-400 cursor-not-allowed"
+              : "bg-black hover:bg-gray-800"
+          }`}
+        >
+          {loading ? "Saving..." : "Save"}
+        </button>
+      </div>
+
+    </div>
+
+  </div>
+);
 };
 
 export default AditionalInfo;

@@ -1,595 +1,374 @@
-import React, { useState, useEffect } from 'react';
-import { doc, getDoc, updateDoc,collection,getDocs } from 'firebase/firestore';
-import axios from 'axios';
-import emailjs from '@emailjs/browser';
-import { db } from '@/firebaseConfig';
+"use client";
+
+import React, { useState, useEffect } from "react";
+import {
+  doc,
+  getDoc,
+  updateDoc,
+  collection,
+  getDocs,
+  addDoc
+} from "firebase/firestore";
+
+import { db } from "@/firebaseConfig";
 import { COLLECTIONS } from "@/lib/utility_collection";
 
-const Followup = ({ id, data = { followups: [], comments: [] ,event: [] }, fetchData }) => {
-  const [followup, setFollowup] = useState([]);
-  const [docData, setDocData] = useState({});
-  const [loading, setLoading] = useState(false);
-  const [comment, setComment] = useState('');
-  const [NTphone, setNTPhone] = useState('');
-  const [Name, setName] = useState('');
+const Followup = ({ id, data = {} }) => {
+
   const [comments, setComments] = useState([]);
-  const [userSearch, setUserSearch] = useState('');
-  const [eventDate, setEventDate] = useState('');
-  const [eventMode, setEventMode] = useState('online');
-  const [zoomLink, setZoomLink] = useState('');
-  const [userList, setUserList] = useState([]);
-  const [venue, setVenue] = useState('');
-  const [eventCreated, setEventCreated] = useState(null);
-  const [rescheduleReason, setRescheduleReason] = useState('');
-  const [filteredUsers, setFilteredUsers] = useState([]);
+  const [comment, setComment] = useState("");
+
   const [createMode, setCreateMode] = useState(false);
   const [rescheduleMode, setRescheduleMode] = useState(false);
-  const WHATSAPP_API_URL = 'https://graph.facebook.com/v22.0/527476310441806/messages';
-  const WHATSAPP_API_TOKEN = 'Bearer EAAHwbR1fvgsBOwUInBvR1SGmVLSZCpDZAkn9aZCDJYaT0h5cwyiLyIq7BnKmXAgNs0ZCC8C33UzhGWTlwhUarfbcVoBdkc1bhuxZBXvroCHiXNwZCZBVxXlZBdinVoVnTB7IC1OYS4lhNEQprXm5l0XZAICVYISvkfwTEju6kV4Aqzt4lPpN8D3FD7eIWXDhnA4SG6QZDZD';
-  const formatReadableDate = (inputDate) => {
-    const d = new Date(inputDate);
-    const day = String(d.getDate()).padStart(2, '0');
-    const month = d.toLocaleString('en-GB', { month: 'long' });
-    const year = String(d.getFullYear()).slice(-2);
-    let hours = d.getHours();
-    const minutes = String(d.getMinutes()).padStart(2, '0');
-    const ampm = hours >= 12 ? 'PM' : 'AM';
-  
-    hours = hours % 12 || 12;
-  
-    return `${day} ${month} ${year} at ${hours}.${minutes} ${ampm}`;
-  };
+
+  const [eventDate, setEventDate] = useState("");
+  const [eventMode, setEventMode] = useState("online");
+  const [zoomLink, setZoomLink] = useState("");
+  const [venue, setVenue] = useState("");
+
+  const [eventCreated, setEventCreated] = useState(null);
+  const [meetings, setMeetings] = useState([]);
+
+  /* ---------------- FETCH DATA ---------------- */
+
   useEffect(() => {
-    const fetchData = async () => {
+
+    const fetchProspect = async () => {
+
       const docRef = doc(db, COLLECTIONS.prospect, id);
-      const docSnap = await getDoc(docRef);
-      if (docSnap.exists()) {
-        const data = docSnap.data();
-        setDocData(data);
-        setFollowup(data.followup || []);
-        setComments(data.comments || []);
-        if (data.event) {
-          setEventCreated(data.event);
-        }
+      const snap = await getDoc(docRef);
+
+      if (snap.exists()) {
+
+        const d = snap.data();
+        setComments(d.comments || []);
+
       }
+
+      fetchMeetings();
     };
 
-    fetchData();
+    fetchProspect();
+
   }, [id]);
 
-  const handleSendComment = async () => {
-    if (!comment.trim()) return;
+  /* ---------------- FETCH MEETINGS ---------------- */
 
-    const newComment = {
-      text: comment.trim(),
-      timestamp: new Date().toISOString(),
-    };
+  const fetchMeetings = async () => {
 
-    const updatedComments = [newComment, ...comments];
+    const meetingRef = collection(db, COLLECTIONS.prospect, id, "meetings");
+    const snapshot = await getDocs(meetingRef);
 
-    try {
-      const docRef = doc(db, COLLECTIONS.prospect, id);
-      await updateDoc(docRef, { comments: updatedComments });
-      setComments(updatedComments);
-      setComment('');
-    } catch (err) {
-      console.error('Error adding comment:', err);
+    const data = snapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    }));
+
+    data.sort((a,b)=> new Date(b.createdAt) - new Date(a.createdAt));
+
+    setMeetings(data);
+
+    if(data.length > 0){
+      setEventCreated(data[0]);
     }
+
   };
 
- 
+  /* ---------------- FORMAT DATE ---------------- */
+
+  const formatReadableDate = (inputDate) => {
+
+    if(!inputDate) return "—";
+
+    const d = new Date(inputDate);
+
+    const day = String(d.getDate()).padStart(2,"0");
+    const month = d.toLocaleString("en-GB",{month:"long"});
+    const year = d.getFullYear();
+
+    let hours = d.getHours();
+    const minutes = String(d.getMinutes()).padStart(2,"0");
+
+    const ampm = hours >= 12 ? "PM" : "AM";
+
+    hours = hours % 12 || 12;
+
+    return `${day} ${month} ${year} at ${hours}:${minutes} ${ampm}`;
+  };
+
+  /* ---------------- CREATE / RESCHEDULE ---------------- */
+
   const handleCreateOrReschedule = async () => {
-    if (!eventDate.trim()) return alert('Please select a date');
+
+    if(!eventDate) return alert("Please select date");
+
     const formattedEventDate = formatReadableDate(eventDate);
-  
-    const eventDetails = {
-      date: formattedEventDate, 
+
+    const meetingData = {
+      rawDate: eventDate,
+      date: formattedEventDate,
       mode: eventMode,
-      zoomLink: eventMode === 'online' ? zoomLink : '',
-      venue: eventMode === 'offline' ? venue : '',
-      reason: rescheduleMode ? rescheduleReason : '',
-    
+      zoomLink: eventMode === "online" ? zoomLink : "",
+      venue: eventMode === "offline" ? venue : "",
+      createdAt: new Date()
     };
-  
-    try {
-      const docRef = doc(db, COLLECTIONS.prospect, id);
-      await updateDoc(docRef, { event: eventDetails });
-      setEventCreated(eventDetails);
-  
-   
-  
-      alert(rescheduleMode ? 'Event rescheduled successfully!' : 'Event created successfully!');
+
+    try{
+
+      const meetingRef = collection(db, COLLECTIONS.prospect, id, "meetings");
+
+      await addDoc(meetingRef, meetingData);
+
+      alert(rescheduleMode ? "Meeting rescheduled" : "Meeting scheduled");
+
       setCreateMode(false);
       setRescheduleMode(false);
-      setRescheduleReason('');
-  
-      // WhatsApp messages
-     const messages = [
-  {
-    name: data.prospectName,
-    phone: data.prospectPhone,
-    date: formattedEventDate,
-    zoomLink: eventMode === 'online' ? zoomLink : '',
-    venue: eventMode === 'offline' ? venue : ''
-  },
-  {
-    name: data.orbiterName,
-    phone: data.orbiterContact,
-    date: formattedEventDate,
-    zoomLink: eventMode === 'online' ? zoomLink : '',
-    venue: eventMode === 'offline' ? venue : ''
-  }
-];
 
-  
-   for (const msg of messages) {
-  await sendWhatsAppMessage({
-    ...msg,
-    isReschedule: rescheduleMode,
-    reason: rescheduleReason,
-    venue: eventMode === 'offline' ? venue : ''
-  });
-}
+      setEventDate("");
+      setZoomLink("");
+      setVenue("");
 
-  
-      // Send email to prospect
-  await sendEmailToProspect(
-  data.prospectName,
-  data.email,
-  formattedEventDate,
-  eventMode === 'online' ? zoomLink : '',
-  rescheduleMode,
-  rescheduleReason,
-  eventMode === 'offline' ? venue : ''
-);
+      fetchMeetings();
 
-  
-    } catch (error) {
-      console.error('Error saving event or sending messages:', error);
+    }catch(err){
+
+      console.error("Meeting save error",err);
+      alert("Error saving meeting");
+
     }
+
   };
 
+  /* ---------------- COMMENTS ---------------- */
 
-const sendEmailToProspect = async (prospectName, email, date, zoomLink, isReschedule = false, reason = '', venue = '') => {
- const scheduleDetails = zoomLink
-  ? `Zoom Link: ${zoomLink}`
-  : venue
-    ? `Venue: ${venue}`
-    : 'Details will be shared soon';
+  const handleSendComment = async () => {
 
-const body = isReschedule
-  ? `Dear ${prospectName},
+    if(!comment.trim()) return;
 
-As you are aware, due to ${reason}, we need to reschedule our upcoming call.
+    const newComment = {
+      text: comment,
+      timestamp: new Date().toISOString()
+    };
 
-We are available for the call on ${date}. Please confirm if this works for you, or let us know a convenient time within the next two working days so we can align accordingly.`
-  : `Thank you for confirming your availability. We look forward to connecting with you and sharing insights about UJustBe and how it fosters meaningful contributions in the areas of Relationship, Health, and Wealth.
+    const updated = [newComment,...comments];
 
-Schedule details:
+    const docRef = doc(db, COLLECTIONS.prospect, id);
 
-Date: ${date}  
-${scheduleDetails}
-
-Our conversation will be an opportunity to explore possibilities, answer any questions you may have, and understand how UJustBe aligns with your aspirations.
-
-Looking forward to speaking with you soon! `;
-
-  const templateParams = {
-    prospect_name: prospectName,
-    to_email: email,
-    body,
-  };
-
-  try {
-    await emailjs.send(
-      'service_acyimrs',
-      'template_cdm3n5x',
-      templateParams,
-      'w7YI9DEqR9sdiWX9h'
-    );
-
-    console.log(`✅ Email sent to ${prospectName} (${email})`);
-  } catch (error) {
-    console.error(`❌ Failed to send email to ${prospectName}:`, error);
-  }
-};
-
-  
-const sendWhatsAppMessage = async ({
-  name,
-  phone,
-  date,
-  zoomLink,
-  isReschedule = false,
-  reason = '',
-  venue = ''
-}) => {
-  const payload = {
-    messaging_product: 'whatsapp',
-    to: `91${phone}`,
-    type: 'template',
-    template: {
-      name: isReschedule ? 'reschedule_meeting_otc' : 'schedule_message_otc',
-      language: { code: 'en' },
-      components: [
-        {
-          type: 'body',
-          parameters: isReschedule
-            ? [
-                { type: 'text', text: name },
-                { type: 'text', text: reason },
-                { type: 'text', text: date }
-              ]
-            : [
-                { type: 'text', text: name },
-                { type: 'text', text: date },
-                {
-                  type: 'text',
-                  text: zoomLink
-                    ? `Zoom Link: ${zoomLink}`
-                    : `Venue: ${venue}`
-                }
-              ]
-        }
-      ]
-    }
-  };
-
-  try {
-    await axios.post(WHATSAPP_API_URL, payload, {
-      headers: {
-        Authorization: WHATSAPP_API_TOKEN,
-        'Content-Type': 'application/json'
-      }
+    await updateDoc(docRef,{
+      comments: updated
     });
 
-    console.log(`✅ WhatsApp message sent to ${name} (${phone})`);
-  } catch (err) {
-    console.error(`❌ Failed to send message to ${name}:`, err.response?.data || err.message);
-  }
-};
+    setComments(updated);
+    setComment("");
 
-
-// Function to send thank you message
-const sendThankYouMessage = async (name, phone) => {
-  const payload = {
-    messaging_product: 'whatsapp',
-    to: `91${phone}`,
-    type: 'template',
-    template: {
-      name: 'meeeting_done_thankyou_otc',
-      language: { code: 'en' },
-      components: [
-        {
-          type: 'body',
-          parameters: [{ type: 'text', text: name }]
-        }
-      ]
-    }
   };
 
-  try {
-    await axios.post(WHATSAPP_API_URL, payload, {
-      headers: {
-        Authorization: WHATSAPP_API_TOKEN,
-        'Content-Type': 'application/json',
-      },
-    });
-    console.log(`✅ Message sent to ${name}`);
-  } catch (error) {
-    console.error(`❌ Failed to send message to ${name}`, error.response?.data || error.message);
-  }
-}; 
- useEffect(() => {
-        const fetchUsers = async () => {
-          try {
-            const userRef = collection(db,COLLECTIONS.userDetail);
-            const snapshot = await getDocs(userRef);
-            const data = snapshot.docs.map(doc => ({
-              id: doc.id,
-              name: doc.data()["Name"],
-              phone: doc.data()["MobileNo"],
-              Email: doc.data()["Email"]
-            }));
-            setUserList(data);
-          } catch (error) {
-            console.error('Error fetching users:', error);
-          }
-        };
-    
-        fetchUsers();
-      }, []);
-
-const handleSearchUser = (e) => {
-    const value = e.target.value.toLowerCase();
-    setUserSearch(value);
-    const filtered = userList.filter(user =>
-        user.Name && user.Name.toLowerCase().includes(value) // Check if name exists
-    );
-    setFilteredUsers(filtered);
-};
-
-const handleSelectUser = (user) => {
-    setName(user.Name);
-    setNTPhone(user.NTphone);
-    setUserSearch('');
-    setFilteredUsers([]);
-};
-const sendThankYouEmail = async (recipientName, recipientEmail) => {
-  const body = `Dear ${recipientName},
-
-Thank you for taking the time to connect with us. It was a pleasure learning about your interests and sharing how UJustBe creates meaningful contributions in the areas of Relationship, Health, and Wealth. We truly value the time and energy you invested in this conversation.
-
-As you reflect on our discussion, we hope you consider how being part of the UJustBe Universe can contribute to building stronger connections, enhancing well-being, and creating possibilities for growth and collaboration. Should you have any questions or require further clarity, we are here to support you.
-
-Regardless of your choice, we are grateful for the opportunity to connect with you and would love to stay in touch. UJustBe is a space where contributions in all aspects of life lead to shared progress and empowerment, and we hope to welcome you into this journey whenever it feels right for you.`;
-
-  const templateParams = {
-    prospect_name: recipientName,
-    to_email: recipientEmail,
-    body,
-  };
-
-  try {
-    await emailjs.send(
-      'service_acyimrs',
-      'template_cdm3n5x',
-      templateParams,
-      'w7YI9DEqR9sdiWX9h'
-    );
-    console.log(`✅ Thank you email sent to ${recipientName}`);
-  } catch (error) {
-    console.error(`❌ Failed to send thank you email to ${recipientName}:`, error);
-  }
-};
-
-
-
-// Button handler
-const handleMeetingDone = async () => {
-  try {
-    if (!data) return alert("Prospect data not available");
-
-    const messagesToSend = [
-      {
-        name: data.prospectName,
-        phone: data.prospectPhone,
-        email: data.email, // <-- assuming prospect's email is here
-      },
-      {
-        name: data.orbiterName,
-        phone: data.orbiterContact,
-        email: data.orbiterEmail, // <-- optional if available
-      },
-    ];
-
-    for (const msg of messagesToSend) {
-      await sendThankYouMessage(msg.name, msg.phone);
-      if (msg.email) {
-        await sendThankYouEmail(msg.name, msg.email);
-      }
-    }
-
-    alert("Thank you messages sent successfully!");
-  } catch (error) {
-    console.error('Meeting Done Error:', error);
-    alert("Something went wrong while sending messages.");
-  }
-};
-
+  /* ---------------- UI ---------------- */
 
   return (
-    <div>
-      <h2>Meeting Schedule Logs</h2>
 
-      {/* Event Section */}
- 
+  <div className="max-w-5xl mx-auto p-6 text-black">
 
+  <h2 className="text-2xl font-semibold mb-6 border-b pb-2">
+  Meeting Schedule Logs
+  </h2>
 
-        {!createMode && !eventCreated && (
-         <button
-         className='m-button-7'
-         style={{ float: 'right' }}
-         onClick={() => setCreateMode(true)}
-       >
-         Schedule Meet
-       </button>
-       
-        )}
+  {!createMode && !eventCreated && (
+  <button
+  className="bg-black text-white px-5 py-2 rounded-lg mb-6"
+  onClick={()=>setCreateMode(true)}
+  >
+  Schedule Meet
+  </button>
+  )}
 
-        {eventCreated && !rescheduleMode && (
-          <>
-        <div className='event-card'>
-  <h4>Event Details</h4>
+  {/* EVENT DETAILS */}
+
+  {eventCreated && !rescheduleMode && (
+
+  <div className="bg-white border p-6 rounded-xl mb-6">
+
+  <h4 className="font-semibold mb-3">Latest Meeting</h4>
+
   <p><strong>Date:</strong> {eventCreated.date}</p>
   <p><strong>Mode:</strong> {eventCreated.mode}</p>
-  {eventCreated.mode === 'online' ? (
-    <p><strong>Zoom Link:</strong> <a href={eventCreated.zoomLink} target='_blank' rel='noopener noreferrer'>{eventCreated.zoomLink}</a></p>
-  ) : (
-    <p><strong>Venue:</strong> {eventCreated.venue}</p>
+
+  {eventCreated.mode==="online" ? (
+
+  <p>
+  <strong>Zoom:</strong>{" "}
+  <a href={eventCreated.zoomLink} className="text-blue-600 underline">
+  {eventCreated.zoomLink}
+  </a>
+  </p>
+
+  ):(
+
+  <p><strong>Venue:</strong> {eventCreated.venue}</p>
+
   )}
-   <ul>
-      <li className='form-row'>
-      <div className='twobtns'>
-    <button className='m-button-7' onClick={() => {
-              setEventDate(eventCreated.date);
-              setEventMode(eventCreated.mode);
-              setZoomLink(eventCreated.zoomLink || '');
-              setVenue(eventCreated.venue || '');
-              setRescheduleMode(true);
-            }}>
-              Reschedule
-            </button>
-            <button className='submitbtn' onClick={handleMeetingDone}>
-    Done
+
+  <div className="flex gap-3 mt-4">
+
+  <button
+  className="bg-gray-800 text-white px-4 py-2 rounded"
+  onClick={()=>{
+  setEventDate(eventCreated.rawDate);
+  setEventMode(eventCreated.mode);
+  setZoomLink(eventCreated.zoomLink || "");
+  setVenue(eventCreated.venue || "");
+  setRescheduleMode(true);
+  }}
+  >
+  Reschedule
   </button>
-            </div>
-            </li>
-            </ul>
-</div>
 
-           
-          </>
-        )}
+  </div>
 
-        {(createMode || rescheduleMode) && (
-            <section className='c-form box'>
-   <ul>
-            <li className='form-row'>
-            <h4>Date:<sup>*</sup></h4>
-            <div className='multipleitem'>
-              <input
-                type='datetime-local'
-                value={eventDate}
-                onChange={(e) => setEventDate(e.target.value)}
-              />
-            </div>
-            </li>
-            {rescheduleMode && (
-  <li className='form-row'>
-    <h4>Reason for Rescheduling:<sup>*</sup></h4>
-    <div className='multipleitem'>
-      <textarea
-        placeholder='Enter reason for rescheduling'
-        value={rescheduleReason}
-        onChange={(e) => setRescheduleReason(e.target.value)}
-        rows={3}
-        style={{ width: '100%' }}
-      />
-    </div>
-  </li>
-)}
-      {/* <ul>
-                    <li className='form-row'>
-                    <h4>Select NT Member:<sup>*</sup></h4>
-                    <div className='multipleitem'>
-                        <input
-                            type="text"
-                            placeholder="Search NTMember"
-                            value={userSearch}
-                            onChange={handleSearchUser}
-                        />
-                        {filteredUsers.length > 0 && (
-                            <ul className="dropdown">
-                                {filteredUsers.map(user => (
-                                    <li key={user.id} onClick={() => handleSelectUser(user)}>
-                                        {user.Name}
-                                    </li>
-                                ))}
-                            </ul>
-                        )}
-                    </div>
-                </li>
-                <li className='form-row'>
-                    <h4>Selected NTMember's Name:<sup>*</sup></h4>
-                    <div className='multipleitem'>
-                        <p>{Name}</p>
-                    </div>
-                </li>
-                <li className='form-row'>
-                    <h4>Selected NTMember's Phone:<sup>*</sup></h4>
-                    <div className='multipleitem'>
-                        <p>{NTphone}</p>
-                    </div>
-                </li>
-                </ul> */}
-           
-            {!rescheduleMode && (
-              <>
-          
-                <li className='form-row'>
-                            <h4>Event Mode:</h4>
-                            <div className='multipleitem'>
-                            <select
-                    value={eventMode}
-                    onChange={(e) => setEventMode(e.target.value)}
-                  >
-                                   <option value='online'>Online</option>
-                    <option value='offline'>Offline</option>
-                  </select>
-                            </div>
-                        </li>
-                {eventMode === 'online' && (
-                  <li className='form-row'>
-                    <label>Zoom Link:</label>
-                    <div className='multipleitem'>
-                    <input
-                      type='text'
-                      placeholder='Enter Zoom link'
-                      value={zoomLink}
-                      onChange={(e) => setZoomLink(e.target.value)}
-                    />
-                    </div>
-                  </li>
-               
-                )}
-   
-                {eventMode === 'offline' && (
-                  <div className='form-row'>
-                    <label>Venue:</label>
-                    <div className='multipleitem'>
-                    <input
-                      type='text'
-                      placeholder='Enter venue address'
-                      value={venue}
-                      onChange={(e) => setVenue(e.target.value)}
-                    />
-                    </div>
-                  </div>
-                )}
-              </>
-            )}
-  <ul>
-                        <li className='form-row'>
-                            <div className='multipleitem'>
-            <button className='submitbtn' onClick={handleCreateOrReschedule}>
-              {rescheduleMode ? 'Reschedule' : 'Schedule'}
-            </button>
-            </div>
-            </li>
-            </ul>
-      </ul>
-          </section>
-        )}
-   
+  </div>
 
-      {/* Comments Section */}
-     
-  <div >
-  <h3>Comments</h3>
-
-  {comments.length === 0 ? (
-    <p>No comments yet.</p>
-  ) : (
-    <div className="comment-list">
-      {comments.map((c, idx) => (
-        <div key={idx} className="comment-bubble">
-          <span className="chat-timestamp">{new Date(c.timestamp).toLocaleString()}</span>
-          <p>{c.text}</p>
-        </div>
-      ))}
-    </div>
   )}
 
-  <div className="chat-input-area">
-    <textarea
-      value={comment}
-      onChange={(e) => setComment(e.target.value)}
-      placeholder="Write your message..."
-      rows={2}
-      className="chat-textarea"
-    />
-       <div className='multipleitem'>
-    <button onClick={handleSendComment} className='m-button-9'>Send</button>
-    </div>
+  {/* CREATE / RESCHEDULE FORM */}
+
+  {(createMode || rescheduleMode) && (
+
+  <div className="bg-white border p-6 rounded-xl mb-6">
+
+  <div className="grid gap-4">
+
+  <div>
+  <label>Date</label>
+  <input
+  type="datetime-local"
+  value={eventDate || ""}
+  onChange={(e)=>setEventDate(e.target.value)}
+  className="w-full border p-2 rounded"
+  />
   </div>
-</div>
 
+  {!rescheduleMode && (
 
+  <>
+  <div>
+  <label>Mode</label>
+  <select
+  value={eventMode}
+  onChange={(e)=>setEventMode(e.target.value)}
+  className="w-full border p-2 rounded"
+  >
+  <option value="online">Online</option>
+  <option value="offline">Offline</option>
+  </select>
+  </div>
 
-</div>
+  {eventMode==="online" && (
+
+  <input
+  placeholder="Zoom Link"
+  value={zoomLink || ""}
+  onChange={(e)=>setZoomLink(e.target.value)}
+  className="border p-2 rounded"
+  />
+
+  )}
+
+  {eventMode==="offline" && (
+
+  <input
+  placeholder="Venue"
+  value={venue || ""}
+  onChange={(e)=>setVenue(e.target.value)}
+  className="border p-2 rounded"
+  />
+
+  )}
+
+  </>
+  )}
+
+  <button
+  onClick={handleCreateOrReschedule}
+  className="bg-black text-white py-2 rounded"
+  >
+  {rescheduleMode ? "Reschedule" : "Schedule"}
+  </button>
+
+  </div>
+
+  </div>
+
+  )}
+
+  {/* MEETING HISTORY */}
+
+  {meetings.length > 0 && (
+
+  <div className="bg-white border rounded-xl p-6 mb-8">
+
+  <h3 className="font-semibold mb-4">Meeting History</h3>
+
+  <div className="space-y-3">
+
+  {meetings.map(m=>(
+  <div key={m.id} className="border p-3 rounded">
+
+  <p><strong>Date:</strong> {m.date}</p>
+  <p><strong>Mode:</strong> {m.mode}</p>
+
+  {m.mode==="online"
+  ? <p>Zoom: {m.zoomLink}</p>
+  : <p>Venue: {m.venue}</p>
+  }
+
+  </div>
+  ))}
+
+  </div>
+
+  </div>
+
+  )}
+
+  {/* COMMENTS */}
+
+  <div>
+
+  <h3 className="text-xl font-semibold mb-4">Comments</h3>
+
+  {comments.map((c,i)=>(
+  <div key={i} className="bg-gray-100 p-3 rounded mb-2">
+  <p className="text-xs text-gray-500">
+  {new Date(c.timestamp).toLocaleString()}
+  </p>
+  <p>{c.text}</p>
+  </div>
+  ))}
+
+  <div className="flex gap-3 mt-4">
+
+  <textarea
+  value={comment || ""}
+  onChange={(e)=>setComment(e.target.value)}
+  placeholder="Write comment"
+  className="flex-1 border p-2 rounded"
+  />
+
+  <button
+  onClick={handleSendComment}
+  className="bg-black text-white px-5 rounded"
+  >
+  Send
+  </button>
+
+  </div>
+
+  </div>
+
+  </div>
 
   );
+
 };
 
 export default Followup;

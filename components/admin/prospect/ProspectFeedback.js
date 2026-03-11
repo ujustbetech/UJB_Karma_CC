@@ -1,8 +1,27 @@
+"use client";
+
 import React, { useEffect, useState } from "react";
-import { collection, getDocs, addDoc ,doc,getDoc,setDoc,query,where,serverTimestamp} from "firebase/firestore";
+import {
+  collection,
+  getDocs,
+  addDoc,
+  doc,
+  getDoc,
+  setDoc,
+  query,
+  where,
+  serverTimestamp
+} from "firebase/firestore";
+
 import { db } from "@/firebaseConfig";
 import { COLLECTIONS } from "@/lib/utility_collection";
 
+import Text from "@/components/ui/Text";
+import Card from "@/components/ui/Card";
+import Button from "@/components/ui/Button";
+import Input from "@/components/ui/Input";
+import Select from "@/components/ui/Select";
+import FormField from "@/components/ui/FormField";
 
 const interestOptions = [
   "Space for Personal Growth & Contribution",
@@ -15,9 +34,11 @@ const interestOptions = [
 const communicationOptions = ["Whatsapp", "Email", "Phone call"];
 
 const ProspectFeedback = ({ id }) => {
+
   const [forms, setForms] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
+
   const [formData, setFormData] = useState({
     fullName: "",
     phoneNumber: "",
@@ -30,6 +51,7 @@ const ProspectFeedback = ({ id }) => {
     communicationOptions: [],
     additionalComments: "",
   });
+
 /* ================= CP HELPERS ================= */
 
 const ensureCpBoardUser = async (db, orbiter) => {
@@ -55,11 +77,11 @@ const addCpForProspectFeedback = async (
   prospectPhone,
   prospectName
 ) => {
+
   if (!orbiter?.ujbcode) return;
 
   await ensureCpBoardUser(db, orbiter);
 
-  // 🚫 Prevent duplicate CP
   const q = query(
     collection(db, "CPBoard", orbiter.ujbcode, "activities"),
     where("activityNo", "==", "010"),
@@ -67,6 +89,7 @@ const addCpForProspectFeedback = async (
   );
 
   const snap = await getDocs(q);
+
   if (!snap.empty) return;
 
   await addDoc(
@@ -90,17 +113,30 @@ const addCpForProspectFeedback = async (
   );
 };
 
- 
+/* ================= FETCH DATA ================= */
+
 useEffect(() => {
+
   const fetchForms = async () => {
+
     try {
-      // 1. Fetch feedback forms
-      const subcollectionRef = collection(db, COLLECTIONS.prospect, id, "prospectfeedbackform");
+
+      const subcollectionRef = collection(
+        db,
+        COLLECTIONS.prospect,
+        id,
+        "prospectfeedbackform"
+      );
+
       const snapshot = await getDocs(subcollectionRef);
-      const data = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+
+      const data = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+
       setForms(data);
 
-      // 2. Fetch prospect details
       const prospectDocRef = doc(db, COLLECTIONS.prospect, id);
       const prospectSnap = await getDoc(prospectDocRef);
 
@@ -112,52 +148,82 @@ useEffect(() => {
       };
 
       if (prospectSnap.exists()) {
+
         const d = prospectSnap.data();
+
         autofill.fullName = d.prospectName || "";
         autofill.phoneNumber = d.prospectPhone || "";
         autofill.email = d.email || "";
         autofill.mentorName = d.orbiterName || "";
+
       }
 
       if (data.length === 0) {
-        // ✅ Show form and autofill
+
         setFormData((prev) => ({ ...prev, ...autofill }));
         setShowForm(true);
+
       } else {
-        setShowForm(false); // Hide form if feedback already exists
-        // Optionally set values from latest form for display
+
+        setShowForm(false);
+
         setFormData((prev) => ({
           ...prev,
           ...data[0]
         }));
+
       }
+
     } catch (error) {
+
       console.error("Error fetching data:", error);
+
     } finally {
+
       setLoading(false);
+
     }
+
   };
 
   if (id) fetchForms();
+
 }, [id]);
 
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
-  };
+/* ================= FORM HANDLERS ================= */
 
-  const handleCheckboxChange = (e, key) => {
-    const { value, checked } = e.target;
-    setFormData((prev) => ({
-      ...prev,
-      [key]: checked ? [...prev[key], value] : prev[key].filter((v) => v !== value),
-    }));
-  };
+const handleChange = (e) => {
 
-  const handleSubmit = async (e) => {
+  const { name, value } = e.target;
+
+  setFormData((prev) => ({
+    ...prev,
+    [name]: value
+  }));
+
+};
+
+const handleCheckboxChange = (e, key) => {
+
+  const { value, checked } = e.target;
+
+  setFormData((prev) => ({
+    ...prev,
+    [key]: checked
+      ? [...prev[key], value]
+      : prev[key].filter((v) => v !== value)
+  }));
+
+};
+
+/* ================= SUBMIT ================= */
+
+const handleSubmit = async (e) => {
+
   e.preventDefault();
+
   try {
-    // 1️⃣ Save feedback form
+
     const subcollectionRef = collection(
       db,
       COLLECTIONS.prospect,
@@ -167,190 +233,221 @@ useEffect(() => {
 
     await addDoc(subcollectionRef, formData);
 
-    // 2️⃣ Fetch prospect to get orbiterContact
     const prospectRef = doc(db, COLLECTIONS.prospect, id);
     const prospectSnap = await getDoc(prospectRef);
 
     if (prospectSnap.exists()) {
+
       const data = prospectSnap.data();
 
-      // 3️⃣ Find mentor (Orbiter)
       const qMentor = query(
         collection(db, COLLECTIONS.userDetail),
-        where("MobileNo", "==", data.orbiterContact) // ⚠️ exact field
+        where("MobileNo", "==", data.orbiterContact)
       );
 
       const mentorSnap = await getDocs(qMentor);
 
       if (!mentorSnap.empty) {
+
         const d = mentorSnap.docs[0].data();
 
         if (d.UJBCode) {
+
           const orbiter = {
             ujbcode: d.UJBCode,
             name: d.Name,
-            phone: d["MobileNo"],
+            phone: d.MobileNo,
             category: d.Category,
           };
 
-          // ⭐ ADD CP 010
           await addCpForProspectFeedback(
             db,
             orbiter,
             data.prospectPhone,
             data.prospectName
           );
+
         }
+
       }
+
     }
 
     alert("Form submitted successfully");
+
     setShowForm(false);
+
   } catch (error) {
+
     console.error("Error submitting form:", error);
+
   }
+
 };
 
+if (loading) return <Text>Loading...</Text>;
 
-  if (loading) return <p>Loading...</p>;
+return (
 
-  return (
-    <div className="form-container">
-      <h2>Prospect Feedback Form</h2>
+<>
+<Text variant="h1">Prospect Feedback</Text>
 
-      {forms.length === 0 && showForm && (
-        <form onSubmit={handleSubmit} className="form-card">
-          <ul>
-            <li className="form-row">
-              <h4>Prospect Name:</h4>
-              <div className="multipleitem">
-                <input type="text" name="fullName" value={formData.fullName} onChange={handleChange} required />
-              </div>
-            </li>
-            <li className="form-row">
-              <h4>Phone Number:</h4>
-              <div className="multipleitem">
-                <input type="text" name="phoneNumber" value={formData.phoneNumber} onChange={handleChange} required />
-              </div>
-            </li>
-            <li className="form-row">
-              <h4>Email:</h4>
-              <div className="multipleitem">
-                <input type="text" name="email" value={formData.email} onChange={handleChange} required />
-              </div>
-            </li>
-            <li className="form-row">
-              <h4>Orbiter Name:</h4>
-              <div className="multipleitem">
-                <input type="text" name="mentorName" value={formData.mentorName} onChange={handleChange} required />
-              </div>
-            </li>
-          
-   <li className="form-row">
-  <h4>Most Interesting Aspects:</h4>
-  <div className="checkbox-group">
-    {interestOptions.map((option, index) => (
-      <div key={index} className="checkbox-item">
-        <input
-          type="checkbox"
-          id={`interest-${index}`}
-          value={option}
-          checked={formData.interestAreas.includes(option)}
-          onChange={(e) => handleCheckboxChange(e, "interestAreas")}
-        />
-        <label htmlFor={`interest-${index}`}>{option}</label>
-      </div>
-    ))}
-  </div>
-</li>
+{forms.length === 0 && showForm && (
 
+<Card>
 
-            <li className="form-row">
-              <h4>Questions or Suggestions:</h4>
-              <textarea name="additionalComments" value={formData.additionalComments} onChange={handleChange} />
-            </li>
-              <li className="form-row">
-              <h4>Understanding of UJustBe:</h4>
-              <select name="understandingLevel" value={formData.understandingLevel} onChange={handleChange} required>
-                <option value="">Select</option>
-                <option value="Excellent">Excellent</option>
-                <option value="Good">Good</option>
-                <option value="Fair">Fair</option>
-                <option value="Poor">Poor</option>
-              </select>
-            </li>
-            <li className="form-row">
-              <h4>Clarity on Self-Growth Possibilities:</h4>
-              <select name="selfGrowthUnderstanding" value={formData.selfGrowthUnderstanding} onChange={handleChange} required>
-                <option value="">Select</option>
-                <option value="Yes, very clearly">Yes, very clearly</option>
-                <option value="Somewhat">Somewhat</option>
-                <option value="No, still unclear">No, still unclear</option>
-              </select>
-            </li>
-            <li className="form-row">
-              <h4>Interest in Joining:</h4>
-              <select name="joinInterest" value={formData.joinInterest} onChange={handleChange} required>
-                <option value="">Select</option>
-                <option value="Yes, I am interested">Yes, I am interested</option>
-                <option value="I would like to think about it">I would like to think about it</option>
-                <option value="No, not interested at the moment">No, not interested at the moment</option>
-              </select>
-            </li>
-     <li className="form-row">
-  <h4>Preferred Communication:</h4>
-  <div className="checkbox-group">
-    {communicationOptions.map((option, index) => (
-      <div key={index} className="checkbox-item">
-        <input
-          type="checkbox"
-          id={`comm-${index}`}
-          value={option}
-          checked={formData.communicationOptions.includes(option)}
-          onChange={(e) => handleCheckboxChange(e, "communicationOptions")}
-        />
-        <label htmlFor={`comm-${index}`}>{option}</label>
-      </div>
-    ))}
-  </div>
-</li>
+<form onSubmit={handleSubmit} className="space-y-6">
 
-            <li className="form-row">
-              <button className="save-button" type="submit">Submit</button>
-            </li>
-          </ul>
-        </form>
-      )}
+<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
 
-      {forms.length > 0 && forms.map((form) => (
-        <div key={form.id} className="form-card">
-          <ul>
-            <li className="form-row"><h4>Prospect Name:</h4><input type="text" value={form.fullName || ""} disabled /></li>
-            <li className="form-row"><h4>Phone Number:</h4><input type="text" value={form.phoneNumber || ""} disabled /></li>
-            <li className="form-row"><h4>Email:</h4><input type="text" value={form.email || ""} disabled /></li>
-            <li className="form-row"><h4>Orbiter Name:</h4><input type="text" value={form.mentorName || ""} disabled /></li>
-            <li className="form-row"><h4>Understanding of UJustBe:</h4><input type="text" value={form.understandingLevel || ""} disabled /></li>
-            <li className="form-row"><h4>Clarity on Self-Growth Possibilities:</h4><input type="text" value={form.selfGrowthUnderstanding || ""} disabled /></li>
-            <li className="form-row"><h4>Interest in Joining:</h4><input type="text" value={form.joinInterest || ""} disabled /></li>
-            {Array.isArray(form.interestAreas) && (
-              <li className="form-row">
-                <h4>Most Interesting Aspects:</h4>
-                <ul>
-                  {form.interestAreas.map((option, index) => (
-                    <li key={index}><input type="checkbox" checked disabled /><label>{option}</label></li>
-                  ))}
-                </ul>
-              </li>
-            )}
-            <li className="form-row"><h4>Questions or Suggestions:</h4><textarea value={form.additionalComments || ""} disabled /></li>
-            {Array.isArray(form.communicationOptions) && (
-              <li className="form-row"><h4>Preferred Communication:</h4><input type="text" value={form.communicationOptions.join(", ")} disabled /></li>
-            )}
-          </ul>
-        </div>
-      ))}
-    </div>
-  );
+<FormField label="Prospect Name">
+<Input name="fullName" value={formData.fullName} onChange={handleChange}/>
+</FormField>
+
+<FormField label="Phone Number">
+<Input name="phoneNumber" value={formData.phoneNumber} onChange={handleChange}/>
+</FormField>
+
+<FormField label="Email">
+<Input name="email" value={formData.email} onChange={handleChange}/>
+</FormField>
+
+<FormField label="Orbiter Name">
+<Input name="mentorName" value={formData.mentorName} onChange={handleChange}/>
+</FormField>
+
+</div>
+
+<FormField label="Understanding of UJustBe">
+<Select
+value={formData.understandingLevel}
+onChange={(v)=>setFormData({...formData, understandingLevel:v})}
+options={[
+{label:"Excellent",value:"Excellent"},
+{label:"Good",value:"Good"},
+{label:"Fair",value:"Fair"},
+{label:"Poor",value:"Poor"}
+]}
+/>
+</FormField>
+
+<FormField label="Self Growth Clarity">
+<Select
+value={formData.selfGrowthUnderstanding}
+onChange={(v)=>setFormData({...formData,selfGrowthUnderstanding:v})}
+options={[
+{label:"Yes, very clearly",value:"Yes, very clearly"},
+{label:"Somewhat",value:"Somewhat"},
+{label:"No, still unclear",value:"No, still unclear"}
+]}
+/>
+</FormField>
+
+<FormField label="Interest in Joining">
+<Select
+value={formData.joinInterest}
+onChange={(v)=>setFormData({...formData,joinInterest:v})}
+options={[
+{label:"Yes, I am interested",value:"Yes, I am interested"},
+{label:"I would like to think about it",value:"I would like to think about it"},
+{label:"No, not interested",value:"No, not interested"}
+]}
+/>
+</FormField>
+
+<div>
+
+<Text variant="h3">Most Interesting Aspects</Text>
+
+<div className="grid grid-cols-1 md:grid-cols-2 gap-2 mt-2">
+
+{interestOptions.map((option,index)=>(
+<label key={index} className="flex items-center gap-2">
+<input
+type="checkbox"
+value={option}
+checked={formData.interestAreas.includes(option)}
+onChange={(e)=>handleCheckboxChange(e,"interestAreas")}
+/>
+<span>{option}</span>
+</label>
+))}
+
+</div>
+
+</div>
+
+<div>
+
+<Text variant="h3">Preferred Communication</Text>
+
+<div className="flex gap-4 mt-2">
+
+{communicationOptions.map((option,index)=>(
+<label key={index} className="flex items-center gap-2">
+<input
+type="checkbox"
+value={option}
+checked={formData.communicationOptions.includes(option)}
+onChange={(e)=>handleCheckboxChange(e,"communicationOptions")}
+/>
+<span>{option}</span>
+</label>
+))}
+
+</div>
+
+</div>
+
+<FormField label="Questions or Suggestions">
+<textarea
+className="w-full border rounded-lg p-3"
+name="additionalComments"
+value={formData.additionalComments}
+onChange={handleChange}
+/>
+</FormField>
+
+<div className="flex justify-end pt-4">
+<Button type="submit">Submit Feedback</Button>
+</div>
+
+</form>
+
+</Card>
+
+)}
+
+{forms.length>0 && forms.map((form)=>(
+<Card key={form.id} className="mb-6">
+
+<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+
+<FormField label="Prospect Name"><Input value={form.fullName||""} disabled/></FormField>
+<FormField label="Phone"><Input value={form.phoneNumber||""} disabled/></FormField>
+<FormField label="Email"><Input value={form.email||""} disabled/></FormField>
+<FormField label="Orbiter Name"><Input value={form.mentorName||""} disabled/></FormField>
+<FormField label="Understanding"><Input value={form.understandingLevel||""} disabled/></FormField>
+<FormField label="Self Growth"><Input value={form.selfGrowthUnderstanding||""} disabled/></FormField>
+<FormField label="Join Interest"><Input value={form.joinInterest||""} disabled/></FormField>
+
+</div>
+
+<FormField label="Comments">
+<textarea
+className="w-full border rounded-lg p-3"
+value={form.additionalComments||""}
+disabled
+/>
+</FormField>
+
+</Card>
+))}
+
+</>
+
+);
+
 };
 
 export default ProspectFeedback;

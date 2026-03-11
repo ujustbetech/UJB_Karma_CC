@@ -850,72 +850,112 @@ Thank you for considering UJustBe, and we hope to reconnect in the future! `;
   };
 
   return (
-    <div>
-      <h2>Enrollment Status Updates</h2>
-      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-        <thead>
-          <tr style={{ backgroundColor: '#f2f2f2' }}>
-            <th>Check</th>
-            <th>Stage</th>
-            <th>Date</th>
-            <th>Status</th>
-            <th>Send Email</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((row, index) => (
-            <tr key={row.label}>
-              <td>
-                <input
-                  type="checkbox"
-                  checked={row.checked}
-                  onChange={(e) => handleChange(index, 'checked', e.target.checked)}
-                />
-              </td>
-              <td>{row.label}</td>
-              <td>
-                <input
-                  type="date"
-                  value={row.date}
-                  onChange={(e) => handleChange(index, 'date', e.target.value)}
-                />
-              </td>
-           <td>
-  <select
-    value={row.status}
-    onChange={(e) => handleChange(index, 'status', e.target.value)}
-  >
-    <option value="">Select</option>
-    {(dropdownOptions[row.label] || []).map((opt) => (
-      <option key={opt} value={opt}>{opt}</option>
-    ))}
-  </select>
-</td>
+  <div className="max-w-6xl mx-auto p-6">
 
-              <td>
-                <button
-                  className="m-button-7"
-                  onClick={() => confirmAndSendEmail(index)}
-                >
-                  Send
-                </button>
-              </td>
+    <div className="bg-white border rounded-xl shadow-sm p-6">
+
+      <h2 className="text-xl font-semibold mb-6">
+        Enrollment Status Updates
+      </h2>
+
+      <div className="overflow-x-auto">
+
+        <table className="min-w-full border border-gray-200 rounded-lg overflow-hidden">
+
+          <thead className="bg-gray-100 text-gray-700 text-sm">
+            <tr>
+              <th className="px-4 py-3 text-left border-b">Check</th>
+              <th className="px-4 py-3 text-left border-b">Stage</th>
+              <th className="px-4 py-3 text-left border-b">Date</th>
+              <th className="px-4 py-3 text-left border-b">Status</th>
+              <th className="px-4 py-3 text-left border-b">Send Email</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
 
-      <div className='button-group'>
+          <tbody className="text-sm">
+
+            {rows.map((row, index) => (
+              <tr key={row.label} className="border-b hover:bg-gray-50">
+
+                <td className="px-4 py-3">
+                  <input
+                    type="checkbox"
+                    checked={row.checked}
+                    onChange={(e) =>
+                      handleChange(index, "checked", e.target.checked)
+                    }
+                    className="w-4 h-4"
+                  />
+                </td>
+
+                <td className="px-4 py-3 font-medium text-gray-800">
+                  {row.label}
+                </td>
+
+                <td className="px-4 py-3">
+                  <input
+                    type="date"
+                    value={row.date}
+                    onChange={(e) =>
+                      handleChange(index, "date", e.target.value)
+                    }
+                    className="border rounded-md px-3 py-1 focus:outline-none focus:ring-2 focus:ring-black"
+                  />
+                </td>
+
+                <td className="px-4 py-3">
+                  <select
+                    value={row.status}
+                    onChange={(e) =>
+                      handleChange(index, "status", e.target.value)
+                    }
+                    className="border rounded-md px-3 py-1 focus:outline-none focus:ring-2 focus:ring-black"
+                  >
+                    <option value="">Select</option>
+                    {(dropdownOptions[row.label] || []).map((opt) => (
+                      <option key={opt} value={opt}>
+                        {opt}
+                      </option>
+                    ))}
+                  </select>
+                </td>
+
+                <td className="px-4 py-3">
+                  <button
+                    onClick={() => confirmAndSendEmail(index)}
+                    className="bg-black text-white px-4 py-1 rounded-lg hover:bg-gray-800 transition"
+                  >
+                    Send
+                  </button>
+                </td>
+
+              </tr>
+            ))}
+
+          </tbody>
+
+        </table>
+
+      </div>
+
+      <div className="mt-6 flex justify-end">
         <button
-          className='save-button'
           onClick={confirmAndSave}
           disabled={loading}
+          className={`px-5 py-2 rounded-lg text-white transition ${
+            loading
+              ? "bg-gray-400 cursor-not-allowed"
+              : "bg-black hover:bg-gray-800"
+          }`}
         >
-          {loading ? 'Saving...' : 'Save'}
+          {loading ? "Saving..." : "Save"}
         </button>
       </div>
+
     </div>
-  );
+
+  </div>
+);
 };
 
 export default EnrollmentStage;

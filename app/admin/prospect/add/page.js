@@ -8,8 +8,6 @@ import {
   addDoc,
 } from "firebase/firestore";
 
-import { COLLECTIONS } from "@/lib/utility_collection";
-
 import Text from "@/components/ui/Text";
 import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
@@ -20,7 +18,7 @@ import FormField from "@/components/ui/FormField";
 
 import Swal from "sweetalert2";
 
-export default function Register(props) {
+export default function Register() {
 
   const [userType, setUserType] = useState("prospect");
 
@@ -104,7 +102,7 @@ export default function Register(props) {
 
     e.preventDefault();
 
-    if (!prospectName || !prospectPhone || !email || !occupation || !date) {
+    if (!prospectName || !prospectPhone || !email || !occupation || !date || !type) {
 
       Swal.fire({
         icon: "error",
@@ -120,6 +118,7 @@ export default function Register(props) {
       const data = {
 
         userType,
+
         prospectName,
         prospectPhone,
         occupation,
@@ -130,8 +129,11 @@ export default function Register(props) {
         orbiterContact: phone,
         orbiterEmail: orbiteremail,
 
-        date,
+        type,
+        date: new Date(date),
+
         registeredAt: new Date(),
+
       };
 
       await addDoc(collection(db, "Prospects"), data);
@@ -142,12 +144,19 @@ export default function Register(props) {
         text: "Prospect Registered Successfully",
       });
 
+      // Reset form
       setProspectName("");
       setProspectPhone("");
       setEmail("");
       setOccupation("");
       setHobbies("");
       setDate("");
+      setType("");
+
+      setName("");
+      setPhone("");
+      setOrbiterEmail("");
+      setSelectedOrbiter(null);
 
     } catch (err) {
 
@@ -278,10 +287,10 @@ export default function Register(props) {
             </FormField>
 
             <FormField label="Date">
-              <DateInput
-                value={date}
-                onChange={(v) => setDate(v)}
-              />
+           <DateInput
+  value={date}
+  onChange={(e) => setDate(e.target.value)}
+/>
             </FormField>
 
             <FormField label="Occupation">

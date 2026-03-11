@@ -157,26 +157,47 @@ https://firebasestorage.googleapis.com/v0/b/monthlymeetingapp.appspot.com/o/Case
     setLoading(false);
   };
 
-  return (
-    <div>
-      <h2 className="form-title">Case Study</h2>
-      {caseStudy?.sent ? (
-        <p style={{ color: "green" }}>
-          ✅ Case Study Sent on {caseStudy.sentAt}
-        </p>
-      ) : (
-        <p style={{ color: "red" }}>❌ Case Study Not Sent</p>
-      )}
+return (
+<div className="max-w-3xl mx-auto p-6">
 
-      <button
-        className="m-button-7"
-        onClick={handleSendCaseStudy}
-        disabled={loading || caseStudy?.sent}
-      >
-        {loading ? "Sending..." : "Send Case Study"}
-      </button>
-    </div>
-  );
+<div className="bg-white border rounded-xl shadow-sm p-6">
+
+<h2 className="text-xl font-semibold mb-4">
+Case Study
+</h2>
+
+{/* Status */}
+
+{caseStudy?.sent ? (
+<div className="bg-green-50 border border-green-200 text-green-700 p-3 rounded-lg mb-4">
+✅ Case Study Sent on {caseStudy.sentAt}
+</div>
+) : (
+<div className="bg-red-50 border border-red-200 text-red-700 p-3 rounded-lg mb-4">
+❌ Case Study Not Sent
+</div>
+)}
+
+{/* Send Button */}
+
+<button
+onClick={handleSendCaseStudy}
+disabled={loading || caseStudy?.sent}
+className={`px-5 py-2 rounded-lg text-white transition ${
+loading || caseStudy?.sent
+? "bg-gray-400 cursor-not-allowed"
+: "bg-black hover:bg-gray-800"
+}`}
+>
+
+{loading ? "Sending..." : "Send Case Study"}
+
+</button>
+
+</div>
+
+</div>
+);
 };
 
 export default Assessment;

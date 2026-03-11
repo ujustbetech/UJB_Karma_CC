@@ -441,57 +441,82 @@ useEffect(() => {
 
 
 return (
-  <div>
-    <h2 className="form-title">Authentic Choice by Prospect</h2>
-    <h3>Status: {status || 'No status yet'}</h3>
-{status?.startsWith('Declined') && declineReason && (
-  <p style={{ marginTop: '10px', color: 'darkred', fontStyle: 'italic' }}>
-    Reason: {declineReason}
-  </p>
-)}
+  <div className="max-w-4xl mx-auto p-6">
 
-    <div className="status-container">
-      <p>Date: {currentDate}</p>
-      <div className="twobtns">
-        <button
-          className="m-button-7"
-          onClick={() => confirmSaveStatus('Choose to enroll')}
-          disabled={loading}
-        >
-          Choose to enroll
-        </button>
-        <button
-          className="m-button-7"
-          onClick={() => confirmSaveStatus('Declined by UJustBe')}
-          disabled={loading}
-        >
-          Decline by UJustBe
-        </button>
-        <button
-          className="m-button-7"
-          onClick={() => confirmSaveStatus('Declined by Prospect')}
-          disabled={loading}
-        >
-          Decline by Prospect
-        </button>
-        <button
-          className="m-button-7"
-          onClick={() => confirmSaveStatus('Need some time')}
-          disabled={loading}
-        >
-          Need some time
-        </button>
-        <button
-          className="m-button-7"
-          onClick={() => confirmSaveStatus('Awaiting response')}
-          disabled={loading}
-        >
-          Awaiting response
-        </button>
+    <div className="bg-white border rounded-xl shadow-sm p-6">
+
+      <h2 className="text-xl font-semibold mb-4">
+        Authentic Choice by Prospect
+      </h2>
+
+      <h3 className="text-lg mb-2">
+        Status:{" "}
+        <span className="font-medium">
+          {status || "No status yet"}
+        </span>
+      </h3>
+
+      {status?.startsWith("Declined") && declineReason && (
+        <p className="mt-2 text-red-700 italic bg-red-50 border border-red-200 p-3 rounded-lg">
+          Reason: {declineReason}
+        </p>
+      )}
+
+      <div className="mt-4">
+
+        <p className="text-gray-700 mb-4">
+          Date: {currentDate}
+        </p>
+
+        <div className="flex flex-wrap gap-3">
+
+          <button
+            onClick={() => confirmSaveStatus("Choose to enroll")}
+            disabled={loading}
+            className="bg-black text-white px-4 py-2 rounded-lg hover:bg-gray-800 disabled:bg-gray-400"
+          >
+            Choose to enroll
+          </button>
+
+          <button
+            onClick={() => confirmSaveStatus("Declined by UJustBe")}
+            disabled={loading}
+            className="bg-black text-white px-4 py-2 rounded-lg hover:bg-gray-800 disabled:bg-gray-400"
+          >
+            Decline by UJustBe
+          </button>
+
+          <button
+            onClick={() => confirmSaveStatus("Declined by Prospect")}
+            disabled={loading}
+            className="bg-black text-white px-4 py-2 rounded-lg hover:bg-gray-800 disabled:bg-gray-400"
+          >
+            Decline by Prospect
+          </button>
+
+          <button
+            onClick={() => confirmSaveStatus("Need some time")}
+            disabled={loading}
+            className="bg-black text-white px-4 py-2 rounded-lg hover:bg-gray-800 disabled:bg-gray-400"
+          >
+            Need some time
+          </button>
+
+          <button
+            onClick={() => confirmSaveStatus("Awaiting response")}
+            disabled={loading}
+            className="bg-black text-white px-4 py-2 rounded-lg hover:bg-gray-800 disabled:bg-gray-400"
+          >
+            Awaiting response
+          </button>
+
+        </div>
+
       </div>
-    </div>
-  </div>
 
+    </div>
+
+  </div>
 );
 };
 

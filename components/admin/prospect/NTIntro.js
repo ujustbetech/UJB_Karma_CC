@@ -153,26 +153,41 @@ Brand Vision: You, as a contributor, come to be, connect and grow together to li
     setLoading(false);
   };
 
-  return (
-    <div>
-      <h2 className="form-title">NT Intro (Day 07)</h2>
+return (
+  <div className="max-w-3xl mx-auto p-6">
+
+    <div className="bg-white border rounded-xl shadow-sm p-6">
+
+      <h2 className="text-xl font-semibold mb-4">
+        NT Intro (Day 07)
+      </h2>
+
       {ntIntro?.sent ? (
-        <p style={{ color: "green" }}>
+        <div className="bg-green-50 border border-green-200 text-green-700 p-3 rounded-lg mb-4">
           ✅ NT Intro Sent on {ntIntro.sentAt}
-        </p>
+        </div>
       ) : (
-        <p style={{ color: "red" }}>❌ NT Intro Not Sent</p>
+        <div className="bg-red-50 border border-red-200 text-red-700 p-3 rounded-lg mb-4">
+          ❌ NT Intro Not Sent
+        </div>
       )}
 
       <button
-        className="m-button-7"
         onClick={handleSendNTIntro}
         disabled={loading || ntIntro?.sent}
+        className={`px-5 py-2 rounded-lg text-white transition ${
+          loading || ntIntro?.sent
+            ? "bg-gray-400 cursor-not-allowed"
+            : "bg-black hover:bg-gray-800"
+        }`}
       >
         {loading ? "Sending..." : "Send NT Intro"}
       </button>
+
     </div>
-  );
+
+  </div>
+);
 };
 
 export default NTIntro;

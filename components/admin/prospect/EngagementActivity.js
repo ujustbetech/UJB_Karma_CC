@@ -595,318 +595,416 @@ Regardless of your choice, we are grateful for the opportunity to connect with y
   };
   // === END NEW ===
 
-  return (
-    <div>
-      <h2>Meeting for Introduction to UJustBe</h2>
+return (
+<div className="max-w-6xl mx-auto p-6 text-black">
 
-      {/* Event Section */}
+<h2 className="text-2xl font-semibold mb-6">
+Meeting for Introduction to UJustBe
+</h2>
 
 
+{/* Schedule Button */}
 
-       {!createMode && !rescheduleMode && (
-  <button
-    className='m-button-7'
-    style={{ float: 'right' }}
-    onClick={() => setCreateMode(true)}
-  >
-    Schedule Meet
-  </button>
+{!createMode && !rescheduleMode && (
+<button
+onClick={() => setCreateMode(true)}
+className="bg-black text-white px-5 py-2 rounded-lg hover:bg-gray-800 ml-auto block"
+>
+Schedule Meet
+</button>
 )}
 
 
-     {introEvents.length > 0 && !createMode && !rescheduleMode && (
-  <div className='event-card'>
-    <h4>Event Details</h4>
+{/* Latest Event */}
 
-    <p><strong>Date:</strong> {introEvents[introEvents.length - 1].date}</p>
-    <p><strong>Mode:</strong> {introEvents[introEvents.length - 1].mode}</p>
+{introEvents.length > 0 && !createMode && !rescheduleMode && (
 
-    {introEvents[introEvents.length - 1].mode === 'online' ? (
-      <p>
-        <strong>Zoom Link:</strong>
-        <a
-          href={introEvents[introEvents.length - 1].zoomLink}
-          target='_blank'
-          rel='noopener noreferrer'
-        >
-          {introEvents[introEvents.length - 1].zoomLink}
-        </a>
-      </p>
-    ) : (
-      <p><strong>Venue:</strong> {introEvents[introEvents.length - 1].venue}</p>
-    )}
+<div className="bg-white border rounded-xl p-6 shadow-sm mt-6">
 
-    <div className='twobtns'>
-      <button
-        className='m-button-7'
-        onClick={() => {
-          const last = introEvents[introEvents.length - 1];
-          setEventDate(last.dateRaw);
-          setEventMode(last.mode);
-          setZoomLink(last.zoomLink || '');
-          setVenue(last.venue || '');
-          setRescheduleMode(true);
-        }}
-      >
-        Reschedule
-      </button>
+<h4 className="font-semibold text-lg mb-4">
+Event Details
+</h4>
 
-      <button className='submitbtn' onClick={handleMeetingDone}>
-        Done
-      </button>
-    </div>
-  </div>
+<p><strong>Date:</strong> {introEvents[introEvents.length - 1].date}</p>
+<p><strong>Mode:</strong> {introEvents[introEvents.length - 1].mode}</p>
+
+{introEvents[introEvents.length - 1].mode === "online" ? (
+
+<p>
+<strong>Zoom Link:</strong>{" "}
+<a
+href={introEvents[introEvents.length - 1].zoomLink}
+target="_blank"
+className="text-blue-600 underline"
+>
+{introEvents[introEvents.length - 1].zoomLink}
+</a>
+</p>
+
+) : (
+
+<p>
+<strong>Venue:</strong> {introEvents[introEvents.length - 1].venue}
+</p>
+
 )}
 
+<div className="flex gap-4 mt-4">
 
-        {(createMode || rescheduleMode) && (
-            <section className='c-form box'>
-   <ul>
-            <li className='form-row'>
-            <h4>Date:<sup>*</sup></h4>
-            <div className='multipleitem'>
-              <input
-                type='datetime-local'
-                value={eventDate}
-                onChange={(e) => setEventDate(e.target.value)}
-              />
-            </div>
-            </li>
-            {rescheduleMode && (
-  <li className='form-row'>
-    <h4>Reason for Rescheduling:<sup>*</sup></h4>
-    <div className='multipleitem'>
-      <textarea
-        placeholder='Enter reason for rescheduling'
-        value={rescheduleReason}
-        onChange={(e) => setRescheduleReason(e.target.value)}
-        rows={3}
-        style={{ width: '100%' }}
-      />
-    </div>
-  </li>
-)}
-      <ul>
-                    <li className='form-row'>
-                    <h4>Select NT Member:<sup>*</sup></h4>
-                    <div className='multipleitem'>
-                        <input
-                            type="text"
-                            placeholder="Search NTMember"
-                            value={userSearch}
-                            onChange={handleSearchUser}
-                        />
-                      {filteredUsers.length > 0 && (
-  <ul className="dropdown">
-    {filteredUsers.map(user => (
-      <li key={user.id} onClick={() => handleSelectUser(user)}>
-        {user.name} — {user.phone}
-      </li>
-    ))}
-  </ul>
-)}
+<button
+className="bg-black text-white px-4 py-2 rounded-lg"
+onClick={() => {
+const last = introEvents[introEvents.length - 1];
+setEventDate(last.dateRaw);
+setEventMode(last.mode);
+setZoomLink(last.zoomLink || "");
+setVenue(last.venue || "");
+setRescheduleMode(true);
+}}
+>
+Reschedule
+</button>
 
-                    </div>
-                </li>
-                <li className='form-row'>
-                    <h4>Selected NTMember's Name:<sup>*</sup></h4>
-                    <div className='multipleitem'>
-                        <p>{Name}</p>
-                    </div>
-                </li>
-                <li className='form-row'>
-                    <h4>Selected NTMember's Phone:<sup>*</sup></h4>
-                    <div className='multipleitem'>
-                        <p>{NTphone}</p>
-                    </div>
-                </li>
-                </ul>
-
-            {!rescheduleMode && (
-              <>
-
-                <li className='form-row'>
-                            <h4>Event Mode:</h4>
-                            <div className='multipleitem'>
-                            <select
-                    value={eventMode}
-                    onChange={(e) => setEventMode(e.target.value)}
-                  >
-                                   <option value='online'>Online</option>
-                    <option value='offline'>Offline</option>
-                  </select>
-                            </div>
-                        </li>
-                {eventMode === 'online' && (
-                  <li className='form-row'>
-                    <label>Zoom Link:</label>
-                    <div className='multipleitem'>
-                    <input
-                      type='text'
-                      placeholder='Enter Zoom link'
-                      value={zoomLink}
-                      onChange={(e) => setZoomLink(e.target.value)}
-                    />
-                    </div>
-                  </li>
-
-                )}
-
-                {eventMode === 'offline' && (
-                  <div className='form-row'>
-                    <label>Venue:</label>
-                    <div className='multipleitem'>
-                    <input
-                      type='text'
-                      placeholder='Enter venue address'
-                      value={venue}
-                      onChange={(e) => setVenue(e.target.value)}
-                    />
-                    </div>
-                  </div>
-                )}
-              </>
-            )}
-  <ul>
-                        <li className='form-row'>
-                            <div className='multipleitem'>
-            <button className='submitbtn' onClick={handleCreateOrReschedule}>
-              {rescheduleMode ? 'Reschedule' : 'Schedule'}
-            </button>
-            </div>
-            </li>
-            </ul>
-      </ul>
-          </section>
-        )}
-
-      {/* === NEW === */}
-      <div style={{ marginTop: 20 }}>
-        <button className="m-button-7" onClick={() => { setCreateMode(true); setOpenIndex(null); }}>
-          + Schedule Another Meeting
-        </button>
-      </div>
-
-      <div style={{ marginTop: 12 }}>
-        {introEvents.length === 0 ? (
-          <p style={{ marginTop: 8 }}>No meetings scheduled yet.</p>
-        ) : (
-          introEvents.map((ev, idx) => (
-            <div key={idx} className="event-card" style={{ border: '1px solid #ddd', padding: 12, marginBottom: 8, borderRadius: 8 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <div style={{ fontWeight: 600 }}>
-                  Meeting #{idx + 1} — {ev.date ? ev.date : formatReadableDate(ev.dateRaw)}
-                  {ev.completed && <span style={{ marginLeft: 8, color: 'green', fontWeight: 700 }}>[Done]</span>}
-                </div>
-                <div>
-                  <button style={{ marginRight: 8 }} onClick={() => toggleOpen(idx)}>
-                    {openIndex === idx ? 'Collapse' : 'Expand'}
-                  </button>
-                  <button className='m-button-7' onClick={() => startAccordionEdit(idx)} disabled={ev.completed}>
-                    Reschedule
-                  </button>
-                  <button className='submitbtn' onClick={() => markAccordionDone(idx)} disabled={ev.completed} style={{ marginLeft: 8 }}>
-                    Done
-                  </button>
-                  <button onClick={() => deleteAccordionEvent(idx)} style={{ marginLeft: 8 }}>
-                    Delete
-                  </button>
-                </div>
-              </div>
-
-              {openIndex === idx && (
-                <div style={{ marginTop: 12 }}>
-                  <p><strong>Mode:</strong> {ev.mode}</p>
-                  {ev.mode === 'online' ? (
-                    <p><strong>Zoom Link:</strong> <a href={ev.zoomLink} target='_blank' rel='noopener noreferrer'>{ev.zoomLink}</a></p>
-                  ) : (
-                    <p><strong>Venue:</strong> {ev.venue}</p>
-                  )}
-
-                  {editingIndex === idx && (
-                    <div style={{ marginTop: 12, borderTop: '1px dashed #ccc', paddingTop: 8 }}>
-                      <h4>Reschedule Meeting</h4>
-                      <div style={{ display: 'grid', gap: 8 }}>
-                        <input type="datetime-local" value={accordionForm.dateRaw ? isoToLocal(accordionForm.dateRaw) : accordionForm.dateRaw} onChange={(e) => setAccordionForm({ ...accordionForm, dateRaw: e.target.value })} />
-                        <select value={accordionForm.mode} onChange={(e) => setAccordionForm({ ...accordionForm, mode: e.target.value })}>
-                          <option value="online">Online</option>
-                          <option value="offline">Offline</option>
-                        </select>
-
-                        {accordionForm.mode === 'online' && <input type="text" placeholder="Zoom link" value={accordionForm.zoomLink} onChange={(e) => setAccordionForm({ ...accordionForm, zoomLink: e.target.value })} />}
-                        {accordionForm.mode === 'offline' && <input type="text" placeholder="Venue" value={accordionForm.venue} onChange={(e) => setAccordionForm({ ...accordionForm, venue: e.target.value })} />}
-
-                        <textarea placeholder="Reason (optional)" value={accordionForm.reason} onChange={(e) => setAccordionForm({ ...accordionForm, reason: e.target.value })} />
-
-                        <div style={{ display: 'flex', gap: 8 }}>
-                          <button className="submitbtn" onClick={() => saveAccordionReschedule(idx)}>Save Reschedule</button>
-                          <button className="m-button-9" onClick={() => { setEditingIndex(null); setAccordionForm({ dateRaw: '', mode: 'online', zoomLink: '', venue: '', reason: '' }); }}>
-                            Cancel
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {ev.rescheduleHistory && ev.rescheduleHistory.length > 0 && (
-                    <div style={{ marginTop: 12 }}>
-                      <strong>Reschedule History:</strong>
-                      {ev.rescheduleHistory.map((log, i) => (
-                        <div key={i} style={{ border: '1px solid #eee', padding: 10, marginTop: 10 }}>
-                          <p><strong>Old:</strong> {formatReadableDate(log.oldDate)}</p>
-                          <p><strong>New:</strong> {formatReadableDate(log.newDate)}</p>
-                          <p><strong>Reason:</strong> {log.reason || 'No reason given'}</p>
-                          <p><strong>On:</strong> {formatReadableDate(log.changedAt)}</p>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          ))
-        )}
-      </div>
-      {/* === END NEW === */}
-
-      {/* Comments Section */}
-
-  <div >
-  <h3>Comments</h3>
-
-  {comments.length === 0 ? (
-    <p>No comments yet.</p>
-  ) : (
-    <div className="comment-list">
-      {comments.map((c, idx) => (
-        <div key={idx} className="comment-bubble">
-          <span className="chat-timestamp">{new Date(c.timestamp).toLocaleString()}</span>
-          <p>{c.text}</p>
-        </div>
-      ))}
-    </div>
-  )}
-
-
-  <div className="chat-input-area">
-    <textarea
-      value={comment}
-      onChange={(e) => setComment(e.target.value)}
-      placeholder="Write your message..."
-      rows={2}
-      className="chat-textarea"
-    />
-       <div className='multipleitem'>
-    <button onClick={handleSendComment} className='m-button-9'>Send</button>
-    </div>
-  </div>
-</div>
-
-
+<button
+onClick={handleMeetingDone}
+className="bg-green-600 text-white px-4 py-2 rounded-lg"
+>
+Done
+</button>
 
 </div>
 
-  );
+</div>
+
+)}
+
+
+{/* Schedule Form */}
+
+{(createMode || rescheduleMode) && (
+
+<div className="bg-white border rounded-xl p-6 shadow-sm mt-6 space-y-4">
+
+<div>
+<label className="font-medium">Date</label>
+<input
+type="datetime-local"
+value={eventDate}
+onChange={(e) => setEventDate(e.target.value)}
+className="w-full border rounded-lg p-2"
+/>
+</div>
+
+
+{rescheduleMode && (
+
+<div>
+<label className="font-medium">Reason</label>
+<textarea
+value={rescheduleReason}
+onChange={(e) => setRescheduleReason(e.target.value)}
+className="w-full border rounded-lg p-2"
+/>
+</div>
+
+)}
+
+
+{/* NT Member Search */}
+
+<div>
+
+<label className="font-medium">Select NT Member</label>
+
+<input
+type="text"
+placeholder="Search NTMember"
+value={userSearch}
+onChange={handleSearchUser}
+className="w-full border rounded-lg p-2"
+/>
+
+{filteredUsers.length > 0 && (
+
+<div className="border rounded-lg mt-2 bg-white shadow">
+
+{filteredUsers.map(user => (
+
+<div
+key={user.id}
+onClick={() => handleSelectUser(user)}
+className="p-2 hover:bg-gray-100 cursor-pointer"
+>
+{user.name} — {user.phone}
+</div>
+
+))}
+
+</div>
+
+)}
+
+</div>
+
+
+<div>
+<label className="font-medium">Selected Member</label>
+<p>{Name}</p>
+<p>{NTphone}</p>
+</div>
+
+
+{/* Mode */}
+
+{!rescheduleMode && (
+
+<>
+
+<div>
+<label className="font-medium">Event Mode</label>
+
+<select
+value={eventMode}
+onChange={(e) => setEventMode(e.target.value)}
+className="w-full border rounded-lg p-2"
+>
+<option value="online">Online</option>
+<option value="offline">Offline</option>
+</select>
+
+</div>
+
+
+{eventMode === "online" && (
+
+<div>
+
+<label className="font-medium">Zoom Link</label>
+
+<input
+type="text"
+value={zoomLink}
+onChange={(e) => setZoomLink(e.target.value)}
+className="w-full border rounded-lg p-2"
+/>
+
+</div>
+
+)}
+
+
+{eventMode === "offline" && (
+
+<div>
+
+<label className="font-medium">Venue</label>
+
+<input
+type="text"
+value={venue}
+onChange={(e) => setVenue(e.target.value)}
+className="w-full border rounded-lg p-2"
+/>
+
+</div>
+
+)}
+
+</>
+
+)}
+
+<button
+onClick={handleCreateOrReschedule}
+className="bg-black text-white px-5 py-2 rounded-lg"
+>
+{rescheduleMode ? "Reschedule" : "Schedule"}
+</button>
+
+</div>
+
+)}
+
+
+{/* Schedule Another Meeting */}
+
+<div className="mt-6">
+
+<button
+onClick={() => {
+setCreateMode(true);
+setOpenIndex(null);
+}}
+className="bg-black text-white px-5 py-2 rounded-lg"
+>
++ Schedule Another Meeting
+</button>
+
+</div>
+
+
+{/* Accordion Meetings */}
+
+<div className="mt-6 space-y-4">
+
+{introEvents.length === 0 ? (
+
+<p className="text-gray-500">
+No meetings scheduled yet.
+</p>
+
+) : (
+
+introEvents.map((ev, idx) => (
+
+<div key={idx} className="border rounded-xl p-4 bg-white shadow-sm">
+
+<div className="flex justify-between items-center">
+
+<div className="font-semibold">
+
+Meeting #{idx + 1} — {ev.date}
+
+{ev.completed && (
+<span className="text-green-600 ml-2">[Done]</span>
+)}
+
+</div>
+
+
+<div className="flex gap-2">
+
+<button
+onClick={() => toggleOpen(idx)}
+className="border px-3 py-1 rounded"
+>
+{openIndex === idx ? "Collapse" : "Expand"}
+</button>
+
+
+<button
+onClick={() => startAccordionEdit(idx)}
+className="bg-black text-white px-3 py-1 rounded"
+>
+Reschedule
+</button>
+
+
+<button
+onClick={() => markAccordionDone(idx)}
+className="bg-green-600 text-white px-3 py-1 rounded"
+>
+Done
+</button>
+
+
+<button
+onClick={() => deleteAccordionEvent(idx)}
+className="bg-red-600 text-white px-3 py-1 rounded"
+>
+Delete
+</button>
+
+</div>
+
+</div>
+
+
+{openIndex === idx && (
+
+<div className="mt-4">
+
+<p><strong>Mode:</strong> {ev.mode}</p>
+
+{ev.mode === "online" ? (
+
+<p>
+<strong>Zoom:</strong>{" "}
+<a href={ev.zoomLink} className="text-blue-600 underline">
+{ev.zoomLink}
+</a>
+</p>
+
+) : (
+
+<p>
+<strong>Venue:</strong> {ev.venue}
+</p>
+
+)}
+
+</div>
+
+)}
+
+</div>
+
+))
+
+)}
+
+</div>
+
+
+{/* Comments */}
+
+<div className="mt-10">
+
+<h3 className="text-xl font-semibold mb-4">
+Comments
+</h3>
+
+
+{comments.length === 0 ? (
+
+<p>No comments yet.</p>
+
+) : (
+
+<div className="space-y-3">
+
+{comments.map((c, idx) => (
+
+<div key={idx} className="bg-gray-100 p-3 rounded-lg">
+
+<p className="text-xs text-gray-500">
+{new Date(c.timestamp).toLocaleString()}
+</p>
+
+<p>{c.text}</p>
+
+</div>
+
+))}
+
+</div>
+
+)}
+
+
+<div className="flex gap-3 mt-4">
+
+<textarea
+value={comment}
+onChange={(e) => setComment(e.target.value)}
+placeholder="Write your message..."
+className="flex-1 border rounded-lg p-2"
+/>
+
+<button
+onClick={handleSendComment}
+className="bg-black text-white px-4 rounded-lg"
+>
+Send
+</button>
+
+</div>
+
+</div>
+
+
+</div>
+);
 };
 
 export default Followup;
