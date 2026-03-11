@@ -1,4 +1,3 @@
-// components/layout/nav.config.js
 import {
   LayoutGrid,
   Users,
@@ -8,7 +7,8 @@ import {
   Orbit,
   CalendarDays,
   Share2,
-  Droplets
+  Droplets,
+  UserSearch
 } from "lucide-react";
 
 export const NAV_ITEMS = [
@@ -46,15 +46,15 @@ export const NAV_ITEMS = [
       { label: "Add Referral", href: "/admin/referral/add" },
     ],
   },
-  {
-    label: "Prospect",
-    icon: Share2,
-    children: [
-      { label: "Prospect Dashboard", href: "/admin/prospect" },
-      { label: "Manage Prospect", href: "/admin/prospect/manage" },
-      { label: "Add Prospect", href: "/admin/prospect/add" },
-    ],
-  },
+{
+  label: "Prospect",
+  icon: UserSearch,
+  children: [
+    { label: "Prospect Dashboard", href: "/admin/prospect" },
+    { label: "Manage Prospect", href: "/admin/prospect/manage" },
+    { label: "Add Prospect", href: "/admin/prospect/add" },
+  ],
+},
   // ⭐ Monthly Meeting Section
   {
     label: "Monthly Meeting",
