@@ -27,6 +27,7 @@ import Input from "@/components/ui/Input";
 import { Cake, Users, User, Phone } from "lucide-react";
 
 export default function AddBirthdayClient() {
+
   const toast = useToast();
 
   /* ================= STATE ================= */
@@ -43,46 +44,65 @@ export default function AddBirthdayClient() {
   const [showConfirm, setShowConfirm] = useState(false);
   const [mounted, setMounted] = useState(false);
 
-
-
   /* ================= LIFECYCLE ================= */
 
   useEffect(() => setMounted(true), []);
 
   useEffect(() => {
+
     async function loadUsers() {
-      const snap = await getDocs(collection(db, COLLECTIONS.userDetail));
 
-      const list = snap.docs
-        .map((docSnap) => {
-          const d = docSnap.data();
-          if (!d?.Name || !d?.MobileNo) return null;
+      try {
 
-          return {
-            label: d.Name.trim(),
-            value: String(d.MobileNo),
-            email: d.Email || "",
-            mentorName: d.MentorName || "",
-            photoURL: d.ProfilePhotoURL || "",
-          };
-        })
-        .filter(Boolean);
+        const snap = await getDocs(collection(db, COLLECTIONS.userDetail));
 
-      setUsers(list);
+        const list = snap.docs
+          .map((docSnap) => {
+
+            const d = docSnap.data();
+
+            const name = (d?.Name || "").trim();
+            const phone = d?.MobileNo ? String(d.MobileNo) : "";
+
+            if (!name || !phone) return null;
+
+            return {
+              label: name,
+              value: phone,
+              email: d?.Email || "",
+              mentorName: d?.MentorName || "",
+              photoURL: d?.ProfilePhotoURL || "",
+            };
+
+          })
+          .filter(Boolean);
+
+        setUsers(list);
+
+      } catch (err) {
+        console.error(err);
+        toast.error("Failed to load users");
+      }
+
     }
 
     loadUsers();
+
   }, []);
 
-  /* ================= DERIVED ================= */
+  /* ================= FILTER USERS ================= */
 
   const filteredUsers = users.filter((u) =>
     u.label.toLowerCase().includes(search.toLowerCase())
   );
 
+  /* ================= SELECTED USER ================= */
+
   const selectedUserData = users.find(
     (u) => String(u.value) === String(selectedUser)
   );
+
+  /* ================= HELPERS ================= */
 
   const getInitials = (name = "") =>
     name
@@ -92,7 +112,6 @@ export default function AddBirthdayClient() {
       .join("")
       .toUpperCase();
 
-
   const hasValidPhoto =
     selectedUserData?.photoURL &&
     selectedUserData.photoURL !== "-" &&
@@ -101,47 +120,58 @@ export default function AddBirthdayClient() {
   /* ================= DUPLICATE CHECK ================= */
 
   useEffect(() => {
+
     if (!selectedUser) {
       setExisting(false);
       return;
     }
 
     getDoc(doc(db, COLLECTIONS.birthdayCanva, selectedUser)).then((snap) => {
+
       setExisting(snap.exists());
+
       if (snap.exists()) {
         toast.info("Birthday Canva already exists for this user");
       }
+
     });
+
   }, [selectedUser]);
 
   /* ================= DOB INFO ================= */
 
   const dobInfo = dob
     ? (() => {
-      const d = new Date(dob);
-      const age = new Date().getFullYear() - d.getFullYear();
-      const day = d.toLocaleDateString("en-US", { weekday: "long" });
-      return { age, day };
-    })()
+        const d = new Date(dob);
+        const age = new Date().getFullYear() - d.getFullYear();
+        const day = d.toLocaleDateString("en-US", { weekday: "long" });
+        return { age, day };
+      })()
     : null;
 
   /* ================= VALIDATION ================= */
 
   const validate = () => {
+
     const e = {};
+
     if (!selectedUser) e.user = "User is required";
     if (!dob) e.dob = "Date of birth is required";
+
     setErrors(e);
+
     return Object.keys(e).length === 0;
+
   };
 
-  /* ================= IMAGE HANDLING ================= */
+  /* ================= IMAGE ================= */
 
   const handleImageChange = (file) => {
+
     if (!file) return;
 
     if (!file.type.startsWith("image/")) {
-      toast.error("Only image files are allowed");
+      toast.error("Only image files allowed");
       return;
     }
 
@@ -151,9 +181,11 @@ export default function AddBirthdayClient() {
     }
 
     setImage(file);
+
   };
 
   const uploadImage = async () => {
+
     if (!image) return "";
 
     const imageRef = ref(
@@ -162,17 +194,21 @@ export default function AddBirthdayClient() {
     );
 
     await uploadBytes(imageRef, image);
+
     return await getDownloadURL(imageRef);
+
   };
 
   /* ================= SAVE ================= */
 
   const handleSave = async () => {
+
     if (!validate() || !selectedUserData || existing) return;
 
     setSaving(true);
 
     try {
+
       const imageUrl = image ? await uploadImage() : "";
 
       await setDoc(doc(db, COLLECTIONS.birthdayCanva, selectedUser), {
@@ -193,25 +229,34 @@ export default function AddBirthdayClient() {
       setDob("");
       setImage(null);
       setErrors({});
+
     } catch (err) {
+
       console.error(err);
       toast.error("Failed to save Birthday Canva");
+
     } finally {
+
       setSaving(false);
       setShowConfirm(false);
+
     }
+
   };
 
   /* ================= UI ================= */
 
   return (
     <>
-      
 
       <Card className="space-y-6">
-        <Text className="py-6" variant="h1">Add Birthday Canva</Text>
+
+        <Text className="py-6" variant="h1">
+          Add Birthday Canva
+        </Text>
 
         {/* SEARCH */}
+
         <FormField label="Search User">
           <Input
             placeholder="Search by name"
@@ -224,6 +269,7 @@ export default function AddBirthdayClient() {
         </FormField>
 
         {/* SELECT */}
+
         <FormField label="Select User" required error={errors.user}>
           <Select
             placeholder="Select user"
@@ -236,52 +282,59 @@ export default function AddBirthdayClient() {
           />
         </FormField>
 
-        {/* USER + MENTOR PREVIEW */}
+        {/* USER PREVIEW */}
+
         {selectedUserData && (
+
           <div className="rounded-xl bg-slate-50 px-4 py-3">
+
             <div className="flex items-center gap-4">
+
               {hasValidPhoto ? (
+
                 <img
                   src={selectedUserData.photoURL}
                   alt={selectedUserData.label}
                   className="h-14 w-14 rounded-full object-cover"
-                  onError={(e) => {
-                    e.currentTarget.style.display = "none";
-                  }}
                 />
+
               ) : (
+
                 <div className="flex h-14 w-14 items-center justify-center rounded-full bg-slate-200 font-semibold text-slate-600">
                   {getInitials(selectedUserData.label)}
                 </div>
+
               )}
 
               <div className="space-y-1">
-                {/* Name */}
+
                 <div className="flex items-center gap-2">
                   <User size={16} className="text-slate-400" />
                   <Text variant="h3">{selectedUserData.label}</Text>
                 </div>
 
-                {/* Phone */}
                 <div className="flex items-center gap-2 text-slate-500">
                   <Phone size={14} />
                   <Text variant="muted">{selectedUserData.value}</Text>
                 </div>
 
-                {/* Mentor */}
                 <div className="flex items-center gap-2 text-slate-500">
                   <Users size={14} />
                   <Text variant="muted">
                     Mentor: {selectedUserData.mentorName || "—"}
                   </Text>
                 </div>
+
               </div>
+
             </div>
+
           </div>
+
         )}
 
-
         {/* DOB */}
+
         <FormField label="Date of Birth" required error={errors.dob}>
           <DateInput
             value={dob}
@@ -294,13 +347,15 @@ export default function AddBirthdayClient() {
 
         {dobInfo && (
           <div className="flex items-center gap-2 pl-1 text-slate-500">
-            <Cake size={16} className="text-slate-400" />
+            <Cake size={16} />
             <Text variant="muted">
               Turns <strong>{dobInfo.age}</strong> on {dobInfo.day}
             </Text>
           </div>
         )}
+
         {/* IMAGE */}
+
         <FormField label="Image">
           <Input
             type="file"
@@ -324,17 +379,20 @@ export default function AddBirthdayClient() {
         >
           Save
         </Button>
+
       </Card>
 
       <ConfirmModal
         open={showConfirm}
         title="Confirm Birthday Canva"
-        description={`Create Birthday Canva for ${selectedUserData?.label || ""
-          }?`}
+        description={`Create Birthday Canva for ${
+          selectedUserData?.label || ""
+        }?`}
         confirmText="Save"
         onConfirm={handleSave}
         onClose={() => setShowConfirm(false)}
       />
+
     </>
   );
 }
