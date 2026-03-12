@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { collection, getDocs } from "firebase/firestore";
+import { collection, getDocs, doc, updateDoc } from "firebase/firestore";
 import axios from "axios";
 import {
   CalendarDays,
@@ -90,6 +90,7 @@ export default function BirthdayClient() {
       );
 
       const result = [];
+      const sentIds = [];
 
       snapshot.forEach((docSnap) => {
         const data = docSnap.data();
@@ -104,11 +105,23 @@ export default function BirthdayClient() {
         )}/${String(dobDate.getMonth() + 1).padStart(2, "0")}`;
 
         if (dayMonth === today || dayMonth === tomorrow) {
-          result.push({ id: docSnap.id, ...data, dayMonth });
+          const userData = {
+            id: docSnap.id,
+            ...data,
+            dayMonth,
+            birthdayMessageSent: data.birthdayMessageSent || false,
+          };
+
+          result.push(userData);
+
+          if (data.birthdayMessageSent) {
+            sentIds.push(docSnap.id);
+          }
         }
       });
 
       setUsers(result);
+      setSentMessages(sentIds);
     } catch (error) {
       console.error(error);
       toast.error("Failed to load birthday users");
@@ -128,6 +141,12 @@ export default function BirthdayClient() {
 
     try {
       await axios.post("/api/send-birthday", { user });
+
+      /* STORE SENT STATUS IN FIRESTORE */
+      await updateDoc(doc(db, COLLECTIONS.birthdayCanva, user.id), {
+        birthdayMessageSent: true,
+        birthdayMessageSentDate: today,
+      });
 
       setSentMessages((prev) => [...prev, user.id]);
 
@@ -221,7 +240,6 @@ export default function BirthdayClient() {
 
   return (
     <>
-      {/* HEADER */}
       <div className="mb-6">
         <h1 className="text-xl font-semibold text-slate-900">
           Birthday Messages
@@ -231,7 +249,6 @@ export default function BirthdayClient() {
         </p>
       </div>
 
-      {/* STATS */}
       <div className="flex gap-6 mb-8">
         <StatItem
           icon={CalendarDays}
@@ -250,7 +267,6 @@ export default function BirthdayClient() {
         />
       </div>
 
-      {/* SECTIONS */}
       <Section title="Today" icon={CalendarDays} list={todayList} />
       <Section title="Tomorrow" icon={CalendarClock} list={tomorrowList} />
     </>
