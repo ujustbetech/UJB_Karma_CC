@@ -11,7 +11,7 @@ const Assessment = ({ id, fetchData }) => {
   const [status, setStatus] = useState('');
   const [currentDate, setCurrentDate] = useState('');
   const [declineReason, setDeclineReason] = useState('');
-
+const isFrozen = loading || (status && status !== "No status yet");
   const WHATSAPP_API_URL = 'https://graph.facebook.com/v22.0/527476310441806/messages';
 const WHATSAPP_API_TOKEN = 'Bearer EAAHwbR1fvgsBOwUInBvR1SGmVLSZCpDZAkn9aZCDJYaT0h5cwyiLyIq7BnKmXAgNs0ZCC8C33UzhGWTlwhUarfbcVoBdkc1bhuxZBXvroCHiXNwZCZBVxXlZBdinVoVnTB7IC1OYS4lhNEQprXm5l0XZAICVYISvkfwTEju6kV4Aqzt4lPpN8D3FD7eIWXDhnA4SG6QZDZD';
 
@@ -306,6 +306,7 @@ const handleSaveStatus = async (selectedstatus, reason = '') => {
       }
       
       await updateDoc(docRef, updateData);
+      setStatus(selectedstatus);
 /* ⭐ ADD CP WHEN ENROLLMENT IS CHOSEN */
 if (selectedstatus === "Choose to enroll") {
   const qMentor = query(
@@ -363,7 +364,12 @@ await sendAssessmentEmail(prospectName, prospectEmail, orbiterName, selectedstat
 // Send WhatsApp for all statuses
 await sendAssesmentMessage(orbiterName, prospectName, bodyText, prospectPhone);
 
-
+Swal.fire({
+  icon: "success",
+  title: "Notification Sent",
+  text: `Status "${selectedstatus}" has been sent to the prospect via Email and WhatsApp.`,
+  confirmButtonColor: "#3085d6"
+});
    
 
       // Refresh UI
@@ -472,7 +478,7 @@ return (
 
           <button
             onClick={() => confirmSaveStatus("Choose to enroll")}
-            disabled={loading}
+         disabled={isFrozen}
             className="bg-black text-white px-4 py-2 rounded-lg hover:bg-gray-800 disabled:bg-gray-400"
           >
             Choose to enroll
@@ -480,7 +486,7 @@ return (
 
           <button
             onClick={() => confirmSaveStatus("Declined by UJustBe")}
-            disabled={loading}
+disabled={isFrozen}
             className="bg-black text-white px-4 py-2 rounded-lg hover:bg-gray-800 disabled:bg-gray-400"
           >
             Decline by UJustBe
@@ -488,7 +494,7 @@ return (
 
           <button
             onClick={() => confirmSaveStatus("Declined by Prospect")}
-            disabled={loading}
+          disabled={isFrozen}
             className="bg-black text-white px-4 py-2 rounded-lg hover:bg-gray-800 disabled:bg-gray-400"
           >
             Decline by Prospect
@@ -496,7 +502,7 @@ return (
 
           <button
             onClick={() => confirmSaveStatus("Need some time")}
-            disabled={loading}
+    disabled={isFrozen}
             className="bg-black text-white px-4 py-2 rounded-lg hover:bg-gray-800 disabled:bg-gray-400"
           >
             Need some time
@@ -504,7 +510,7 @@ return (
 
           <button
             onClick={() => confirmSaveStatus("Awaiting response")}
-            disabled={loading}
+      disabled={isFrozen}
             className="bg-black text-white px-4 py-2 rounded-lg hover:bg-gray-800 disabled:bg-gray-400"
           >
             Awaiting response

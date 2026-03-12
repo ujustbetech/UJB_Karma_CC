@@ -128,14 +128,18 @@ const handleSave = async () => {
     alert("Data saved successfully!");
 
     setFormData({
-      callDate: "",
-      orbiterName: "",
-      occasion: "",
-      discussionDetails: "",
-      orbiterSuggestions: [""],
-      teamSuggestions: [""],
-      referralPossibilities: [""],
-    });
+  callDate: "",
+  orbiterName: "",
+  occasion: "",
+  referralId: "",
+  eventName: "",
+  otherOccasion: "",
+  discussionDetails: "",
+  orbiterSuggestions: [""],
+  teamSuggestions: [""],
+  referralPossibilities: [""],
+  nextFollowupDate: ""
+});
 
     fetchEntries();
 
@@ -305,36 +309,60 @@ onChange={handleChange}
 
 ) : (
 
-<div className="overflow-x-auto">
+<div className="overflow-x-auto mt-4">
 
-<table className="min-w-full border mt-4">
+<table className="min-w-full border border-gray-200 rounded-lg overflow-hidden">
 
-<thead className="bg-slate-100">
+<thead className="bg-gray-100 text-gray-700 text-sm">
 
 <tr>
-<th className="p-2 border">Date</th>
-<th className="p-2 border">Orbiter</th>
-<th className="p-2 border">Occasion</th>
-<th className="p-2 border">Discussion</th>
-<th className="p-2 border">Next Followup</th>
-<th className="p-2 border">Last Updated</th>
+<th className="px-4 py-3 border-b text-left">Date</th>
+<th className="px-4 py-3 border-b text-left">Orbiter</th>
+<th className="px-4 py-3 border-b text-left">Occasion</th>
+<th className="px-4 py-3 border-b text-left">Discussion</th>
+<th className="px-4 py-3 border-b text-left">Next Followup</th>
+<th className="px-4 py-3 border-b text-left">Last Updated</th>
 </tr>
 
 </thead>
 
-<tbody>
+<tbody className="text-sm text-gray-700">
 
-{entries.map((entry)=>(
-<tr key={entry.id} className="border">
+{entries.map((entry,index)=>(
+<tr
+key={entry.id}
+className={`hover:bg-gray-50 ${
+index % 2 === 0 ? "bg-white" : "bg-gray-50"
+}`}
+>
 
-<td className="p-2">{formatDate(entry.callDate)}</td>
-<td className="p-2">{entry.orbiterName}</td>
-<td className="p-2">{entry.occasion}</td>
-<td className="p-2">{entry.discussionDetails}</td>
-<td className="p-2">{formatDate(entry.nextFollowupDate)}</td>
-<td className="p-2">
+<td className="px-4 py-3 border-b">
+{formatDate(entry.callDate)}
+</td>
+
+<td className="px-4 py-3 border-b">
+{entry.orbiterName}
+</td>
+
+<td className="px-4 py-3 border-b">
+<span className="px-2 py-1 text-xs rounded bg-blue-100 text-blue-700">
+{entry.occasion}
+</span>
+</td>
+
+<td className="px-4 py-3 border-b max-w-xs truncate">
+{entry.discussionDetails}
+</td>
+
+<td className="px-4 py-3 border-b">
+{formatDate(entry.nextFollowupDate)}
+</td>
+
+<td className="px-4 py-3 border-b text-gray-500">
 {entry.updatedAt
-? formatDate(entry.updatedAt.seconds ? entry.updatedAt.toDate() : entry.updatedAt)
+? formatDate(entry.updatedAt.seconds
+? entry.updatedAt.toDate()
+: entry.updatedAt)
 : "—"}
 </td>
 

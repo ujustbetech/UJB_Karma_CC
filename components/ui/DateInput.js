@@ -1,5 +1,5 @@
 import Input from "@/components/ui/Input";
 
-export default function DateInput(props) {
-  return <Input type="datetime-local" {...props} />;
+export default function DateInput({ type = "datetime-local", ...props }) {
+  return <Input type={type} {...props} />;
 }

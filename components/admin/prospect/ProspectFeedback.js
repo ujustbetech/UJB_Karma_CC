@@ -39,6 +39,9 @@ const ProspectFeedback = ({ id }) => {
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
 
+  const [editMode, setEditMode] = useState(false);
+  const [editingId, setEditingId] = useState(null);
+
   const [formData, setFormData] = useState({
     fullName: "",
     phoneNumber: "",
@@ -52,142 +55,80 @@ const ProspectFeedback = ({ id }) => {
     additionalComments: "",
   });
 
-/* ================= CP HELPERS ================= */
-
-const ensureCpBoardUser = async (db, orbiter) => {
-  if (!orbiter?.ujbcode) return;
-
-  const ref = doc(db, "CPBoard", orbiter.ujbcode);
-  const snap = await getDoc(ref);
-
-  if (!snap.exists()) {
-    await setDoc(ref, {
-      id: orbiter.ujbcode,
-      name: orbiter.name,
-      phoneNumber: orbiter.phone,
-      role: orbiter.category || "MentOrbiter",
-      createdAt: serverTimestamp(),
-    });
-  }
-};
-
-const addCpForProspectFeedback = async (
-  db,
-  orbiter,
-  prospectPhone,
-  prospectName
-) => {
-
-  if (!orbiter?.ujbcode) return;
-
-  await ensureCpBoardUser(db, orbiter);
-
-  const q = query(
-    collection(db, "CPBoard", orbiter.ujbcode, "activities"),
-    where("activityNo", "==", "010"),
-    where("prospectPhone", "==", prospectPhone)
-  );
-
-  const snap = await getDocs(q);
-
-  if (!snap.empty) return;
-
-  await addDoc(
-    collection(db, "CPBoard", orbiter.ujbcode, "activities"),
-    {
-      activityNo: "010",
-      activityName: "Communicating Doorstep Feedback from Guest (Tool)",
-      points: 30,
-      category: "R",
-      purpose:
-        "Encourages structured documentation of feedback via tool usage for better tracking.",
-      prospectName,
-      prospectPhone,
-      source: "ProspectFeedbackForm",
-      month: new Date().toLocaleString("default", {
-        month: "short",
-        year: "numeric",
-      }),
-      addedAt: serverTimestamp(),
-    }
-  );
-};
-
 /* ================= FETCH DATA ================= */
 
-useEffect(() => {
+const fetchForms = async () => {
 
-  const fetchForms = async () => {
+  try {
 
-    try {
+    const subcollectionRef = collection(
+      db,
+      COLLECTIONS.prospect,
+      id,
+      "prospectfeedbackform"
+    );
 
-      const subcollectionRef = collection(
-        db,
-        COLLECTIONS.prospect,
-        id,
-        "prospectfeedbackform"
-      );
+    const snapshot = await getDocs(subcollectionRef);
 
-      const snapshot = await getDocs(subcollectionRef);
+    const data = snapshot.docs.map((doc) => ({
+      id: doc.id,
+      ...doc.data()
+    }));
 
-      const data = snapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data()
-      }));
+    setForms(data);
 
-      setForms(data);
+    const prospectDocRef = doc(db, COLLECTIONS.prospect, id);
+    const prospectSnap = await getDoc(prospectDocRef);
 
-      const prospectDocRef = doc(db, COLLECTIONS.prospect, id);
-      const prospectSnap = await getDoc(prospectDocRef);
+    let autofill = {
+      fullName: "",
+      phoneNumber: "",
+      email: "",
+      mentorName: "",
+    };
 
-      const autofill = {
-        fullName: "",
-        phoneNumber: "",
-        email: "",
-        mentorName: "",
+    if (prospectSnap.exists()) {
+
+      const d = prospectSnap.data();
+
+      autofill = {
+        fullName: d.prospectName || "",
+        phoneNumber: d.prospectPhone || "",
+        email: d.email || "",
+        mentorName: d.orbiterName || "",
       };
-
-      if (prospectSnap.exists()) {
-
-        const d = prospectSnap.data();
-
-        autofill.fullName = d.prospectName || "";
-        autofill.phoneNumber = d.prospectPhone || "";
-        autofill.email = d.email || "";
-        autofill.mentorName = d.orbiterName || "";
-
-      }
-
-      if (data.length === 0) {
-
-        setFormData((prev) => ({ ...prev, ...autofill }));
-        setShowForm(true);
-
-      } else {
-
-        setShowForm(false);
-
-        setFormData((prev) => ({
-          ...prev,
-          ...data[0]
-        }));
-
-      }
-
-    } catch (error) {
-
-      console.error("Error fetching data:", error);
-
-    } finally {
-
-      setLoading(false);
 
     }
 
-  };
+    if (data.length === 0) {
 
+      setFormData((prev) => ({
+        ...prev,
+        ...autofill
+      }));
+
+      setShowForm(true);
+
+    } else {
+
+      setShowForm(false);
+
+    }
+
+  } catch (error) {
+
+    console.error("Error fetching data:", error);
+
+  } finally {
+
+    setLoading(false);
+
+  }
+
+};
+
+useEffect(() => {
   if (id) fetchForms();
-
 }, [id]);
 
 /* ================= FORM HANDLERS ================= */
@@ -224,6 +165,11 @@ const handleSubmit = async (e) => {
 
   try {
 
+    const payload = {
+      ...formData,
+      createdAt: serverTimestamp()
+    };
+
     const subcollectionRef = collection(
       db,
       COLLECTIONS.prospect,
@@ -231,55 +177,60 @@ const handleSubmit = async (e) => {
       "prospectfeedbackform"
     );
 
-    await addDoc(subcollectionRef, formData);
-
-    const prospectRef = doc(db, COLLECTIONS.prospect, id);
-    const prospectSnap = await getDoc(prospectRef);
-
-    if (prospectSnap.exists()) {
-
-      const data = prospectSnap.data();
-
-      const qMentor = query(
-        collection(db, COLLECTIONS.userDetail),
-        where("MobileNo", "==", data.orbiterContact)
-      );
-
-      const mentorSnap = await getDocs(qMentor);
-
-      if (!mentorSnap.empty) {
-
-        const d = mentorSnap.docs[0].data();
-
-        if (d.UJBCode) {
-
-          const orbiter = {
-            ujbcode: d.UJBCode,
-            name: d.Name,
-            phone: d.MobileNo,
-            category: d.Category,
-          };
-
-          await addCpForProspectFeedback(
-            db,
-            orbiter,
-            data.prospectPhone,
-            data.prospectName
-          );
-
-        }
-
-      }
-
-    }
+    await addDoc(subcollectionRef, payload);
 
     alert("Form submitted successfully");
+
+    // ⭐ reload feedback from Firestore
+    const snapshot = await getDocs(subcollectionRef);
+
+    const updatedForms = snapshot.docs.map((doc) => ({
+      id: doc.id,
+      ...doc.data()
+    }));
+
+    setForms(updatedForms);
 
     setShowForm(false);
 
   } catch (error) {
 
     console.error("Error submitting form:", error);
+
+  }
+
+};
+/* ================= UPDATE ================= */
+
+const handleUpdate = async (e) => {
+
+  e.preventDefault();
+
+  try {
+
+    const docRef = doc(
+      db,
+      COLLECTIONS.prospect,
+      id,
+      "prospectfeedbackform",
+      editingId
+    );
+
+    await setDoc(docRef, {
+      ...formData,
+      updatedAt: serverTimestamp()
+    }, { merge: true });
+
+    alert("Feedback updated successfully");
+
+    setEditMode(false);
+    setEditingId(null);
+
+    await fetchForms();
+
+  } catch (error) {
+
+    console.error("Error updating form:", error);
 
   }
 
@@ -291,6 +242,8 @@ return (
 
 <>
 <Text variant="h1">Prospect Feedback</Text>
+
+{/* ================= NEW FORM ================= */}
 
 {forms.length === 0 && showForm && (
 
@@ -355,11 +308,10 @@ options={[
 />
 </FormField>
 
-<div>
+{/* Interest Areas */}
 
-<Text variant="h3">Most Interesting Aspects</Text>
-
-<div className="grid grid-cols-1 md:grid-cols-2 gap-2 mt-2">
+<FormField label="Interest Areas">
+<div className="grid grid-cols-1 md:grid-cols-2 gap-2">
 
 {interestOptions.map((option,index)=>(
 <label key={index} className="flex items-center gap-2">
@@ -374,14 +326,13 @@ onChange={(e)=>handleCheckboxChange(e,"interestAreas")}
 ))}
 
 </div>
+</FormField>
 
-</div>
+{/* Communication */}
 
-<div>
+<FormField label="Preferred Communication">
 
-<Text variant="h3">Preferred Communication</Text>
-
-<div className="flex gap-4 mt-2">
+<div className="flex gap-4">
 
 {communicationOptions.map((option,index)=>(
 <label key={index} className="flex items-center gap-2">
@@ -397,15 +348,17 @@ onChange={(e)=>handleCheckboxChange(e,"communicationOptions")}
 
 </div>
 
-</div>
+</FormField>
 
-<FormField label="Questions or Suggestions">
+<FormField label="Comments">
+
 <textarea
 className="w-full border rounded-lg p-3"
 name="additionalComments"
 value={formData.additionalComments}
 onChange={handleChange}
 />
+
 </FormField>
 
 <div className="flex justify-end pt-4">
@@ -418,30 +371,127 @@ onChange={handleChange}
 
 )}
 
-{forms.length>0 && forms.map((form)=>(
+{/* ================= VIEW FEEDBACK ================= */}
+
+{forms.map((form)=>(
+
 <Card key={form.id} className="mb-6">
+
+<form onSubmit={editMode ? handleUpdate : undefined}>
 
 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
 
-<FormField label="Prospect Name"><Input value={form.fullName||""} disabled/></FormField>
-<FormField label="Phone"><Input value={form.phoneNumber||""} disabled/></FormField>
-<FormField label="Email"><Input value={form.email||""} disabled/></FormField>
-<FormField label="Orbiter Name"><Input value={form.mentorName||""} disabled/></FormField>
-<FormField label="Understanding"><Input value={form.understandingLevel||""} disabled/></FormField>
-<FormField label="Self Growth"><Input value={form.selfGrowthUnderstanding||""} disabled/></FormField>
-<FormField label="Join Interest"><Input value={form.joinInterest||""} disabled/></FormField>
+<FormField label="Prospect Name">
+<Input value={editMode ? formData.fullName : form.fullName} name="fullName" onChange={handleChange} disabled={!editMode}/>
+</FormField>
+
+<FormField label="Phone">
+<Input value={editMode ? formData.phoneNumber : form.phoneNumber} name="phoneNumber" onChange={handleChange} disabled={!editMode}/>
+</FormField>
+
+<FormField label="Email">
+<Input value={editMode ? formData.email : form.email} name="email" onChange={handleChange} disabled={!editMode}/>
+</FormField>
+
+<FormField label="Orbiter Name">
+<Input value={editMode ? formData.mentorName : form.mentorName} name="mentorName" onChange={handleChange} disabled={!editMode}/>
+</FormField>
+
+<FormField label="Understanding">
+{editMode ? (
+<Select
+value={formData.understandingLevel}
+onChange={(v)=>setFormData({...formData, understandingLevel:v})}
+options={[
+{label:"Excellent",value:"Excellent"},
+{label:"Good",value:"Good"},
+{label:"Fair",value:"Fair"},
+{label:"Poor",value:"Poor"}
+]}
+/>
+) : (
+<Input value={form.understandingLevel || ""} disabled/>
+)}
+</FormField>
+
+<FormField label="Self Growth">
+{editMode ? (
+<Select
+value={formData.selfGrowthUnderstanding}
+onChange={(v)=>setFormData({...formData,selfGrowthUnderstanding:v})}
+options={[
+{label:"Yes, very clearly",value:"Yes, very clearly"},
+{label:"Somewhat",value:"Somewhat"},
+{label:"No, still unclear",value:"No, still unclear"}
+]}
+/>
+) : (
+<Input value={form.selfGrowthUnderstanding || ""} disabled/>
+)}
+</FormField>
+<FormField label="Join Interest">
+{editMode ? (
+<Select
+value={formData.joinInterest}
+onChange={(v)=>setFormData({...formData,joinInterest:v})}
+options={[
+{label:"Yes, I am interested",value:"Yes, I am interested"},
+{label:"I would like to think about it",value:"I would like to think about it"},
+{label:"No, not interested",value:"No, not interested"}
+]}
+/>
+) : (
+<Input value={form.joinInterest || ""} disabled/>
+)}
+</FormField>
 
 </div>
+
+<FormField label="Interest Areas">
+<Input value={(editMode ? formData.interestAreas : form.interestAreas)?.join(", ")} disabled/>
+</FormField>
+
+<FormField label="Preferred Communication">
+<Input value={(editMode ? formData.communicationOptions : form.communicationOptions)?.join(", ")} disabled/>
+</FormField>
 
 <FormField label="Comments">
 <textarea
 className="w-full border rounded-lg p-3"
-value={form.additionalComments||""}
-disabled
+value={editMode ? formData.additionalComments : form.additionalComments}
+name="additionalComments"
+onChange={handleChange}
+disabled={!editMode}
 />
 </FormField>
 
+<div className="flex gap-3 mt-4">
+
+{!editMode && (
+<Button
+type="button"
+onClick={()=>{
+setEditMode(true);
+setEditingId(form.id);
+setFormData(form);
+}}
+>
+Edit
+</Button>
+)}
+
+{editMode && (
+<Button type="submit">
+Update
+</Button>
+)}
+
+</div>
+
+</form>
+
 </Card>
+
 ))}
 
 </>

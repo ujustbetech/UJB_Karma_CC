@@ -14,7 +14,8 @@ const ReactQuill = dynamic(() => import("react-quill-new"), {
   loading: () => <p>Loading editor...</p>,
 });
 
-const AditionalInfo = ({ id, data = { sections: [] }, fetchData }) => {
+const AditionalInfo = ({ id, data = { sections: [] } }) => {
+
   const [section, setSection] = useState({
     lived: "",
     overviewOfUJB: "",
@@ -29,6 +30,9 @@ const AditionalInfo = ({ id, data = { sections: [] }, fetchData }) => {
   const [mounted, setMounted] = useState(false);
   const [loading, setLoading] = useState(false);
 
+  const [hasData, setHasData] = useState(false);
+  const [editMode, setEditMode] = useState(false);
+
   const WHATSAPP_API_URL =
     "https://graph.facebook.com/v22.0/527476310441806/messages";
 
@@ -42,6 +46,8 @@ const AditionalInfo = ({ id, data = { sections: [] }, fetchData }) => {
   useEffect(() => {
     if (data.sections?.[0]) {
       setSection(data.sections[0]);
+      setHasData(true);
+      setEditMode(false);
     }
   }, [data]);
 
@@ -50,12 +56,19 @@ const AditionalInfo = ({ id, data = { sections: [] }, fetchData }) => {
   };
 
   const handleSave = async () => {
+
     setLoading(true);
 
     try {
+
       const existingDocRef = doc(db, COLLECTIONS.prospect, id);
 
-      await updateDoc(existingDocRef, { sections: [section] });
+      await updateDoc(existingDocRef, {
+        sections: [section],
+      });
+
+      setHasData(true);
+      setEditMode(false);
 
       const formLink = `https://otc-app.vercel.app/prospectfeedbackform/${id}`;
 
@@ -87,8 +100,11 @@ Thank you!
         emailBody,
         phone
       );
+
     } catch (error) {
+
       console.error("Error saving section:", error);
+
     }
 
     setLoading(false);
@@ -107,6 +123,7 @@ Thank you!
     bodyText,
     phone
   ) => {
+
     const payload = {
       messaging_product: "whatsapp",
       to: `91${phone}`,
@@ -127,6 +144,7 @@ Thank you!
     };
 
     try {
+
       await axios.post(WHATSAPP_API_URL, payload, {
         headers: {
           Authorization: WHATSAPP_API_TOKEN,
@@ -135,9 +153,13 @@ Thank you!
       });
 
       console.log("WhatsApp message sent");
+
     } catch (error) {
+
       console.error("WhatsApp failed", error);
+
     }
+
   };
 
   const sendAssessmentEmail = async (
@@ -146,6 +168,7 @@ Thank you!
     prospectName,
     formLink
   ) => {
+
     const templateParams = {
       prospect_name: prospectName,
       to_email: prospectEmail,
@@ -154,101 +177,131 @@ Thank you!
     };
 
     try {
+
       await emailjs.send(
         "service_acyimrs",
         "template_cdm3n5x",
         templateParams,
         "w7YI9DEqR9sdiWX9h"
       );
+
     } catch (error) {
+
       console.error("Email failed", error);
+
     }
+
   };
 
   const renderEditor = (field, placeholder) => (
+
     <div className="editor-wrapper">
+
       {mounted && (
         <ReactQuill
           theme="snow"
           placeholder={placeholder}
           value={section[field]}
+          readOnly={hasData && !editMode}
           onChange={(value) => handleInputChange(value, field)}
         />
       )}
+
     </div>
+
   );
 
-return (
-  <div className="max-w-5xl mx-auto p-6">
+  return (
 
-    <div className="bg-white border rounded-xl shadow-sm p-6">
+    <div className="max-w-5xl mx-auto p-6">
 
-      <h2 className="text-2xl font-semibold mb-8">
-        UJB Pre Enrollment Assessment Form
-      </h2>
+      <div className="bg-white border rounded-xl shadow-sm p-6">
 
-      <div className="space-y-8">
+        <h2 className="text-2xl font-semibold mb-8">
+          UJB Pre Enrollment Assessment Form
+        </h2>
 
-        <div>
-          <h4 className="text-lg font-medium mb-2">As lived Experience</h4>
-          {renderEditor("lived", "Lived")}
+        <div className="space-y-8">
+
+          <div>
+            <h4 className="text-lg font-medium mb-2">As lived Experience</h4>
+            {renderEditor("lived", "Lived")}
+          </div>
+
+          <div>
+            <h4 className="text-lg font-medium mb-2">Overview of UJustBe</h4>
+            {renderEditor("overviewOfUJB", "")}
+          </div>
+
+          <div>
+            <h4 className="text-lg font-medium mb-2">Why UJustBe</h4>
+            {renderEditor("whyUJB", "")}
+          </div>
+
+          <div>
+            <h4 className="text-lg font-medium mb-2">Selection Rationale</h4>
+            {renderEditor("selectionRational", "")}
+          </div>
+
+          <div>
+            <h4 className="text-lg font-medium mb-2">Tangible Aspects</h4>
+            {renderEditor("tangible", "Tangible")}
+          </div>
+
+          <div>
+            <h4 className="text-lg font-medium mb-2">Intangible Aspects</h4>
+            {renderEditor("intangible", "Intangible")}
+          </div>
+
+          <div>
+            <h4 className="text-lg font-medium mb-2">Vision Statement</h4>
+            {renderEditor("vision", "Vision")}
+          </div>
+
+          <div>
+            <h4 className="text-lg font-medium mb-2">Happy Face</h4>
+            {renderEditor("happyFace", "Happy Face")}
+          </div>
+
         </div>
 
-        <div>
-          <h4 className="text-lg font-medium mb-2">Overview of UJustBe</h4>
-          {renderEditor("overviewOfUJB", "")}
+        <div className="mt-8 flex justify-end gap-3">
+
+          {!hasData && (
+            <button
+              onClick={handleSave}
+              disabled={loading}
+              className="px-6 py-2 rounded-lg text-white bg-black hover:bg-gray-800"
+            >
+              Save
+            </button>
+          )}
+
+          {hasData && !editMode && (
+            <button
+              onClick={() => setEditMode(true)}
+              className="px-6 py-2 rounded-lg text-white bg-black hover:bg-gray-800"
+            >
+              Edit
+            </button>
+          )}
+
+          {editMode && (
+            <button
+              onClick={handleSave}
+              disabled={loading}
+              className="px-6 py-2 rounded-lg text-white bg-black hover:bg-gray-800"
+            >
+              Update
+            </button>
+          )}
+
         </div>
 
-        <div>
-          <h4 className="text-lg font-medium mb-2">Why UJustBe</h4>
-          {renderEditor("whyUJB", "")}
-        </div>
-
-        <div>
-          <h4 className="text-lg font-medium mb-2">Selection Rationale</h4>
-          {renderEditor("selectionRational", "")}
-        </div>
-
-        <div>
-          <h4 className="text-lg font-medium mb-2">Tangible Aspects</h4>
-          {renderEditor("tangible", "Tangible")}
-        </div>
-
-        <div>
-          <h4 className="text-lg font-medium mb-2">Intangible Aspects</h4>
-          {renderEditor("intangible", "Intangible")}
-        </div>
-
-        <div>
-          <h4 className="text-lg font-medium mb-2">Vision Statement</h4>
-          {renderEditor("vision", "Vision")}
-        </div>
-
-        <div>
-          <h4 className="text-lg font-medium mb-2">Happy Face</h4>
-          {renderEditor("happyFace", "Happy Face")}
-        </div>
-
-      </div>
-
-      <div className="mt-8 flex justify-end">
-        <button
-          onClick={handleSave}
-          disabled={loading}
-          className={`px-6 py-2 rounded-lg text-white transition ${
-            loading
-              ? "bg-gray-400 cursor-not-allowed"
-              : "bg-black hover:bg-gray-800"
-          }`}
-        >
-          {loading ? "Saving..." : "Save"}
-        </button>
       </div>
 
     </div>
-
-  </div>
-);
+  );
 };
 
 export default AditionalInfo;
