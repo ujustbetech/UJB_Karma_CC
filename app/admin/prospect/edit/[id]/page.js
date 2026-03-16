@@ -15,10 +15,33 @@ import {
   ClipboardCheck,
   MessageCircle,
   Layers,
+  MessageSquare,
+  CheckCircle,
+  UserCheck,
+  Activity,
   BookOpen,
+  Book,
+  Library,
+  Mail,
+  Phone,
   Users,
-  Network
+  Network,
+  Calendar,
+  Sparkles,
+  Star,
+  Eye,
+  ClipboardList,
+  Share2,
+  GitBranch,
+  Smile,
+  Compass,
+  ShieldCheck,
+  Rocket,
+  CalendarCheck,
+  MessageSquareText
 } from "lucide-react";
+
+/* COMPONENTS */
 
 import Edit from "@/components/admin/prospect/EditProspectForm";
 import AditionalInfo from "@/components/admin/prospect/AdditionalInfo";
@@ -39,6 +62,15 @@ import CaseStudy1 from "@/components/admin/prospect/CaseStudy1";
 import CaseStudy2 from "@/components/admin/prospect/CaseStudy2";
 import AssesmentCall from "@/components/admin/prospect/AssesmentCall";
 import AssesmentMail from "@/components/admin/prospect/AssesmentMail";
+import Assessment from "@/components/admin/prospect/AssesmentBtn";
+import Day17SocialMedia from "@/components/admin/prospect/SocialParticipation";
+import Day19Referral from "@/components/admin/prospect/ReferralParticipation";
+import Day21HappyFace from "@/components/admin/prospect/HappyFace";
+import Day22VisionAlignment from "@/components/admin/prospect/VisionAllignment";
+import Day24IntegrityReferral from "@/components/admin/prospect/IntegrityReferral";
+import Day25CosmOrbiterImpact from "@/components/admin/prospect/CosmOrbiterImpact";
+import Day27Events from "@/components/admin/prospect/Events";
+import Day28Feedback from "@/components/admin/prospect/FinalFeedback";
 
 export default function EditAdminEvent() {
 
@@ -69,7 +101,16 @@ export default function EditAdminEvent() {
     "Monthly Meeting Knowledge",
     "As Lived Part 1",
     "As Lived Part 2",
-    "Review Session"
+    "Review Session",
+    "Assesment Completion",
+    "Social Participation",
+    "Referral Participation",
+    "Happy Face",
+    "Vision Allignment",
+    "Integrity Referral",
+    "CosmOrbiter Impact",
+    "Event",
+    "Feedback"
   ];
 
   const icons = [
@@ -77,26 +118,31 @@ export default function EditAdminEvent() {
     ClipboardCheck,
     MessageCircle,
     Layers,
+    MessageSquare,
+    CheckCircle,
+    UserCheck,
+    Activity,
+    BookOpen,
+    Book,
+    Library,
+    Mail,
+    Phone,
     Users,
     Network,
-    BookOpen,
-    BookOpen,
-    BookOpen,
-    BookOpen,
-    BookOpen,
-    BookOpen,
-    BookOpen,
-    BookOpen,
-    BookOpen,
-    BookOpen,
-    BookOpen,
-    BookOpen,
-    BookOpen
+    Calendar,
+    Sparkles,
+    Star,
+    Eye,
+    ClipboardList,
+    Share2,
+    GitBranch,
+    Smile,
+    Compass,
+    ShieldCheck,
+    Rocket,
+    CalendarCheck,
+    MessageSquareText
   ];
-
-  /* ------------------------------------------------ */
-  /* FETCH PROSPECT */
-  /* ------------------------------------------------ */
 
   const fetchEvent = async () => {
 
@@ -114,6 +160,7 @@ export default function EditAdminEvent() {
     } finally {
       setLoading(false);
     }
+
   };
 
   useEffect(() => {
@@ -123,10 +170,6 @@ export default function EditAdminEvent() {
     fetchEvent();
 
   }, [id]);
-
-  /* ------------------------------------------------ */
-  /* NAVIGATION */
-  /* ------------------------------------------------ */
 
   const nextTab = () => {
 
@@ -146,10 +189,6 @@ export default function EditAdminEvent() {
 
   };
 
-  /* ------------------------------------------------ */
-  /* EXPORT CSV */
-  /* ------------------------------------------------ */
-
   const exportProspect = () => {
 
     if (!eventData) return;
@@ -158,22 +197,16 @@ export default function EditAdminEvent() {
     const headers = Object.keys(eventData);
 
     rows.push(headers.join(","));
-
     rows.push(headers.map((h) => JSON.stringify(eventData[h] ?? "")).join(","));
 
     const csv = "data:text/csv;charset=utf-8," + rows.join("\n");
 
     const link = document.createElement("a");
-
     link.href = encodeURI(csv);
     link.download = `Prospect_${id}.csv`;
-
     link.click();
-  };
 
-  /* ------------------------------------------------ */
-  /* RENDER TAB */
-  /* ------------------------------------------------ */
+  };
 
   const renderTab = () => {
 
@@ -200,21 +233,26 @@ export default function EditAdminEvent() {
       case 16: return <CaseStudy1 data={eventData} id={id} />;
       case 17: return <CaseStudy2 data={eventData} id={id} />;
       case 18: return <AssesmentCall data={eventData} id={id} />;
+      case 19: return <Assessment data={eventData} id={id} />;
+      case 20: return <Day17SocialMedia data={eventData} id={id} />;
+      case 21: return <Day19Referral data={eventData} id={id} />;
+      case 22: return <Day21HappyFace data={eventData} id={id} />;
+      case 23: return <Day22VisionAlignment data={eventData} id={id} />;
+      case 24: return <Day24IntegrityReferral data={eventData} id={id} />;
+      case 25: return <Day25CosmOrbiterImpact data={eventData} id={id} />;
+      case 26: return <Day27Events data={eventData} id={id} />;
+      case 27: return <Day28Feedback data={eventData} id={id} />;
+      default: return null;
 
-      default:
-        return null;
     }
-  };
 
-  /* ------------------------------------------------ */
-  /* UI */
-  /* ------------------------------------------------ */
+  };
 
   return (
 
     <div className="grid grid-cols-12 gap-6 pb-28">
 
-      {/* LEFT SIDEBAR */}
+      {/* SIDEBAR */}
 
       <div className="col-span-2">
 
@@ -234,17 +272,12 @@ export default function EditAdminEvent() {
                 <button
                   key={index}
                   onClick={() => setActiveTab(index)}
-                  className={`
-                    relative w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition
-                    ${isActive
-                      ? "bg-brand-primary/10 text-brand-primary font-medium"
-                      : "hover:bg-slate-50 text-slate-700"}
+                  className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition
+                  ${isActive
+                    ? "bg-brand-primary/10 text-brand-primary font-medium"
+                    : "hover:bg-slate-50 text-slate-700"}
                   `}
                 >
-
-                  {isActive && (
-                    <span className="absolute left-0 top-1 bottom-1 w-1 rounded bg-brand-primary" />
-                  )}
 
                   <Icon size={16} />
 
@@ -262,7 +295,7 @@ export default function EditAdminEvent() {
 
       </div>
 
-      {/* CENTER CONTENT */}
+      {/* MAIN */}
 
       <div className="col-span-8 space-y-6">
 
@@ -281,10 +314,7 @@ export default function EditAdminEvent() {
                 {tabs[activeTab]}
               </Text>
 
-              <Button
-                variant="secondary"
-                onClick={exportProspect}
-              >
+              <Button variant="secondary" onClick={exportProspect}>
                 Export
               </Button>
 
@@ -307,11 +337,9 @@ export default function EditAdminEvent() {
               </Button>
 
               {activeTab < tabs.length - 1 && (
-
                 <Button onClick={nextTab}>
                   Next
                 </Button>
-
               )}
 
             </div>
@@ -326,30 +354,27 @@ export default function EditAdminEvent() {
 
       <div className="col-span-2">
 
-        <div className="sticky top-6 space-y-4">
+        <Card className="sticky top-6 p-4">
 
-          <Card className="p-4">
+          <Text variant="h4">
+            Tips
+          </Text>
 
-            <Text variant="h4">
-              Tips
-            </Text>
+          <ul className="mt-2 text-xs text-slate-600 space-y-1">
 
-            <ul className="mt-2 text-xs text-slate-600 space-y-1">
+            <li>• Complete assessment form</li>
+            <li>• Add engagement logs</li>
+            <li>• Track follow-up meetings</li>
+            <li>• Fill knowledge sessions</li>
 
-              <li>• Complete assessment form</li>
-              <li>• Add engagement logs</li>
-              <li>• Track follow-up meetings</li>
-              <li>• Fill knowledge sessions</li>
+          </ul>
 
-            </ul>
-
-          </Card>
-
-        </div>
+        </Card>
 
       </div>
 
     </div>
 
   );
+
 }

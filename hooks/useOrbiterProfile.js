@@ -295,11 +295,19 @@ if (data.bankDetails) {
       [field]: URL.createObjectURL(file)
     }));
   };
+const handleBankProofChange = (file) => {
 
-  const handleBankProofChange = (file) => {
-    setBankProofFile(file);
-    setBankProofPreview(URL.createObjectURL(file));
-  };
+  /* DELETE CASE */
+  if (!file) {
+    setBankProofFile(null);
+    setBankProofPreview('');
+    return;
+  }
+
+  /* UPLOAD CASE */
+  setBankProofFile(file);
+  setBankProofPreview(URL.createObjectURL(file));
+};
 
 
   const approveBusiness = async () => {

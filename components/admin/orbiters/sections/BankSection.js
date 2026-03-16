@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import Card from '@/components/ui/Card';
 import Text from '@/components/ui/Text';
 import FormField from '@/components/ui/FormField';
@@ -21,6 +21,7 @@ export default function BankSection({ profile }) {
 
   const [errors, setErrors] = useState({});
   const [showAccount, setShowAccount] = useState(false);
+  const fileInputRef = useRef(null);
 
   /* ---------------- SAFE NESTED UPDATE ---------------- */
 
@@ -75,6 +76,14 @@ export default function BankSection({ profile }) {
 
     // 🔥 DO NOT store file in formData
     handleBankProofChange(file);
+  };
+
+  const handleDeleteFile = () => {
+    handleBankProofChange(null);
+
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
   };
 
   const isPDF = (url) => url?.toLowerCase()?.includes('.pdf');
@@ -149,30 +158,44 @@ export default function BankSection({ profile }) {
         <FormField label="Upload Bank Proof">
           <div className="space-y-2">
             <input
+              ref={fileInputRef}
               type="file"
               accept="image/*,.pdf"
               onChange={(e) => handleProofUpload(e.target.files[0])}
               className="block w-full text-sm border rounded-lg p-2"
             />
 
-            {bankProofPreview && (
-              isPDF(bankProofPreview) ? (
-                <a
-                  href={bankProofPreview}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-sm text-blue-600 underline"
-                >
-                  View Uploaded PDF
-                </a>
-              ) : (
-                <img
-                  src={bankProofPreview}
-                  alt="Bank Proof"
-                  className="w-32 rounded-lg border"
-                />
-              )
-            )}
+      {bankProofPreview && (
+  <div className="space-y-2">
+
+    {isPDF(bankProofPreview) ? (
+      <a
+        href={bankProofPreview}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="text-sm text-blue-600 underline"
+      >
+        View Uploaded PDF
+      </a>
+    ) : (
+      <img
+        src={bankProofPreview}
+        alt="Bank Proof"
+        className="w-32 rounded-lg border"
+      />
+    )}
+
+    <Button
+      type="button"
+      variant="ghost"
+      onClick={handleDeleteFile}
+      className="text-red-500"
+    >
+      Delete File
+    </Button>
+
+  </div>
+)}
           </div>
         </FormField>
 
