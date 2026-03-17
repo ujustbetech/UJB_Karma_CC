@@ -80,22 +80,30 @@ export default function Register() {
     fetchUsers();
 
   }, []);
-useEffect(() => {
-  const now = new Date();
 
-  const formatted =
-    now.getFullYear() +
-    "-" +
-    String(now.getMonth() + 1).padStart(2, "0") +
-    "-" +
-    String(now.getDate()).padStart(2, "0") +
-    "T" +
-    String(now.getHours()).padStart(2, "0") +
-    ":" +
-    String(now.getMinutes()).padStart(2, "0");
+  /* ---------------------------------- */
+  /* DEFAULT DATE */
+  /* ---------------------------------- */
 
-  setDate(formatted);
-}, []);
+  useEffect(() => {
+
+    const now = new Date();
+
+    const formatted =
+      now.getFullYear() +
+      "-" +
+      String(now.getMonth() + 1).padStart(2, "0") +
+      "-" +
+      String(now.getDate()).padStart(2, "0") +
+      "T" +
+      String(now.getHours()).padStart(2, "0") +
+      ":" +
+      String(now.getMinutes()).padStart(2, "0");
+
+    setDate(formatted);
+
+  }, []);
+
   /* ---------------------------------- */
   /* SEARCH ORBITER */
   /* ---------------------------------- */
@@ -111,6 +119,7 @@ useEffect(() => {
     );
 
     setFilteredUsers(filtered);
+
   };
 
   const handleSelectUser = (user) => {
@@ -123,6 +132,7 @@ useEffect(() => {
 
     setUserSearch("");
     setFilteredUsers([]);
+
   };
 
   /* ---------------------------------- */
@@ -219,92 +229,6 @@ UJustBe Team
   };
 
   /* ---------------------------------- */
-  /* CP SYSTEM */
-  /* ---------------------------------- */
-
-  const ensureCpBoardUser = async (orbiter) => {
-
-    if (!orbiter?.ujbcode) return;
-
-    const ref = doc(db, "CPBoard", orbiter.ujbcode);
-
-    const snap = await getDoc(ref);
-
-    if (!snap.exists()) {
-
-      await setDoc(ref, {
-        id: orbiter.ujbcode,
-        name: orbiter.name,
-        phoneNumber: orbiter.phone,
-        role: "CosmOrbiter",
-        totals: { R: 0, H: 0, W: 0 },
-        createdAt: serverTimestamp(),
-      });
-
-    }
-  };
-
-  const updateCategoryTotals = async (orbiter, categories, points) => {
-
-    const ref = doc(db, "CPBoard", orbiter.ujbcode);
-
-    const snap = await getDoc(ref);
-
-    if (!snap.exists()) return;
-
-    const data = snap.data();
-
-    const totals = data.totals || { R: 0, H: 0, W: 0 };
-
-    categories.forEach((cat) => {
-      totals[cat] = (totals[cat] || 0) + points;
-    });
-
-    await updateDoc(ref, { totals });
-  };
-
-  const addCpForProspectIntroduction = async (
-    orbiter,
-    prospectName,
-    prospectPhone
-  ) => {
-
-    await ensureCpBoardUser(orbiter);
-
-    const q = query(
-      collection(db, "CPBoard", orbiter.ujbcode, "activities"),
-      where("activityNo", "==", "001"),
-      where("prospectPhone", "==", prospectPhone)
-    );
-
-    const snap = await getDocs(q);
-
-    if (!snap.empty) return;
-
-    const categories = ["R"];
-    const points = 50;
-
-    await addDoc(
-      collection(db, "CPBoard", orbiter.ujbcode, "activities"),
-      {
-        activityNo: "001",
-        activityName: "Prospect Identification",
-        points,
-        categories,
-        prospectName,
-        prospectPhone,
-        month: new Date().toLocaleString("default", {
-          month: "short",
-          year: "numeric",
-        }),
-        addedAt: serverTimestamp(),
-      }
-    );
-
-    await updateCategoryTotals(orbiter, categories, points);
-  };
-
-  /* ---------------------------------- */
   /* SUBMIT */
   /* ---------------------------------- */
 
@@ -312,12 +236,55 @@ UJustBe Team
 
     e.preventDefault();
 
-    if (!prospectName || !prospectPhone || !email || !occupation || !date || !type) {
+    /* -------- VALIDATION -------- */
+
+    if (!selectedOrbiter) {
 
       Swal.fire({
         icon: "error",
-        title: "Missing fields",
-        text: "Please fill all required fields",
+        title: "Orbiter Required",
+        text: "Please search and select an Orbiter",
+      });
+
+      return;
+    }
+
+    if (
+      !prospectName ||
+      !prospectPhone ||
+      !email ||
+      !occupation ||
+      !hobbies ||
+      !date ||
+      !type
+    ) {
+
+      Swal.fire({
+        icon: "error",
+        title: "Missing Fields",
+        text: "All fields are required",
+      });
+
+      return;
+    }
+
+    if (!/^\d{10}$/.test(prospectPhone)) {
+
+      Swal.fire({
+        icon: "error",
+        title: "Invalid Phone",
+        text: "Prospect phone must be 10 digits",
+      });
+
+      return;
+    }
+
+    if (!/^\S+@\S+\.\S+$/.test(email)) {
+
+      Swal.fire({
+        icon: "error",
+        title: "Invalid Email",
+        text: "Please enter a valid email address",
       });
 
       return;
@@ -349,12 +316,12 @@ UJustBe Team
 
       const docId = docRef.id;
 
-     const baseUrl =
-  typeof window !== "undefined"
-    ? window.location.origin
-    : process.env.NEXT_PUBLIC_SITE_URL;
+      const baseUrl =
+        typeof window !== "undefined"
+          ? window.location.origin
+          : process.env.NEXT_PUBLIC_SITE_URL;
 
-const formLink = `${baseUrl}/user/prospects/${docId}`;
+      const formLink = `${baseUrl}/user/prospects/${docId}`;
 
       await sendAssessmentEmail(
         name,
@@ -370,26 +337,13 @@ const formLink = `${baseUrl}/user/prospects/${docId}`;
         formLink
       );
 
-      if (selectedOrbiter?.ujbCode) {
-
-        const orbiter = {
-          ujbcode: selectedOrbiter.ujbCode,
-          name: selectedOrbiter.name,
-          phone: selectedOrbiter.phone,
-        };
-
-        await addCpForProspectIntroduction(
-          orbiter,
-          prospectName,
-          prospectPhone
-        );
-      }
-
       Swal.fire({
         icon: "success",
         title: "Success",
         text: "Prospect Registered Successfully",
       });
+
+      /* RESET FORM */
 
       setProspectName("");
       setProspectPhone("");
@@ -445,7 +399,7 @@ const formLink = `${baseUrl}/user/prospects/${docId}`;
 
           <Text variant="h3">Mentor Orbiter</Text>
 
-          <FormField label="Search Orbiter">
+          <FormField label="Search Orbiter" required>
 
             <div className="relative">
 
@@ -517,39 +471,39 @@ const formLink = `${baseUrl}/user/prospects/${docId}`;
               />
             </FormField>
 
-            <FormField label="Email">
+            <FormField label="Email" required>
               <Input
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
               />
             </FormField>
 
-            <FormField label="Date">
+            <FormField label="Date" required>
               <DateInput
                 value={date}
                 onChange={(e) => setDate(e.target.value)}
               />
             </FormField>
 
-            <FormField label="Occupation">
+            <FormField label="Occupation" required>
 
-             <Select
-  value={occupation}
-  onChange={(v) => setOccupation(v)}
-  options={[
-    { label: "Select an option", value: "" },
-    { label: "Service", value: "Service" },
-    { label: "Student", value: "Student" },
-    { label: "Business", value: "Business" },
-    { label: "Professional", value: "Professional" },
-    { label: "Housewife", value: "Housewife" },
-    { label: "Retired", value: "Retired" },
-  ]}
-/>
+              <Select
+                value={occupation}
+                onChange={(v) => setOccupation(v)}
+                options={[
+                  { label: "Select an option", value: "" },
+                  { label: "Service", value: "Service" },
+                  { label: "Student", value: "Student" },
+                  { label: "Business", value: "Business" },
+                  { label: "Professional", value: "Professional" },
+                  { label: "Housewife", value: "Housewife" },
+                  { label: "Retired", value: "Retired" },
+                ]}
+              />
 
             </FormField>
 
-            <FormField label="Hobbies">
+            <FormField label="Hobbies" required>
 
               <Input
                 value={hobbies}
@@ -560,19 +514,19 @@ const formLink = `${baseUrl}/user/prospects/${docId}`;
 
           </div>
 
-          <FormField label="Occasion">
+          <FormField label="Occasion" required>
 
-           <Select
-  value={type}
-  onChange={(v) => setType(v)}
-  options={[
-    { label: "Select an option", value: "" },
-    { label: "Support Call", value: "support_call" },
-    { label: "Orbiter Connection", value: "orbiter_connection" },
-    { label: "Monthly Meeting", value: "monthly_meeting" },
-    { label: "E2A Interaction", value: "e2a_interactions" },
-  ]}
-/>
+            <Select
+              value={type}
+              onChange={(v) => setType(v)}
+              options={[
+                { label: "Select an option", value: "" },
+                { label: "Support Call", value: "support_call" },
+                { label: "Orbiter Connection", value: "orbiter_connection" },
+                { label: "Monthly Meeting", value: "monthly_meeting" },
+                { label: "E2A Interaction", value: "e2a_interactions" },
+              ]}
+            />
 
           </FormField>
 

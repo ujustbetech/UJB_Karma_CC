@@ -248,8 +248,7 @@ export default function ProspectForm() {
 
   /* SUBMIT */
 
-  const handleSubmit = async (e) => {
-
+const handleSubmit = async () => {
     e.preventDefault();
 
     const subcollectionRef = collection(
@@ -343,7 +342,7 @@ export default function ProspectForm() {
 
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-6 min-h-[500px]">
+        <form  className="space-y-6 min-h-[500px]">
 
           {/* TAB 1 */}
 {/* TAB 1 */}
@@ -749,20 +748,22 @@ className="w-full border rounded-lg p-3 mt-2"
             </button>
 
             {activeTab === tabs.length - 1 ? (
-              <button
-                type="submit"
-                className="px-6 py-2 bg-indigo-600 text-white rounded-lg"
-              >
-                Submit
-              </button>
+             <button
+  type="button"
+  onClick={handleSubmit}
+  className="px-6 py-2 bg-indigo-600 text-white rounded-lg"
+>
+  Submit
+</button>
             ) : (
+           
               <button
-                type="button"
-                onClick={nextTab}
-                className="px-6 py-2 bg-indigo-600 text-white rounded-lg"
-              >
-                Next
-              </button>
+  type="button"
+  onClick={nextTab}
+  className="px-6 py-2 bg-indigo-600 text-white rounded-lg"
+>
+  Next
+</button>
             )}
 
           </div>
