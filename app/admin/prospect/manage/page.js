@@ -25,384 +25,475 @@ import { Trash2, Pencil, Download, Users, AlertCircle } from "lucide-react";
 
 export default function ProspectsListingPage() {
 
-  const toast = useToast();
+const toast = useToast();
 
-  const [prospects, setProspects] = useState([]);
-  const [loading, setLoading] = useState(true);
+const [prospects, setProspects] = useState([]);
+const [loading, setLoading] = useState(true);
 
-  const [nameFilter, setNameFilter] = useState("");
-  const [orbiterFilter, setOrbiterFilter] = useState("");
-  const [typeFilter, setTypeFilter] = useState("all");
+const [nameFilter, setNameFilter] = useState("");
+const [orbiterFilter, setOrbiterFilter] = useState("");
+const [typeFilter, setTypeFilter] = useState("all");
 
-  const [deleteOpen, setDeleteOpen] = useState(false);
-  const [prospectToDelete, setProspectToDelete] = useState(null);
+const [deleteOpen, setDeleteOpen] = useState(false);
+const [prospectToDelete, setProspectToDelete] = useState(null);
 
-  const [page, setPage] = useState(1);
-  const perPage = 10;
+const [page, setPage] = useState(1);
+const perPage = 10;
 
-  const columns = [
-    { key: "sr", label: "#" },
-    { key: "name", label: "Prospect Name" },
-    { key: "occupation", label: "Occupation" },
-    { key: "orbiter", label: "Orbiter" },
-    { key: "last", label: "Last Engagement" },
-    { key: "next", label: "Next Follow-up" },
-    { key: "type", label: "Type" },
-    { key: "actions", label: "Actions" },
-  ];
+const columns = [
+{ key: "sr", label: "#" },
+{ key: "name", label: "Prospect Name" },
+{ key: "occupation", label: "Occupation" },
+{ key: "orbiter", label: "Orbiter" },
+{ key: "stage", label: "Current Stage" },
+{ key: "progress", label: "Progress" },
+{ key: "last", label: "Last Engagement" },
+{ key: "next", label: "Next Follow-up" },
+{ key: "type", label: "Type" },
+{ key: "actions", label: "Actions" },
+];
 
-  /* ------------------------------------------------ */
-  /* FETCH PROSPECTS */
-  /* ------------------------------------------------ */
 
-  const fetchProspects = async () => {
 
-    setLoading(true);
+/* ------------------------------------------------ */
+/* STAGE DETECTION */
+/* ------------------------------------------------ */
 
-    try {
+const getProspectStage = (p) => {
 
-      const snap = await getDocs(collection(db, COLLECTIONS.prospect));
+if (p.status === "Choose to enroll")
+return { stage: "Enrolled", progress: 100 };
 
-      const list = await Promise.all(
+if (p.enrollmentStages?.some(s => s.status === "Completed"))
+return { stage: "Enrollment Process", progress: 90 };
 
-        snap.docs.map(async (docSnap) => {
+if (p.assessmentMail?.sent)
+return { stage: "Assessment Completed", progress: 80 };
 
-          const data = docSnap.data();
+if (p.caseStudy2?.sent)
+return { stage: "Case Study 2", progress: 75 };
 
-          const engagementCol = collection(
-            db,
-            `${COLLECTIONS.prospect}/${docSnap.id}/engagementform`
-          );
+if (p.caseStudy1?.sent)
+return { stage: "Case Study 1", progress: 70 };
 
-          const engagementSnap = await getDocs(engagementCol);
+if (p.knowledgeSeries10_evening?.sent)
+return { stage: "Knowledge Series 10", progress: 65 };
 
-          let lastEngagementDate = null;
-          let nextFollowupDate = null;
+if (p.knowledgeSeries5_morning?.sent)
+return { stage: "Knowledge Series", progress: 55 };
 
-          if (!engagementSnap.empty) {
+if (p.ntIntro?.sent)
+return { stage: "NT Intro", progress: 45 };
 
-            const engagements = engagementSnap.docs.map((e) => e.data());
+if (p.sections?.length > 0)
+return { stage: "Assessment Form", progress: 35 };
 
-            engagements.sort((a, b) => {
+if (p.introevent?.length > 0)
+return { stage: "Intro Meeting", progress: 20 };
 
-              const dateA = a.updatedAt?.seconds || a.createdAt?.seconds || 0;
-              const dateB = b.updatedAt?.seconds || b.createdAt?.seconds || 0;
+return { stage: "Prospect Created", progress: 5 };
 
-              return dateB - dateA;
+};
 
-            });
 
-            const latest = engagements[0];
 
-            if (latest.callDate) lastEngagementDate = latest.callDate;
-            else if (latest.updatedAt) lastEngagementDate = latest.updatedAt;
-            else if (latest.createdAt) lastEngagementDate = latest.createdAt;
+/* ------------------------------------------------ */
+/* FETCH PROSPECTS */
+/* ------------------------------------------------ */
 
-            if (latest.nextFollowupDate)
-              nextFollowupDate = latest.nextFollowupDate;
-          }
+const fetchProspects = async () => {
 
-          return {
-            id: docSnap.id,
-            ...data,
-            lastEngagementDate,
-            nextFollowupDate,
-          };
-        })
-      );
+setLoading(true);
 
-      setProspects(list);
+try {
 
-    } catch {
+const snap = await getDocs(collection(db, COLLECTIONS.prospect));
 
-      toast.error("Failed to fetch prospects");
+const list = await Promise.all(
 
-    } finally {
+snap.docs.map(async (docSnap) => {
 
-      setLoading(false);
+const data = docSnap.data();
 
-    }
-  };
+const engagementCol = collection(
+db,
+`${COLLECTIONS.prospect}/${docSnap.id}/engagementform`
+);
 
-  useEffect(() => {
-    fetchProspects();
-  }, []);
+const engagementSnap = await getDocs(engagementCol);
 
-  /* ------------------------------------------------ */
-  /* DATE FORMAT */
-  /* ------------------------------------------------ */
+let lastEngagementDate = null;
+let nextFollowupDate = null;
 
-  const formatDate = (dateValue) => {
+if (!engagementSnap.empty) {
 
-    if (!dateValue) return "-";
+const engagements = engagementSnap.docs.map((e) => e.data());
 
-    if (typeof dateValue === "string") {
-      const d = new Date(dateValue);
-      return isNaN(d) ? "-" : format(d, "dd/MM/yyyy HH:mm");
-    }
+engagements.sort((a, b) => {
 
-    if (dateValue?.seconds) {
-      return format(new Date(dateValue.seconds * 1000), "dd/MM/yyyy HH:mm");
-    }
+const dateA = a.updatedAt?.seconds || a.createdAt?.seconds || 0;
+const dateB = b.updatedAt?.seconds || b.createdAt?.seconds || 0;
 
-    return "-";
-  };
+return dateB - dateA;
 
-  /* ------------------------------------------------ */
-  /* FILTERING */
-  /* ------------------------------------------------ */
+});
 
-  const filtered = useMemo(() => {
+const latest = engagements[0];
 
-    return prospects.filter((p) => {
+if (latest.callDate) lastEngagementDate = latest.callDate;
+else if (latest.updatedAt) lastEngagementDate = latest.updatedAt;
+else if (latest.createdAt) lastEngagementDate = latest.createdAt;
 
-      const matchName =
-        !nameFilter ||
-        p.prospectName?.toLowerCase().includes(nameFilter.toLowerCase());
+if (latest.nextFollowupDate)
+nextFollowupDate = latest.nextFollowupDate;
+}
 
-      const matchOrbiter =
-        !orbiterFilter ||
-        p.orbiterName?.toLowerCase().includes(orbiterFilter.toLowerCase());
+return {
+id: docSnap.id,
+...data,
+lastEngagementDate,
+nextFollowupDate,
+};
 
-      const matchType =
-        typeFilter === "all" ||
-        (typeFilter === "etu" && p.userType === "orbiter") ||
-        (typeFilter === "ntu" && p.userType !== "orbiter");
+})
+);
 
-      return matchName && matchOrbiter && matchType;
+setProspects(list);
 
-    });
+} catch {
 
-  }, [prospects, nameFilter, orbiterFilter, typeFilter]);
+toast.error("Failed to fetch prospects");
 
-  const totalPages = Math.max(1, Math.ceil(filtered.length / perPage));
+} finally {
 
-  const paginated = filtered.slice(
-    (page - 1) * perPage,
-    page * perPage
-  );
+setLoading(false);
 
-  /* ------------------------------------------------ */
-  /* DELETE */
-  /* ------------------------------------------------ */
+}
+};
 
-  const openDelete = (p) => {
-    setProspectToDelete(p);
-    setDeleteOpen(true);
-  };
+useEffect(() => {
+fetchProspects();
+}, []);
 
-  const confirmDelete = async () => {
 
-    try {
 
-      await deleteDoc(doc(db, COLLECTIONS.prospect, prospectToDelete.id));
+/* ------------------------------------------------ */
+/* DATE FORMAT */
+/* ------------------------------------------------ */
 
-      toast.success("Prospect deleted");
+const formatDate = (dateValue) => {
 
-      fetchProspects();
+if (!dateValue) return "-";
 
-    } catch {
+if (typeof dateValue === "string") {
+const d = new Date(dateValue);
+return isNaN(d) ? "-" : format(d, "dd/MM/yyyy HH:mm");
+}
 
-      toast.error("Delete failed");
+if (dateValue?.seconds) {
+return format(new Date(dateValue.seconds * 1000), "dd/MM/yyyy HH:mm");
+}
 
-    }
+return "-";
+};
 
-    setDeleteOpen(false);
-  };
 
-  /* ------------------------------------------------ */
-  /* EXPORT */
-  /* ------------------------------------------------ */
 
-  const exportExcel = () => {
+/* ------------------------------------------------ */
+/* FILTERING */
+/* ------------------------------------------------ */
 
-    if (!prospects.length) return;
+const filtered = useMemo(() => {
 
-    const ws = XLSX.utils.json_to_sheet(prospects);
-    const wb = XLSX.utils.book_new();
+return prospects.filter((p) => {
 
-    XLSX.utils.book_append_sheet(wb, ws, "Prospects");
+const matchName =
+!nameFilter ||
+p.prospectName?.toLowerCase().includes(nameFilter.toLowerCase());
 
-    XLSX.writeFile(wb, "prospects.xlsx");
-  };
+const matchOrbiter =
+!orbiterFilter ||
+p.orbiterName?.toLowerCase().includes(orbiterFilter.toLowerCase());
 
-  /* ------------------------------------------------ */
-  /* STATS */
-  /* ------------------------------------------------ */
+const matchType =
+typeFilter === "all" ||
+(typeFilter === "etu" && p.userType === "orbiter") ||
+(typeFilter === "ntu" && p.userType !== "orbiter");
 
-  const totalProspects = prospects.length;
-  const ntu = prospects.filter((p) => p.userType !== "orbiter").length;
-  const etu = prospects.filter((p) => p.userType === "orbiter").length;
+return matchName && matchOrbiter && matchType;
 
-  /* ------------------------------------------------ */
-  /* UI */
-  /* ------------------------------------------------ */
+});
 
-  return (
-    <>
+}, [prospects, nameFilter, orbiterFilter, typeFilter]);
 
-      <Text variant="h1">Prospects</Text>
+const totalPages = Math.max(1, Math.ceil(filtered.length / perPage));
 
-      {/* Stats */}
-      <div className="grid grid-cols-3 gap-4 mb-4">
+const paginated = filtered.slice(
+(page - 1) * perPage,
+page * perPage
+);
 
-        <Card>
-          <div className="flex justify-between">
-            <div>
-              <Text variant="h3">{totalProspects}</Text>
-              <Text variant="muted">Total Prospects</Text>
-            </div>
-            <Users />
-          </div>
-        </Card>
 
-        <Card>
-          <div className="flex justify-between">
-            <div>
-              <Text variant="h3">{ntu}</Text>
-              <Text variant="muted">NTU</Text>
-            </div>
-            <AlertCircle />
-          </div>
-        </Card>
 
-        <Card>
-          <div className="flex justify-between">
-            <div>
-              <Text variant="h3">{etu}</Text>
-              <Text variant="muted">ETU</Text>
-            </div>
-            <AlertCircle />
-          </div>
-        </Card>
+/* ------------------------------------------------ */
+/* DELETE */
+/* ------------------------------------------------ */
 
-      </div>
+const openDelete = (p) => {
+setProspectToDelete(p);
+setDeleteOpen(true);
+};
 
-      {/* Filters */}
-      <Card className="mb-4">
+const confirmDelete = async () => {
 
-        <div className="flex gap-3">
+try {
 
-          <Input
-            placeholder="Search Prospect"
-            value={nameFilter}
-            onChange={(e) => setNameFilter(e.target.value)}
-          />
+await deleteDoc(doc(db, COLLECTIONS.prospect, prospectToDelete.id));
 
-          <Input
-            placeholder="Search Orbiter"
-            value={orbiterFilter}
-            onChange={(e) => setOrbiterFilter(e.target.value)}
-          />
+toast.success("Prospect deleted");
 
-          <Select
-            value={typeFilter}
-            onChange={setTypeFilter}
-            options={[
-              { label: "All", value: "all" },
-              { label: "NTU", value: "ntu" },
-              { label: "ETU", value: "etu" },
-            ]}
-          />
+fetchProspects();
 
-          <Button onClick={exportExcel}>
-            <Download size={16} /> Excel
-          </Button>
+} catch {
 
-        </div>
+toast.error("Delete failed");
 
-      </Card>
+}
 
-      {/* Table */}
-      <Card>
+setDeleteOpen(false);
+};
 
-        {loading ? (
-          <p>Loading...</p>
-        ) : (
-          <Table>
 
-            <TableHeader columns={columns} />
 
-            <tbody>
+/* ------------------------------------------------ */
+/* EXPORT */
+/* ------------------------------------------------ */
 
-              {paginated.map((p, i) => (
+const exportExcel = () => {
 
-                <TableRow key={p.id}>
+if (!prospects.length) return;
 
-                  <td className="px-4 py-3">{(page - 1) * perPage + i + 1}</td>
+const ws = XLSX.utils.json_to_sheet(prospects);
+const wb = XLSX.utils.book_new();
 
-                  <td className="px-4 py-3">{p.prospectName}</td>
+XLSX.utils.book_append_sheet(wb, ws, "Prospects");
 
-                  <td className="px-4 py-3">{p.occupation}</td>
+XLSX.writeFile(wb, "prospects.xlsx");
 
-                  <td className="px-4 py-3">{p.orbiterName}</td>
+};
 
-                  <td className="px-4 py-3">
-                    {formatDate(p.lastEngagementDate)}
-                  </td>
 
-                  <td className="px-4 py-3">
-                    {formatDate(p.nextFollowupDate)}
-                  </td>
 
-                  <td className="px-4 py-3">
-                    {p.userType === "orbiter" ? "ETU" : "NTU"}
-                  </td>
+/* ------------------------------------------------ */
+/* STATS */
+/* ------------------------------------------------ */
 
-                  <td className="px-4 py-3">
+const totalProspects = prospects.length;
+const ntu = prospects.filter((p) => p.userType !== "orbiter").length;
+const etu = prospects.filter((p) => p.userType === "orbiter").length;
 
-                    <div className="flex gap-2">
 
-                      <Tooltip content="Edit">
-                        <ActionButton
-                          icon={Pencil}
-                          onClick={() =>
-                            (window.location.href =
-                              `/admin/prospect/edit/${p.id}`)
-                          }
-                        />
-                      </Tooltip>
 
-                      <Tooltip content="Delete">
-                        <ActionButton
-                          icon={Trash2}
-                          variant="danger"
-                          onClick={() => openDelete(p)}
-                        />
-                      </Tooltip>
+/* ------------------------------------------------ */
+/* UI */
+/* ------------------------------------------------ */
 
-                    </div>
+return (
+<>
 
-                  </td>
+<Text variant="h1">Prospects</Text>
 
-                </TableRow>
+<div className="grid grid-cols-3 gap-4 mb-4">
 
-              ))}
+<Card>
+<div className="flex justify-between">
+<div>
+<Text variant="h3">{totalProspects}</Text>
+<Text variant="muted">Total Prospects</Text>
+</div>
+<Users />
+</div>
+</Card>
 
-            </tbody>
+<Card>
+<div className="flex justify-between">
+<div>
+<Text variant="h3">{ntu}</Text>
+<Text variant="muted">NTU</Text>
+</div>
+<AlertCircle />
+</div>
+</Card>
 
-          </Table>
-        )}
+<Card>
+<div className="flex justify-between">
+<div>
+<Text variant="h3">{etu}</Text>
+<Text variant="muted">ETU</Text>
+</div>
+<AlertCircle />
+</div>
+</Card>
 
-        <div className="mt-4 flex justify-end">
-          <Pagination
-            page={page}
-            pageSize={perPage}
-            total={filtered.length}
-            onPageChange={setPage}
-          />
-        </div>
+</div>
 
-      </Card>
 
-      <ConfirmModal
-        open={deleteOpen}
-        title="Delete Prospect"
-        description={`Delete ${prospectToDelete?.prospectName}?`}
-        onConfirm={confirmDelete}
-        onClose={() => setDeleteOpen(false)}
-      />
 
-    </>
-  );
+<Card className="mb-4">
+
+<div className="flex gap-3">
+
+<Input
+placeholder="Search Prospect"
+value={nameFilter}
+onChange={(e) => setNameFilter(e.target.value)}
+/>
+
+<Input
+placeholder="Search Orbiter"
+value={orbiterFilter}
+onChange={(e) => setOrbiterFilter(e.target.value)}
+/>
+
+<Select
+value={typeFilter}
+onChange={setTypeFilter}
+options={[
+{ label: "All", value: "all" },
+{ label: "NTU", value: "ntu" },
+{ label: "ETU", value: "etu" },
+]}
+/>
+
+<Button onClick={exportExcel}>
+<Download size={16} /> Excel
+</Button>
+
+</div>
+
+</Card>
+
+
+
+<Card>
+
+{loading ? (
+<p>Loading...</p>
+) : (
+
+<Table>
+
+<TableHeader columns={columns} />
+
+<tbody>
+
+{paginated.map((p, i) => {
+
+const { stage, progress } = getProspectStage(p);
+
+return (
+
+<TableRow key={p.id}>
+
+<td className="px-4 py-3">{(page - 1) * perPage + i + 1}</td>
+
+<td className="px-4 py-3">{p.prospectName}</td>
+
+<td className="px-4 py-3">{p.occupation}</td>
+
+<td className="px-4 py-3">{p.orbiterName}</td>
+
+<td className="px-4 py-3 text-blue-600 font-medium">
+{stage}
+</td>
+
+<td className="px-4 py-3 w-40">
+
+<div className="w-full bg-gray-200 rounded-full h-2">
+
+<div
+className="bg-black h-2 rounded-full"
+style={{ width: `${progress}%` }}
+/>
+
+</div>
+
+<span className="text-xs text-gray-600">{progress}%</span>
+
+</td>
+
+<td className="px-4 py-3">
+{formatDate(p.lastEngagementDate)}
+</td>
+
+<td className="px-4 py-3">
+{formatDate(p.nextFollowupDate)}
+</td>
+
+<td className="px-4 py-3">
+{p.userType === "orbiter" ? "ETU" : "NTU"}
+</td>
+
+<td className="px-4 py-3">
+
+<div className="flex gap-2">
+
+<Tooltip content="Edit">
+<ActionButton
+icon={Pencil}
+onClick={() =>
+(window.location.href =
+`/admin/prospect/edit/${p.id}`)
+}
+/>
+</Tooltip>
+
+<Tooltip content="Delete">
+<ActionButton
+icon={Trash2}
+variant="danger"
+onClick={() => openDelete(p)}
+/>
+</Tooltip>
+
+</div>
+
+</td>
+
+</TableRow>
+
+);
+
+})}
+
+</tbody>
+
+</Table>
+)}
+
+<div className="mt-4 flex justify-end">
+
+<Pagination
+page={page}
+pageSize={perPage}
+total={filtered.length}
+onPageChange={setPage}
+/>
+
+</div>
+
+</Card>
+
+
+
+<ConfirmModal
+open={deleteOpen}
+title="Delete Prospect"
+description={`Delete ${prospectToDelete?.prospectName}?`}
+onConfirm={confirmDelete}
+onClose={() => setDeleteOpen(false)}
+/>
+
+</>
+);
 }

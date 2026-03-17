@@ -13,9 +13,9 @@ import {
   where,
   serverTimestamp
 } from "firebase/firestore";
+
 import Swal from "sweetalert2";
 import { db } from "@/firebaseConfig";
-import { getAuth } from "firebase/auth";
 import { COLLECTIONS } from "@/lib/utility_collection";
 
 import Text from "@/components/ui/Text";
@@ -29,6 +29,7 @@ import FormField from "@/components/ui/FormField";
 const ProspectFormDetails = ({ id }) => {
 
   const [forms, setForms] = useState([]);
+  const [originalForms, setOriginalForms] = useState([]);
   const [loading, setLoading] = useState(true);
   const [editMode, setEditMode] = useState(false);
 
@@ -48,9 +49,6 @@ const ProspectFormDetails = ({ id }) => {
         );
 
         const snapshot = await getDocs(subcollectionRef);
-
-        const auth = getAuth();
-        const user = auth.currentUser;
 
         const prospectDocRef = doc(db, COLLECTIONS.prospect, id);
         const prospectSnap = await getDoc(prospectDocRef);
@@ -73,30 +71,29 @@ const ProspectFormDetails = ({ id }) => {
 
         if (snapshot.empty) {
 
-          setForms([
-            {
-              ...defaultMentor,
-              ...defaultProspect,
-              assessmentDate: todayISO,
-              country: "",
-              city: "",
-              profession: prospectData.occupation || "",
-              companyName: "",
-              industry: "",
-              socialProfile: "",
-              howFound: "",
-              interestLevel: "",
-              interestAreas: prospectData.hobbies
-                ? [prospectData.hobbies]
-                : [],
-              contributionWays: [],
-              informedStatus: "",
-              alignmentLevel: "",
-              recommendation: "",
-              additionalComments: "",
-            },
-          ]);
+          const defaultForm = [{
+            id: null,
+            ...defaultMentor,
+            ...defaultProspect,
+            assessmentDate: todayISO,
+            country: "",
+            city: "",
+            profession: prospectData.occupation || "",
+            companyName: "",
+            industry: "",
+            socialProfile: "",
+            howFound: "",
+            interestLevel: "",
+            interestAreas: prospectData.hobbies ? [prospectData.hobbies] : [],
+            contributionWays: [],
+            informedStatus: "",
+            alignmentLevel: "",
+            recommendation: "",
+            additionalComments: "",
+          }];
 
+          setForms(defaultForm);
+          setOriginalForms(defaultForm);
           setEditMode(true);
 
         } else {
@@ -107,6 +104,8 @@ const ProspectFormDetails = ({ id }) => {
           }));
 
           setForms(data);
+          setOriginalForms(data);
+          setEditMode(false);
 
         }
 
@@ -124,98 +123,18 @@ const ProspectFormDetails = ({ id }) => {
 
   }, [id]);
 
-  const ensureCpBoardUser = async (orbiter) => {
-
-    if (!orbiter?.ujbcode) return;
-
-    const ref = doc(db, "CPBoard", orbiter.ujbcode);
-    const snap = await getDoc(ref);
-
-    if (!snap.exists()) {
-
-      await setDoc(ref, {
-        id: orbiter.ujbcode,
-        name: orbiter.name,
-        phoneNumber: orbiter.phone,
-        role: orbiter.category || "CosmOrbiter",
-        totals: { R: 0, H: 0, W: 0 },
-        createdAt: serverTimestamp(),
-      });
-
-    }
-
-  };
-
-  const updateCategoryTotals = async (orbiter, categories, points) => {
-
-    const ref = doc(db, "CPBoard", orbiter.ujbcode);
-    const snap = await getDoc(ref);
-
-    if (!snap.exists()) return;
-
-    const totals = snap.data().totals || { R: 0, H: 0, W: 0 };
-
-    const split = Math.floor(points / categories.length);
-
-    const updated = { ...totals };
-
-    categories.forEach((c) => {
-
-      updated[c] = (updated[c] || 0) + split;
-
-    });
-
-    await updateDoc(ref, { totals: updated });
-
-  };
-
-  const addCpForProspectAssessment = async (orbiter, prospect) => {
-
-    await ensureCpBoardUser(orbiter);
-
-    const activityNo = "002";
-    const points = 100;
-    const categories = ["R"];
-
-    const q = query(
-      collection(db, "CPBoard", orbiter.ujbcode, "activities"),
-      where("activityNo", "==", activityNo),
-      where("prospectPhone", "==", prospect.phone)
-    );
-
-    const snap = await getDocs(q);
-
-    if (!snap.empty) return;
-
-    await addDoc(
-      collection(db, "CPBoard", orbiter.ujbcode, "activities"),
-      {
-        activityNo,
-        activityName: "Prospect Assessment (Tool)",
-        points,
-        categories,
-        prospectName: prospect.name,
-        prospectPhone: prospect.phone,
-        source: "ProspectFormDetails",
-        month: new Date().toLocaleString("default", {
-          month: "short",
-          year: "numeric",
-        }),
-        addedAt: serverTimestamp(),
-      }
-    );
-
-    await updateCategoryTotals(orbiter, categories, points);
-
-  };
-
   const handleChange = (formIndex, field, value) => {
 
-    const updatedForms = [...forms];
+    const updated = [...forms];
+    updated[formIndex][field] = value;
+    setForms(updated);
 
-    updatedForms[formIndex][field] = value;
+  };
 
-    setForms(updatedForms);
+  const handleCancel = () => {
+
+    setForms(originalForms);
+    setEditMode(false);
 
   };
 
@@ -244,109 +163,69 @@ const ProspectFormDetails = ({ id }) => {
         } else {
 
           await addDoc(
-            collection(
-              db,
-              COLLECTIONS.prospect,
-              id,
-              "prospectform"
-            ),
+            collection(db, COLLECTIONS.prospect, id, "prospectform"),
             formCopy
           );
-
-          const prospectSnap = await getDoc(
-            doc(db, COLLECTIONS.prospect, id)
-          );
-
-          if (!prospectSnap.exists()) continue;
-
-          const p = prospectSnap.data();
-
-          if (!p.orbiterContact) {
-            console.error("orbiterContact missing in prospect");
-            continue;
-          }
-
-          const qMentor = query(
-            collection(db, "usersdetail"),
-            where("MobileNo", "==", p.orbiterContact)
-          );
-
-          const mentorSnap = await getDocs(qMentor);
-
-          if (mentorSnap.empty) {
-            console.error("Mentor not found:", p.orbiterContact);
-            continue;
-          }
-
-          const d = mentorSnap.docs[0].data();
-
-          const orbiter = {
-            ujbcode: d.UJBCode,
-            name: d.Name,
-            phone: d.MobileNo,
-            category: d.Category,
-          };
-
-          await addCpForProspectAssessment(orbiter, {
-            name: p.prospectName,
-            phone: p.prospectPhone,
-          });
 
         }
 
       }
 
-   Swal.fire({
-  icon: "success",
-  title: "Saved!",
-  text: "Prospect Details Saved Successfully",
-  confirmButtonColor: "#2563eb",
-});
+      Swal.fire({
+        icon: "success",
+        title: "Saved!",
+        text: "Prospect Details Saved Successfully",
+      });
+
+      setOriginalForms(forms);
       setEditMode(false);
 
     } catch (err) {
 
       console.error("Error saving forms:", err);
-  Swal.fire({
-  icon: "error",
-  title: "Error",
-  text: "Failed to save changes",
-});
+
+      Swal.fire({
+        icon: "error",
+        title: "Error",
+        text: "Failed to save changes",
+      });
+
     }
 
   };
+const formatDate = (value) => {
 
-  const handleAddForm = () => {
+  if (!value) return todayISO;
 
-    setEditMode(true);
+  try {
 
-  };
+    // Firestore Timestamp
+    if (value?.seconds) {
+      return new Date(value.seconds * 1000)
+        .toISOString()
+        .split("T")[0];
+    }
 
-  if (loading) return <Text>Loading...</Text>;
+    // Normal Date
+    if (value instanceof Date) {
+      return value.toISOString().split("T")[0];
+    }
 
-  if (forms.length === 0) {
+    // ISO string
+    const d = new Date(value);
 
-    return (
+    if (!isNaN(d.getTime())) {
+      return d.toISOString().split("T")[0];
+    }
 
-      <>
-        <Text variant="h1">Prospects Assessment Form</Text>
-
-        <Card>
-
-          <Text>No prospect forms found.</Text>
-
-          <div className="pt-4">
-            <Button onClick={handleAddForm}>
-              Add New Form
-            </Button>
-          </div>
-
-        </Card>
-      </>
-
-    );
-
+  } catch (e) {
+    console.warn("Invalid date:", value);
   }
+
+  return todayISO;
+
+};
+  if (loading) return <Text>Loading...</Text>;
 
   return (
 
@@ -360,38 +239,37 @@ const ProspectFormDetails = ({ id }) => {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
 
             {[
-              { label: "Mentor Name", key: "mentorName" },
-              { label: "Mentor Phone", key: "mentorPhone" },
-              { label: "Mentor Email", key: "mentorEmail" },
-              { label: "Assessment Date", key: "assessmentDate" },
-              { label: "Prospect Name", key: "fullName" },
-              { label: "Phone", key: "phoneNumber" },
-              { label: "Email", key: "email" },
+              { label: "Mentor Name", key: "mentorName", frozen: true },
+              { label: "Mentor Phone", key: "mentorPhone", frozen: true },
+              { label: "Mentor Email", key: "mentorEmail", frozen: true },
+              { label: "Assessment Date", key: "assessmentDate",frozen: true },
+              { label: "Prospect Name", key: "fullName",frozen: true },
+              { label: "Phone", key: "phoneNumber", frozen: true },
+              { label: "Email", key: "email", frozen: true },
               { label: "Country", key: "country" },
               { label: "City", key: "city" },
               { label: "Profession", key: "profession" },
               { label: "Company", key: "companyName" },
               { label: "Industry", key: "industry" },
               { label: "Social Profile", key: "socialProfile" },
-            ].map(({ label, key }) => (
+            ].map(({ label, key, frozen }) => (
 
               <FormField key={key} label={label}>
 
                 {key === "assessmentDate" ? (
 
-                 <DateInput
-  value={form[key] || todayISO}
-  disabled={!editMode}
+               <DateInput
+  value={formatDate(form[key])}
+  disabled={frozen || !editMode}
   onChange={(e) =>
     handleChange(index, key, e.target.value)
   }
 />
-
                 ) : (
 
                   <Input
                     value={form[key] || ""}
-                    disabled={!editMode}
+                    disabled={frozen || !editMode}
                     onChange={(e) =>
                       handleChange(index, key, e.target.value)
                     }
@@ -450,11 +328,7 @@ const ProspectFormDetails = ({ id }) => {
               value={form.additionalComments || ""}
               disabled={!editMode}
               onChange={(e) =>
-                handleChange(
-                  index,
-                  "additionalComments",
-                  e.target.value
-                )
+                handleChange(index, "additionalComments", e.target.value)
               }
             />
 
@@ -468,24 +342,30 @@ const ProspectFormDetails = ({ id }) => {
 
         {!editMode ? (
 
-         <Button
-  onClick={() => setEditMode(true)}
-  className="cursor-pointer"
->
-  Edit
-</Button>
+          <Button onClick={() => setEditMode(true)}>
+            Edit
+          </Button>
+
         ) : (
-<Button
-  onClick={handleSave}
-  className="cursor-pointer"
->
-  Save
-</Button>
+
+          <>
+            <Button
+              variant="secondary"
+              onClick={handleCancel}
+            >
+              Cancel
+            </Button>
+
+            <Button onClick={handleSave}>
+              Save
+            </Button>
+          </>
 
         )}
 
       </div>
     </>
+
   );
 
 };
