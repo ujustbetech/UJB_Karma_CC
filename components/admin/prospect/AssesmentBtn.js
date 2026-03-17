@@ -2,8 +2,9 @@ import React, { useState, useEffect } from "react";
 import {
   doc,
   updateDoc,
-  getDoc,
+  getDoc
 } from "firebase/firestore";
+
 import { db } from "@/firebaseConfig";
 import emailjs from "@emailjs/browser";
 import axios from "axios";
@@ -25,6 +26,10 @@ const Assessment = ({ id, fetchData }) => {
   const WHATSAPP_API_TOKEN =
     "Bearer YOUR_TOKEN";
 
+  /* ------------------------------------------------ */
+  /* FETCH ASSESSMENT STATUS */
+  /* ------------------------------------------------ */
+
   useEffect(() => {
 
     const fetchStatus = async () => {
@@ -35,12 +40,18 @@ const Assessment = ({ id, fetchData }) => {
         const docSnap = await getDoc(docRef);
 
         if (docSnap.exists()) {
-          setStatus(docSnap.data().status || "No status yet");
-          setReason(docSnap.data().reason || "");
+
+          const data = docSnap.data();
+
+          setStatus(data.assessmentStatus || "No status yet");
+          setReason(data.assessmentReason || "");
+
         }
 
       } catch (error) {
+
         console.error("Error fetching status:", error);
+
       }
 
     };
@@ -48,7 +59,7 @@ const Assessment = ({ id, fetchData }) => {
     const today = new Date().toLocaleDateString("en-IN", {
       day: "numeric",
       month: "long",
-      year: "numeric",
+      year: "numeric"
     });
 
     setCurrentDate(today);
@@ -57,9 +68,17 @@ const Assessment = ({ id, fetchData }) => {
 
   }, [id]);
 
+  /* ------------------------------------------------ */
+  /* HELPERS */
+  /* ------------------------------------------------ */
+
   const sanitizeText = (text) => {
     return text?.replace(/[^a-zA-Z0-9 .,!?'"@#&()\-]/g, " ") || "";
   };
+
+  /* ------------------------------------------------ */
+  /* SEND WHATSAPP */
+  /* ------------------------------------------------ */
 
   const sendWhatsapp = async (prospectName, orbiterName, message, phone) => {
 
@@ -75,11 +94,11 @@ const Assessment = ({ id, fetchData }) => {
             type: "body",
             parameters: [
               { type: "text", text: sanitizeText(message) },
-              { type: "text", text: sanitizeText(orbiterName) },
-            ],
-          },
-        ],
-      },
+              { type: "text", text: sanitizeText(orbiterName) }
+            ]
+          }
+        ]
+      }
     };
 
     try {
@@ -87,8 +106,8 @@ const Assessment = ({ id, fetchData }) => {
       await axios.post(WHATSAPP_API_URL, payload, {
         headers: {
           Authorization: WHATSAPP_API_TOKEN,
-          "Content-Type": "application/json",
-        },
+          "Content-Type": "application/json"
+        }
       });
 
       console.log("Whatsapp sent");
@@ -100,6 +119,10 @@ const Assessment = ({ id, fetchData }) => {
     }
 
   };
+
+  /* ------------------------------------------------ */
+  /* SEND EMAIL */
+  /* ------------------------------------------------ */
 
   const sendEmail = async (
     prospectName,
@@ -121,7 +144,7 @@ UJustBe Team`;
       prospect_name: prospectName,
       to_email: prospectEmail,
       body,
-      orbiter_name: orbiterName,
+      orbiter_name: orbiterName
     };
 
     try {
@@ -141,6 +164,10 @@ UJustBe Team`;
 
   };
 
+  /* ------------------------------------------------ */
+  /* SAVE ASSESSMENT */
+  /* ------------------------------------------------ */
+
   const handleSaveStatus = async (selectedstatus, reasonText = "") => {
 
     setLoading(true);
@@ -155,12 +182,17 @@ UJustBe Team`;
       const data = docSnap.data();
 
       const updateData = {
-        status: selectedstatus,
-        reason: reasonText,
+        assessmentStatus: selectedstatus,
+        assessmentReason: reasonText,
+        assessmentDate: currentDate
       };
 
+      /* START JOURNEY */
+
       if (selectedstatus === "Completed 80%") {
+
         updateData.journeyStage = "Day17";
+
       }
 
       await updateDoc(docRef, updateData);
@@ -172,7 +204,8 @@ UJustBe Team`;
       const prospectPhone = data.prospectPhone;
       const orbiterName = data.orbiterName;
 
-      const message = `Hello ${prospectName}, your Day 16 assessment result is: ${selectedstatus}. Please check your email for details.`;
+      const message =
+        `Hello ${prospectName}, your Day 16 assessment result is: ${selectedstatus}. Please check your email for details.`;
 
       await sendEmail(
         prospectName,
@@ -190,8 +223,8 @@ UJustBe Team`;
 
       Swal.fire({
         icon: "success",
-        title: "Status Saved",
-        text: "Email and WhatsApp notification sent",
+        title: "Assessment Saved",
+        text: "Email and WhatsApp notification sent"
       });
 
       fetchData?.();
@@ -205,6 +238,10 @@ UJustBe Team`;
     setLoading(false);
 
   };
+
+  /* ------------------------------------------------ */
+  /* CONFIRMATION */
+  /* ------------------------------------------------ */
 
   const confirmSaveStatus = (newStatus) => {
 
@@ -224,11 +261,13 @@ UJustBe Team`;
             Swal.showValidationMessage("Reason required");
           }
           return value;
-        },
+        }
       }).then((result) => {
 
         if (result.isConfirmed) {
+
           handleSaveStatus(newStatus, result.value);
+
         }
 
       });
@@ -239,11 +278,13 @@ UJustBe Team`;
         title: "Confirm",
         text: `Set status as "${newStatus}"?`,
         icon: "warning",
-        showCancelButton: true,
+        showCancelButton: true
       }).then((result) => {
 
         if (result.isConfirmed) {
+
           handleSaveStatus(newStatus);
+
         }
 
       });
@@ -252,7 +293,12 @@ UJustBe Team`;
 
   };
 
+  /* ------------------------------------------------ */
+  /* UI */
+  /* ------------------------------------------------ */
+
   return (
+
     <div className="max-w-4xl mx-auto p-6">
 
       <div className="bg-white border rounded-xl shadow-sm p-6">
@@ -262,20 +308,28 @@ UJustBe Team`;
         </h2>
 
         <h3 className="text-lg mb-2">
+
           Status:{" "}
           <span className="font-medium">
+
             {status || "No status yet"}
+
           </span>
+
         </h3>
 
         {reason && (
+
           <p className="mt-2 text-red-700 italic bg-red-50 border p-3 rounded-lg">
             Reason: {reason}
           </p>
+
         )}
 
         <p className="text-gray-700 mt-4 mb-4">
+
           Date: {currentDate}
+
         </p>
 
         <div className="flex flex-wrap gap-3">
@@ -313,7 +367,9 @@ UJustBe Team`;
       </div>
 
     </div>
+
   );
+
 };
 
 export default Assessment;
