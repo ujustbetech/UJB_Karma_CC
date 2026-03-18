@@ -43,7 +43,7 @@ export default function Register() {
   const [hobbies, setHobbies] = useState("");
   const [email, setEmail] = useState("");
   const [date, setDate] = useState("");
-
+const [submitting, setSubmitting] = useState(false);
   const [type, setType] = useState("");
 
   const [userList, setUserList] = useState([]);
@@ -232,20 +232,25 @@ UJustBe Team
   /* SUBMIT */
   /* ---------------------------------- */
 
-  const handleSubmit = async (e) => {
+const handleSubmit = async (e) => {
 
-    e.preventDefault();
+  e.preventDefault();
+
+  if (submitting) return; // 🔒 prevent double click
+
+  setSubmitting(true); // 👈 start loading
+
+  try {
 
     /* -------- VALIDATION -------- */
 
     if (!selectedOrbiter) {
-
       Swal.fire({
         icon: "error",
         title: "Orbiter Required",
         text: "Please search and select an Orbiter",
       });
-
+      setSubmitting(false);
       return;
     }
 
@@ -258,118 +263,123 @@ UJustBe Team
       !date ||
       !type
     ) {
-
       Swal.fire({
         icon: "error",
         title: "Missing Fields",
         text: "All fields are required",
       });
-
+      setSubmitting(false);
       return;
     }
 
     if (!/^\d{10}$/.test(prospectPhone)) {
-
       Swal.fire({
         icon: "error",
         title: "Invalid Phone",
         text: "Prospect phone must be 10 digits",
       });
-
+      setSubmitting(false);
       return;
     }
 
     if (!/^\S+@\S+\.\S+$/.test(email)) {
-
       Swal.fire({
         icon: "error",
         title: "Invalid Email",
         text: "Please enter a valid email address",
       });
-
+      setSubmitting(false);
       return;
     }
 
-    try {
+    const data = {
+      userType,
+      prospectName,
+      prospectPhone,
+      occupation,
+      hobbies,
+      email,
+      orbiterName: name,
+      orbiterContact: phone,
+      orbiterEmail: orbiteremail,
+      type,
+      date: new Date(date),
+      registeredAt: new Date(),
+    };
 
-      const data = {
+    const docRef = await addDoc(collection(db, "Prospects"), data);
 
-        userType,
+    const docId = docRef.id;
 
-        prospectName,
-        prospectPhone,
-        occupation,
-        hobbies,
-        email,
+    const baseUrl =
+      typeof window !== "undefined"
+        ? window.location.origin
+        : process.env.NEXT_PUBLIC_SITE_URL;
 
-        orbiterName: name,
-        orbiterContact: phone,
-        orbiterEmail: orbiteremail,
+    const formLink = `${baseUrl}/user/prospects/${docId}`;
 
-        type,
-        date: new Date(date),
+    await sendAssessmentEmail(
+      name,
+      orbiteremail,
+      prospectName,
+      formLink
+    );
 
-        registeredAt: new Date(),
-      };
+    await sendAssesmentMessage(
+      name,
+      prospectName,
+      phone,
+      formLink
+    );
 
-      const docRef = await addDoc(collection(db, "Prospects"), data);
+    Swal.fire({
+      icon: "success",
+      title: "Success",
+      text: "Prospect Registered Successfully",
+    });
 
-      const docId = docRef.id;
+    /* RESET FORM */
 
-      const baseUrl =
-        typeof window !== "undefined"
-          ? window.location.origin
-          : process.env.NEXT_PUBLIC_SITE_URL;
+    setProspectName("");
+    setProspectPhone("");
+    setEmail("");
+    setOccupation("");
+    setHobbies("");
+    setType("");
 
-      const formLink = `${baseUrl}/user/prospects/${docId}`;
+    // 🔥 reset date to TODAY again
+    const now = new Date();
+    const formatted =
+      now.getFullYear() +
+      "-" +
+      String(now.getMonth() + 1).padStart(2, "0") +
+      "-" +
+      String(now.getDate()).padStart(2, "0") +
+      "T" +
+      String(now.getHours()).padStart(2, "0") +
+      ":" +
+      String(now.getMinutes()).padStart(2, "0");
 
-      await sendAssessmentEmail(
-        name,
-        orbiteremail,
-        prospectName,
-        formLink
-      );
+    setDate(formatted);
 
-      await sendAssesmentMessage(
-        name,
-        prospectName,
-        phone,
-        formLink
-      );
+    setName("");
+    setPhone("");
+    setOrbiterEmail("");
+    setSelectedOrbiter(null);
 
-      Swal.fire({
-        icon: "success",
-        title: "Success",
-        text: "Prospect Registered Successfully",
-      });
+  } catch (err) {
+    console.error(err);
 
-      /* RESET FORM */
+    Swal.fire({
+      icon: "error",
+      title: "Error",
+      text: "Something went wrong",
+    });
 
-      setProspectName("");
-      setProspectPhone("");
-      setEmail("");
-      setOccupation("");
-      setHobbies("");
-      setDate("");
-      setType("");
-
-      setName("");
-      setPhone("");
-      setOrbiterEmail("");
-      setSelectedOrbiter(null);
-
-    } catch (err) {
-
-      console.error(err);
-
-      Swal.fire({
-        icon: "error",
-        title: "Error",
-        text: "Something went wrong",
-      });
-
-    }
-  };
+  } finally {
+    setSubmitting(false); // 👈 always stop loading
+  }
+};
 
   /* ---------------------------------- */
   /* UI */
@@ -532,9 +542,15 @@ UJustBe Team
 
           <div className="flex justify-end pt-4">
 
-            <Button type="submit">
-              Register Prospect
-            </Button>
+           <Button
+  type="submit"
+  disabled={submitting}
+  className={`${
+    submitting ? "opacity-50 cursor-not-allowed" : ""
+  }`}
+>
+  {submitting ? "Registering..." : "Register Prospect"}
+</Button>
 
           </div>
 
