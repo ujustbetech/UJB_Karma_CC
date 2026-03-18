@@ -19,8 +19,10 @@ import {
 import Swal from "sweetalert2";
 import { useParams } from "next/navigation";
 import { COLLECTIONS } from "@/lib/utility_collection";
-
+;
 const tabs = ["Mentor", "Prospect", "Alignment", "Assessment"];
+
+const today = new Date().toISOString().split("T")[0];
 
 const initialFormState = {
   fullName: "",
@@ -46,9 +48,8 @@ const initialFormState = {
   howFoundOther: "",
   interestOther: "",
   contributionOther: "",
-  assessmentDate: "",
+  assessmentDate: today, // 👈 auto-fill today
 };
-
 const interestOptions = [
   "Skill Sharing & Collaboration",
   "Business Growth & Referrals",
@@ -69,7 +70,7 @@ export default function ProspectForm() {
 
   const params = useParams();
   const id = params?.id;
-
+const [submitting, setSubmitting] = useState(false)
   const [countries, setCountries] = useState([]);
   const [cities, setCities] = useState([]);
   const [activeTab, setActiveTab] = useState(0);
@@ -249,7 +250,10 @@ export default function ProspectForm() {
   /* SUBMIT */
 
 const handleSubmit = async () => {
-    e.preventDefault();
+
+  setSubmitting(true); // 👈 start loading
+
+  try {
 
     const subcollectionRef = collection(
       db,
@@ -266,47 +270,47 @@ const handleSubmit = async () => {
           : formData.howFound,
     };
 
-    try {
+    await addDoc(subcollectionRef, finalData);
 
-      await addDoc(subcollectionRef, finalData);
+    const q = query(
+      collection(db, COLLECTIONS.userDetail),
+      where("MobileNo", "==", formData.mentorPhone)
+    );
 
-      const q = query(
-        collection(db, COLLECTIONS.userDetail),
-        where("MobileNo", "==", formData.mentorPhone)
+    const snap = await getDocs(q);
+
+    if (!snap.empty) {
+
+      const d = snap.docs[0].data();
+
+      const orbiter = {
+        ujbcode: d.UJBCode,
+        name: d.Name,
+        phone: d.MobileNo,
+        category: d.Category,
+      };
+
+      await addCpForProspectAssessment(
+        orbiter,
+        formData.phoneNumber
       );
-
-      const snap = await getDocs(q);
-
-      if (!snap.empty) {
-
-        const d = snap.docs[0].data();
-
-        const orbiter = {
-          ujbcode: d.UJBCode,
-          name: d.Name,
-          phone: d.MobileNo,
-          category: d.Category,
-        };
-
-        await addCpForProspectAssessment(
-          orbiter,
-          formData.phoneNumber
-        );
-
-      }
-
-      Swal.fire("Success", "Assessment Submitted!", "success");
-
-      setFormData(initialFormState);
-
-    } catch (err) {
-
-      console.error(err);
-      Swal.fire("Error", "Something went wrong.", "error");
-
     }
 
-  };
+    Swal.fire("Success", "Assessment Submitted!", "success");
+   setFormData({
+  ...initialFormState,
+  assessmentDate: new Date().toISOString().split("T")[0],
+});
+
+  } catch (err) {
+
+    console.error(err);
+    Swal.fire("Error", "Something went wrong.", "error");
+
+  } finally {
+    setSubmitting(false); // 👈 stop loading ALWAYS
+  }
+};
 
   const nextTab = () =>
     activeTab < tabs.length - 1 && setActiveTab(activeTab + 1);
@@ -748,12 +752,15 @@ className="w-full border rounded-lg p-3 mt-2"
             </button>
 
             {activeTab === tabs.length - 1 ? (
-             <button
+          <button
   type="button"
   onClick={handleSubmit}
-  className="px-6 py-2 bg-indigo-600 text-white rounded-lg"
+  disabled={submitting}
+  className={`px-6 py-2 rounded-lg text-white ${
+    submitting ? "bg-gray-400 cursor-not-allowed" : "bg-indigo-600"
+  }`}
 >
-  Submit
+  {submitting ? "Submitting..." : "Submit"}
 </button>
             ) : (
            
