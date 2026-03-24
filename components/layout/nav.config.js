@@ -23,7 +23,7 @@ export const NAV_ITEMS = [
     icon: Users,
     children: [
       { label: "All Users", href: "/admin/users/add" },
-      { label: "Roles", href: "/admin/users/roles" },
+      { label: "Roles", href: "/admin/users/manage" },
     ],
   },
 

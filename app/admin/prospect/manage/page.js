@@ -46,7 +46,7 @@ const columns = [
 { key: "occupation", label: "Occupation" },
 { key: "orbiter", label: "Orbiter" },
 { key: "stage", label: "Current Stage" },
-{ key: "progress", label: "Progress" },
+// { key: "progress", label: "Progress" },
 { key: "last", label: "Last Engagement" },
 { key: "next", label: "Next Follow-up" },
 { key: "type", label: "Type" },
@@ -407,7 +407,7 @@ return (
 {stage}
 </td>
 
-<td className="px-4 py-3 w-40">
+{/* <td className="px-4 py-3 w-40">
 
 <div className="w-full bg-gray-200 rounded-full h-2">
 
@@ -420,7 +420,7 @@ style={{ width: `${progress}%` }}
 
 <span className="text-xs text-gray-600">{progress}%</span>
 
-</td>
+</td> */}
 
 <td className="px-4 py-3">
 {formatDate(p.lastEngagementDate)}

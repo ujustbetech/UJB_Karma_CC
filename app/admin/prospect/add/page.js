@@ -42,8 +42,9 @@ export default function Register() {
   const [occupation, setOccupation] = useState("");
   const [hobbies, setHobbies] = useState("");
   const [email, setEmail] = useState("");
-  const [date, setDate] = useState("");
-const [submitting, setSubmitting] = useState(false);
+  const [date, setDate] = useState(""); // DOB only
+
+  const [submitting, setSubmitting] = useState(false);
   const [type, setType] = useState("");
 
   const [userList, setUserList] = useState([]);
@@ -62,9 +63,7 @@ const [submitting, setSubmitting] = useState(false);
   /* ---------------------------------- */
 
   useEffect(() => {
-
     const fetchUsers = async () => {
-
       const snap = await getDocs(collection(db, "usersdetail"));
 
       const list = snap.docs.map((d) => ({
@@ -78,15 +77,13 @@ const [submitting, setSubmitting] = useState(false);
     };
 
     fetchUsers();
-
   }, []);
 
   /* ---------------------------------- */
-  /* DEFAULT DATE */
+  /* DEFAULT DOB (ONLY DATE, NO TIME) */
   /* ---------------------------------- */
 
   useEffect(() => {
-
     const now = new Date();
 
     const formatted =
@@ -94,14 +91,9 @@ const [submitting, setSubmitting] = useState(false);
       "-" +
       String(now.getMonth() + 1).padStart(2, "0") +
       "-" +
-      String(now.getDate()).padStart(2, "0") +
-      "T" +
-      String(now.getHours()).padStart(2, "0") +
-      ":" +
-      String(now.getMinutes()).padStart(2, "0");
+      String(now.getDate()).padStart(2, "0");
 
-    setDate(formatted);
-
+    setDate(formatted); // ✅ only date
   }, []);
 
   /* ---------------------------------- */
@@ -109,7 +101,6 @@ const [submitting, setSubmitting] = useState(false);
   /* ---------------------------------- */
 
   const handleSearchUser = (e) => {
-
     const value = e.target.value.toLowerCase();
 
     setUserSearch(value);
@@ -119,11 +110,9 @@ const [submitting, setSubmitting] = useState(false);
     );
 
     setFilteredUsers(filtered);
-
   };
 
   const handleSelectUser = (user) => {
-
     setSelectedOrbiter(user);
 
     setName(user.name);
@@ -132,7 +121,6 @@ const [submitting, setSubmitting] = useState(false);
 
     setUserSearch("");
     setFilteredUsers([]);
-
   };
 
   /* ---------------------------------- */
@@ -166,18 +154,14 @@ UJustBe Team
     };
 
     try {
-
       await emailjs.send(
         "service_acyimrs",
         "template_cdm3n5x",
         templateParams,
         "w7YI9DEqR9sdiWX9h"
       );
-
     } catch (error) {
-
       console.error("Email error:", error);
-
     }
   };
 
@@ -213,18 +197,14 @@ UJustBe Team
     };
 
     try {
-
       await axios.post(WHATSAPP_API_URL, payload, {
         headers: {
           Authorization: WHATSAPP_API_TOKEN,
           "Content-Type": "application/json",
         },
       });
-
     } catch (error) {
-
       console.error("WhatsApp error:", error);
-
     }
   };
 
@@ -232,161 +212,102 @@ UJustBe Team
   /* SUBMIT */
   /* ---------------------------------- */
 
-const handleSubmit = async (e) => {
+  const handleSubmit = async (e) => {
 
-  e.preventDefault();
+    e.preventDefault();
 
-  if (submitting) return; // 🔒 prevent double click
+    if (submitting) return;
 
-  setSubmitting(true); // 👈 start loading
+    setSubmitting(true);
 
-  try {
+    try {
 
-    /* -------- VALIDATION -------- */
+      if (!selectedOrbiter) {
+        Swal.fire("Error", "Please select an Orbiter", "error");
+        setSubmitting(false);
+        return;
+      }
 
-    if (!selectedOrbiter) {
-      Swal.fire({
-        icon: "error",
-        title: "Orbiter Required",
-        text: "Please search and select an Orbiter",
-      });
+      if (
+        !prospectName ||
+        !prospectPhone ||
+        !email ||
+        !occupation ||
+        !hobbies ||
+        !date ||
+        !type
+      ) {
+        Swal.fire("Error", "All fields are required", "error");
+        setSubmitting(false);
+        return;
+      }
+
+      const data = {
+        userType,
+        prospectName,
+        prospectPhone,
+        occupation,
+        hobbies,
+        email,
+        dob: date, // ✅ DOB stored (no time)
+        orbiterName: name,
+        orbiterContact: phone,
+        orbiterEmail: orbiteremail,
+        type,
+        registeredAt: new Date(),
+      };
+
+      const docRef = await addDoc(collection(db, "Prospects"), data);
+
+      const docId = docRef.id;
+
+      const baseUrl = window.location.origin;
+      const formLink = `${baseUrl}/user/prospects/${docId}`;
+
+      await sendAssessmentEmail(name, orbiteremail, prospectName, formLink);
+      await sendAssesmentMessage(name, prospectName, phone, formLink);
+
+      Swal.fire("Success", "Prospect Registered Successfully", "success");
+
+      /* RESET */
+
+      setProspectName("");
+      setProspectPhone("");
+      setEmail("");
+      setOccupation("");
+      setHobbies("");
+      setType("");
+
+      const now = new Date();
+      const formatted =
+        now.getFullYear() +
+        "-" +
+        String(now.getMonth() + 1).padStart(2, "0") +
+        "-" +
+        String(now.getDate()).padStart(2, "0");
+
+      setDate(formatted);
+
+      setName("");
+      setPhone("");
+      setOrbiterEmail("");
+      setSelectedOrbiter(null);
+
+    } catch (err) {
+      console.error(err);
+
+      Swal.fire("Error", "Something went wrong", "error");
+
+    } finally {
       setSubmitting(false);
-      return;
     }
-
-    if (
-      !prospectName ||
-      !prospectPhone ||
-      !email ||
-      !occupation ||
-      !hobbies ||
-      !date ||
-      !type
-    ) {
-      Swal.fire({
-        icon: "error",
-        title: "Missing Fields",
-        text: "All fields are required",
-      });
-      setSubmitting(false);
-      return;
-    }
-
-    if (!/^\d{10}$/.test(prospectPhone)) {
-      Swal.fire({
-        icon: "error",
-        title: "Invalid Phone",
-        text: "Prospect phone must be 10 digits",
-      });
-      setSubmitting(false);
-      return;
-    }
-
-    if (!/^\S+@\S+\.\S+$/.test(email)) {
-      Swal.fire({
-        icon: "error",
-        title: "Invalid Email",
-        text: "Please enter a valid email address",
-      });
-      setSubmitting(false);
-      return;
-    }
-
-    const data = {
-      userType,
-      prospectName,
-      prospectPhone,
-      occupation,
-      hobbies,
-      email,
-      orbiterName: name,
-      orbiterContact: phone,
-      orbiterEmail: orbiteremail,
-      type,
-      date: new Date(date),
-      registeredAt: new Date(),
-    };
-
-    const docRef = await addDoc(collection(db, "Prospects"), data);
-
-    const docId = docRef.id;
-
-    const baseUrl =
-      typeof window !== "undefined"
-        ? window.location.origin
-        : process.env.NEXT_PUBLIC_SITE_URL;
-
-    const formLink = `${baseUrl}/user/prospects/${docId}`;
-
-    await sendAssessmentEmail(
-      name,
-      orbiteremail,
-      prospectName,
-      formLink
-    );
-
-    await sendAssesmentMessage(
-      name,
-      prospectName,
-      phone,
-      formLink
-    );
-
-    Swal.fire({
-      icon: "success",
-      title: "Success",
-      text: "Prospect Registered Successfully",
-    });
-
-    /* RESET FORM */
-
-    setProspectName("");
-    setProspectPhone("");
-    setEmail("");
-    setOccupation("");
-    setHobbies("");
-    setType("");
-
-    // 🔥 reset date to TODAY again
-    const now = new Date();
-    const formatted =
-      now.getFullYear() +
-      "-" +
-      String(now.getMonth() + 1).padStart(2, "0") +
-      "-" +
-      String(now.getDate()).padStart(2, "0") +
-      "T" +
-      String(now.getHours()).padStart(2, "0") +
-      ":" +
-      String(now.getMinutes()).padStart(2, "0");
-
-    setDate(formatted);
-
-    setName("");
-    setPhone("");
-    setOrbiterEmail("");
-    setSelectedOrbiter(null);
-
-  } catch (err) {
-    console.error(err);
-
-    Swal.fire({
-      icon: "error",
-      title: "Error",
-      text: "Something went wrong",
-    });
-
-  } finally {
-    setSubmitting(false); // 👈 always stop loading
-  }
-};
+  };
 
   /* ---------------------------------- */
   /* UI */
   /* ---------------------------------- */
 
   return (
-
     <>
       <Text variant="h1">Add New Prospect</Text>
 
@@ -395,7 +316,6 @@ const handleSubmit = async (e) => {
         <form onSubmit={handleSubmit} className="space-y-6">
 
           <FormField label="User Type">
-
             <Select
               value={userType}
               onChange={(v) => setUserType(v)}
@@ -404,15 +324,12 @@ const handleSubmit = async (e) => {
                 { label: "Orbiter", value: "orbiter" },
               ]}
             />
-
           </FormField>
 
           <Text variant="h3">Mentor Orbiter</Text>
 
           <FormField label="Search Orbiter" required>
-
             <div className="relative">
-
               <Input
                 placeholder="Search Orbiter"
                 value={userSearch}
@@ -420,11 +337,8 @@ const handleSubmit = async (e) => {
               />
 
               {filteredUsers.length > 0 && (
-
                 <div className="absolute z-10 bg-white border rounded w-full max-h-48 overflow-auto">
-
                   {filteredUsers.map((u) => (
-
                     <div
                       key={u.ujbCode}
                       className="px-3 py-2 hover:bg-slate-100 cursor-pointer"
@@ -432,21 +346,14 @@ const handleSubmit = async (e) => {
                     >
                       {u.name} — {u.phone}
                     </div>
-
                   ))}
-
                 </div>
-
               )}
-
             </div>
-
           </FormField>
 
           {selectedOrbiter && (
-
             <div className="grid md:grid-cols-3 gap-4">
-
               <FormField label="Orbiter Name">
                 <Input value={name} disabled />
               </FormField>
@@ -458,9 +365,7 @@ const handleSubmit = async (e) => {
               <FormField label="Orbiter Email">
                 <Input value={orbiteremail} disabled />
               </FormField>
-
             </div>
-
           )}
 
           <Text variant="h3">Prospect Details</Text>
@@ -488,15 +393,15 @@ const handleSubmit = async (e) => {
               />
             </FormField>
 
-            <FormField label="Date" required>
-              <DateInput
-                value={date}
-                onChange={(e) => setDate(e.target.value)}
-              />
+            <FormField label="DOB" required>
+           <Input
+  type="date"
+  value={date}
+  onChange={(e) => setDate(e.target.value)}
+/>
             </FormField>
 
             <FormField label="Occupation" required>
-
               <Select
                 value={occupation}
                 onChange={(v) => setOccupation(v)}
@@ -510,22 +415,18 @@ const handleSubmit = async (e) => {
                   { label: "Retired", value: "Retired" },
                 ]}
               />
-
             </FormField>
 
             <FormField label="Hobbies" required>
-
               <Input
                 value={hobbies}
                 onChange={(e) => setHobbies(e.target.value)}
               />
-
             </FormField>
 
           </div>
 
           <FormField label="Occasion" required>
-
             <Select
               value={type}
               onChange={(v) => setType(v)}
@@ -537,21 +438,16 @@ const handleSubmit = async (e) => {
                 { label: "E2A Interaction", value: "e2a_interactions" },
               ]}
             />
-
           </FormField>
 
           <div className="flex justify-end pt-4">
-
-           <Button
-  type="submit"
-  disabled={submitting}
-  className={`${
-    submitting ? "opacity-50 cursor-not-allowed" : ""
-  }`}
->
-  {submitting ? "Registering..." : "Register Prospect"}
-</Button>
-
+            <Button
+              type="submit"
+              disabled={submitting}
+              className={`${submitting ? "opacity-50 cursor-not-allowed" : ""}`}
+            >
+              {submitting ? "Registering..." : "Register Prospect"}
+            </Button>
           </div>
 
         </form>

@@ -205,13 +205,14 @@ export default function AddOrbiterPage() {
             </FormField>
 
             <FormField label="DOB" error={errors.dob} required>
-              <DateInput
-                value={newUser.dob}
-                onChange={(v) => {
-                  setErrors((p) => ({ ...p, dob: "" }));
-                  setNewUser({ ...newUser, dob: v });
-                }}
-              />
+             <Input
+  type="date"
+  value={newUser.dob}
+  onChange={(e) => {
+    setErrors((p) => ({ ...p, dob: "" }));
+    setNewUser({ ...newUser, dob: e.target.value }); // ✅ gives YYYY-MM-DD only
+  }}
+/>
             </FormField>
           </div>
 

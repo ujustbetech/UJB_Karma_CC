@@ -75,7 +75,7 @@ const [submitting, setSubmitting] = useState(false)
   const [cities, setCities] = useState([]);
   const [activeTab, setActiveTab] = useState(0);
   const [formData, setFormData] = useState(initialFormState);
-
+const [isSubmitted, setIsSubmitted] = useState(false);
   /* FETCH COUNTRIES */
 
   useEffect(() => {
@@ -157,7 +157,20 @@ const [submitting, setSubmitting] = useState(false)
     await updateDoc(ref, { totals: updatedTotals });
 
   };
+useEffect(() => {
+  const checkIfSubmitted = async () => {
+    if (!id) return;
 
+    const ref = collection(db, COLLECTIONS.prospect, id, "prospectform");
+    const snap = await getDocs(ref);
+
+    if (!snap.empty) {
+      setIsSubmitted(true);
+    }
+  };
+
+  checkIfSubmitted();
+}, [id]);
   const addCpForProspectAssessment = async (orbiter, prospectPhone) => {
 
     if (!orbiter?.ujbcode) return;
@@ -248,10 +261,12 @@ const [submitting, setSubmitting] = useState(false)
   };
 
   /* SUBMIT */
-
 const handleSubmit = async () => {
 
-  setSubmitting(true); // 👈 start loading
+  // 🔒 prevent resubmit if already submitted
+  if (isSubmitted) return;
+
+  setSubmitting(true);
 
   try {
 
@@ -262,6 +277,15 @@ const handleSubmit = async () => {
       "prospectform"
     );
 
+    // 🔥 double check from DB (extra safety)
+    const existing = await getDocs(subcollectionRef);
+    if (!existing.empty) {
+      setIsSubmitted(true);
+      Swal.fire("Info", "Form already submitted", "info");
+      setSubmitting(false);
+      return;
+    }
+
     const finalData = {
       ...formData,
       howFound:
@@ -271,6 +295,11 @@ const handleSubmit = async () => {
     };
 
     await addDoc(subcollectionRef, finalData);
+
+    // 🔥 LOCK FOREVER AFTER SUBMIT
+    setIsSubmitted(true);
+
+    /* -------- CP LOGIC -------- */
 
     const q = query(
       collection(db, COLLECTIONS.userDetail),
@@ -297,10 +326,9 @@ const handleSubmit = async () => {
     }
 
     Swal.fire("Success", "Assessment Submitted!", "success");
-   setFormData({
-  ...initialFormState,
-  assessmentDate: new Date().toISOString().split("T")[0],
-});
+
+    // ❌ DO NOT reset form (important for lock view)
+    // setFormData(...) ❌ remove this
 
   } catch (err) {
 
@@ -308,10 +336,9 @@ const handleSubmit = async () => {
     Swal.fire("Error", "Something went wrong.", "error");
 
   } finally {
-    setSubmitting(false); // 👈 stop loading ALWAYS
+    setSubmitting(false);
   }
 };
-
   const nextTab = () =>
     activeTab < tabs.length - 1 && setActiveTab(activeTab + 1);
 
@@ -345,7 +372,11 @@ const handleSubmit = async () => {
           ))}
 
         </div>
-
+{isSubmitted && (
+  <div className="bg-red-100 text-red-600 p-3 rounded-lg text-center mb-6">
+    Form already submitted. Editing is disabled.
+  </div>
+)}
         <form  className="space-y-6 min-h-[500px]">
 
           {/* TAB 1 */}
@@ -405,14 +436,15 @@ onChange={handleChange}
 Prospect Details
 </h3>
 
-<input
-className="w-full border rounded-lg p-3"
-name="fullName"
-value={formData.fullName}
-onChange={handleChange}
-placeholder="Prospect Name"
-/>
 
+<input
+  disabled={isSubmitted}
+  className="w-full border p-3"
+  name="fullName"
+  value={formData.fullName}
+  onChange={handleChange}
+  placeholder="Prospect Name"
+/>
 <input
 className="w-full border rounded-lg p-3"
 name="phoneNumber"
@@ -752,15 +784,15 @@ className="w-full border rounded-lg p-3 mt-2"
             </button>
 
             {activeTab === tabs.length - 1 ? (
-          <button
-  type="button"
+       <button
+         type="button"  
   onClick={handleSubmit}
-  disabled={submitting}
-  className={`px-6 py-2 rounded-lg text-white ${
-    submitting ? "bg-gray-400 cursor-not-allowed" : "bg-indigo-600"
+  disabled={submitting || isSubmitted}
+  className={`px-6 py-2 text-white ${
+    submitting || isSubmitted ? "bg-gray-400 cursor-not-allowed" : "bg-indigo-600"
   }`}
 >
-  {submitting ? "Submitting..." : "Submit"}
+  {isSubmitted ? "Already Submitted" : submitting ? "Submitting..." : "Submit"}
 </button>
             ) : (
            

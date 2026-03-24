@@ -10,7 +10,6 @@ import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
 import Select from "@/components/ui/Select";
-import DateInput from "@/components/ui/DateInput";
 import FormField from "@/components/ui/FormField";
 import { useToast } from "@/components/ui/ToastProvider";
 
@@ -22,9 +21,16 @@ export default function EditProspect({ id, data }) {
   const [filteredUsers, setFilteredUsers] = useState([]);
   const [userList, setUserList] = useState([]);
 
-  const getNowForDateTimeLocal = () => {
+  /* DEFAULT DOB (ONLY DATE) */
+  const getTodayDate = () => {
     const now = new Date();
-    return now.toISOString().slice(0, 16);
+    return (
+      now.getFullYear() +
+      "-" +
+      String(now.getMonth() + 1).padStart(2, "0") +
+      "-" +
+      String(now.getDate()).padStart(2, "0")
+    );
   };
 
   const [form, setForm] = useState({
@@ -37,22 +43,8 @@ export default function EditProspect({ id, data }) {
     occupation: data?.occupation || "",
     hobbies: data?.hobbies || "",
     email: data?.email || "",
-    date: getNowForDateTimeLocal(),
+    dob: data?.dob || getTodayDate(), // ✅ DOB only
   });
-
-  const formatReadableDate = (inputDate) => {
-    const d = new Date(inputDate);
-    const day = String(d.getDate()).padStart(2, "0");
-    const month = d.toLocaleString("en-GB", { month: "long" });
-    const year = String(d.getFullYear()).slice(-2);
-    let hours = d.getHours();
-    const minutes = String(d.getMinutes()).padStart(2, "0");
-    const ampm = hours >= 12 ? "PM" : "AM";
-
-    hours = hours % 12 || 12;
-
-    return `${day} ${month} ${year} at ${hours}.${minutes} ${ampm}`;
-  };
 
   /* FETCH USERS */
 
@@ -113,7 +105,8 @@ export default function EditProspect({ id, data }) {
       !form.prospectPhone ||
       !form.occupation ||
       !form.hobbies ||
-      !form.email
+      !form.email ||
+      !form.dob
     ) {
       toast.error("Please fill all fields");
       return;
@@ -121,14 +114,10 @@ export default function EditProspect({ id, data }) {
 
     try {
 
-      const formattedDate = formatReadableDate(form.date);
-
       const prospectRef = doc(db, COLLECTIONS.prospect, id);
 
       await updateDoc(prospectRef, {
         ...form,
-        date: formattedDate,
-        submittedAt: new Date(form.date),
         updatedAt: new Date(),
       });
 
@@ -223,10 +212,14 @@ export default function EditProspect({ id, data }) {
               />
             </FormField>
 
-            <FormField label="Meeting Date">
-              <DateInput
-                value={form.date}
-                onChange={(v) => setForm({ ...form, date: v })}
+            {/* ✅ DOB FIELD */}
+            <FormField label="DOB" required>
+              <Input
+                type="date"
+                value={form.dob}
+                onChange={(e) =>
+                  setForm({ ...form, dob: e.target.value })
+                }
               />
             </FormField>
 
