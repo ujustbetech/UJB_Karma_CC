@@ -21,16 +21,12 @@ import ConfirmModal from "@/components/ui/ConfirmModal";
 import { useToast } from "@/components/ui/ToastProvider";
 
 import FormField from "@/components/ui/FormField";
-import Select from "@/components/ui/Select";
-import DateInput from "@/components/ui/DateInput";
 import Input from "@/components/ui/Input";
+
 import { Cake, Users, User, Phone } from "lucide-react";
 
 export default function AddBirthdayClient() {
-
   const toast = useToast();
-
-  /* ================= STATE ================= */
 
   const [users, setUsers] = useState([]);
   const [search, setSearch] = useState("");
@@ -42,23 +38,16 @@ export default function AddBirthdayClient() {
   const [errors, setErrors] = useState({});
   const [saving, setSaving] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
-  const [mounted, setMounted] = useState(false);
 
-  /* ================= LIFECYCLE ================= */
-
-  useEffect(() => setMounted(true), []);
+  /* ================= LOAD USERS ================= */
 
   useEffect(() => {
-
     async function loadUsers() {
-
       try {
-
         const snap = await getDocs(collection(db, COLLECTIONS.userDetail));
 
         const list = snap.docs
           .map((docSnap) => {
-
             const d = docSnap.data();
 
             const name = (d?.Name || "").trim();
@@ -72,36 +61,98 @@ export default function AddBirthdayClient() {
               email: d?.Email || "",
               mentorName: d?.MentorName || "",
               photoURL: d?.ProfilePhotoURL || "",
+              dob: d?.DOB || d?.dob || "",
             };
-
           })
           .filter(Boolean);
 
         setUsers(list);
-
       } catch (err) {
         console.error(err);
         toast.error("Failed to load users");
       }
-
     }
 
     loadUsers();
-
   }, []);
 
-  /* ================= FILTER USERS ================= */
+  /* ================= FILTER ================= */
 
   const filteredUsers = users.filter((u) =>
     u.label.toLowerCase().includes(search.toLowerCase())
   );
 
-  /* ================= SELECTED USER ================= */
-
   const selectedUserData = users.find(
     (u) => String(u.value) === String(selectedUser)
   );
 
+  /* ================= AUTO DOB ================= */
+
+  useEffect(() => {
+    if (selectedUserData?.dob) {
+      setDob(selectedUserData.dob);
+    } else {
+      setDob("");
+    }
+  }, [selectedUserData]);
+
+  /* ================= DUPLICATE ================= */
+
+  useEffect(() => {
+    if (!selectedUser) return;
+
+    getDoc(doc(db, COLLECTIONS.birthdayCanva, selectedUser)).then((snap) => {
+      setExisting(snap.exists());
+    });
+  }, [selectedUser]);
+
+  /* ================= DOB FIX ================= */
+
+const dobInfo = dob
+  ? (() => {
+      let birthDate;
+
+      // ✅ Parse DOB safely (DD/MM/YYYY)
+      if (typeof dob === "string") {
+        if (dob.includes("/")) {
+          const [day, month, year] = dob.split("/");
+          birthDate = new Date(`${year}-${month}-${day}`);
+        } else {
+          birthDate = new Date(dob);
+        }
+      } else if (dob?.seconds) {
+        birthDate = new Date(dob.seconds * 1000);
+      } else {
+        return null;
+      }
+
+      if (isNaN(birthDate.getTime())) return null;
+
+      const today = new Date();
+
+      // 🎯 NEXT BIRTHDAY (THIS YEAR)
+      let nextBirthday = new Date(
+        today.getFullYear(),
+        birthDate.getMonth(),
+        birthDate.getDate()
+      );
+
+      // 🎯 If already passed → next year
+      if (nextBirthday < today) {
+        nextBirthday.setFullYear(today.getFullYear() + 1);
+      }
+
+      // 🎯 AGE ON NEXT BIRTHDAY
+      const age = nextBirthday.getFullYear() - birthDate.getFullYear();
+
+      // 🎯 DAY OF NEXT BIRTHDAY
+      const day = nextBirthday.toLocaleDateString("en-US", {
+        weekday: "long",
+      });
+
+      return { age, day };
+    })()
+  : null;
   /* ================= HELPERS ================= */
 
   const getInitials = (name = "") =>
@@ -114,239 +165,126 @@ export default function AddBirthdayClient() {
 
   const hasValidPhoto =
     selectedUserData?.photoURL &&
-    selectedUserData.photoURL !== "-" &&
     selectedUserData.photoURL.startsWith("http");
-
-  /* ================= DUPLICATE CHECK ================= */
-
-  useEffect(() => {
-
-    if (!selectedUser) {
-      setExisting(false);
-      return;
-    }
-
-    getDoc(doc(db, COLLECTIONS.birthdayCanva, selectedUser)).then((snap) => {
-
-      setExisting(snap.exists());
-
-      if (snap.exists()) {
-        toast.info("Birthday Canva already exists for this user");
-      }
-
-    });
-
-  }, [selectedUser]);
-
-  /* ================= DOB INFO ================= */
-
-  const dobInfo = dob
-    ? (() => {
-        const d = new Date(dob);
-        const age = new Date().getFullYear() - d.getFullYear();
-        const day = d.toLocaleDateString("en-US", { weekday: "long" });
-        return { age, day };
-      })()
-    : null;
-
-  /* ================= VALIDATION ================= */
-
-  const validate = () => {
-
-    const e = {};
-
-    if (!selectedUser) e.user = "User is required";
-    if (!dob) e.dob = "Date of birth is required";
-
-    setErrors(e);
-
-    return Object.keys(e).length === 0;
-
-  };
-
-  /* ================= IMAGE ================= */
-
-  const handleImageChange = (file) => {
-
-    if (!file) return;
-
-    if (!file.type.startsWith("image/")) {
-      toast.error("Only image files allowed");
-      return;
-    }
-
-    if (file.size > 2 * 1024 * 1024) {
-      toast.error("Image must be under 2MB");
-      return;
-    }
-
-    setImage(file);
-
-  };
-
-  const uploadImage = async () => {
-
-    if (!image) return "";
-
-    const imageRef = ref(
-      storage,
-      `birthdayImages/${selectedUser}/${Date.now()}`
-    );
-
-    await uploadBytes(imageRef, image);
-
-    return await getDownloadURL(imageRef);
-
-  };
 
   /* ================= SAVE ================= */
 
   const handleSave = async () => {
-
-    if (!validate() || !selectedUserData || existing) return;
+    if (!selectedUser || !dob || existing) return;
 
     setSaving(true);
 
     try {
+      let imageUrl = "";
 
-      const imageUrl = image ? await uploadImage() : "";
+      if (image) {
+        const imageRef = ref(
+          storage,
+          `birthdayImages/${selectedUser}/${Date.now()}`
+        );
+        await uploadBytes(imageRef, image);
+        imageUrl = await getDownloadURL(imageRef);
+      }
 
       await setDoc(doc(db, COLLECTIONS.birthdayCanva, selectedUser), {
         name: selectedUserData.label,
         phone: selectedUserData.value,
         email: selectedUserData.email,
-        mentorName: selectedUserData.mentorName,
         dob,
         dobTimestamp: new Date(dob),
         imageUrl,
         registeredAt: serverTimestamp(),
       });
 
-      toast.success("Birthday Canva saved successfully");
+      toast.success("Saved successfully");
 
       setSearch("");
       setSelectedUser("");
       setDob("");
       setImage(null);
-      setErrors({});
-
     } catch (err) {
-
       console.error(err);
-      toast.error("Failed to save Birthday Canva");
-
+      toast.error("Error saving");
     } finally {
-
       setSaving(false);
       setShowConfirm(false);
-
     }
-
   };
 
   /* ================= UI ================= */
 
   return (
     <>
-
       <Card className="space-y-6">
-
-        <Text className="py-6" variant="h1">
-          Add Birthday Canva
-        </Text>
+        <Text variant="h1">Add Birthday Canva</Text>
 
         {/* SEARCH */}
-
         <FormField label="Search User">
           <Input
-            placeholder="Search by name"
+            placeholder="Search user..."
             value={search}
             onChange={(e) => {
               setSearch(e.target.value);
               setSelectedUser("");
             }}
           />
-        </FormField>
 
-        {/* SELECT */}
-
-        <FormField label="Select User" required error={errors.user}>
-          <Select
-            placeholder="Select user"
-            options={filteredUsers}
-            value={selectedUser}
-            onChange={(val) => {
-              setSelectedUser(val?.value ?? val);
-              setErrors((p) => ({ ...p, user: null }));
-            }}
-          />
+          {/* SEARCH LIST */}
+          {search && (
+            <div className="mt-2 border rounded-lg bg-white max-h-40 overflow-y-auto shadow">
+              {filteredUsers.length > 0 ? (
+                filteredUsers.map((user) => (
+                  <div
+                    key={user.value}
+                    onClick={() => {
+                      setSelectedUser(user.value);
+                      setSearch(user.label);
+                    }}
+                    className="px-3 py-2 hover:bg-slate-100 cursor-pointer text-sm"
+                  >
+                    {user.label} ({user.value})
+                  </div>
+                ))
+              ) : (
+                <div className="px-3 py-2 text-sm text-slate-400">
+                  No users found
+                </div>
+              )}
+            </div>
+          )}
         </FormField>
 
         {/* USER PREVIEW */}
-
         {selectedUserData && (
-
-          <div className="rounded-xl bg-slate-50 px-4 py-3">
-
-            <div className="flex items-center gap-4">
-
-              {hasValidPhoto ? (
-
-                <img
-                  src={selectedUserData.photoURL}
-                  alt={selectedUserData.label}
-                  className="h-14 w-14 rounded-full object-cover"
-                />
-
-              ) : (
-
-                <div className="flex h-14 w-14 items-center justify-center rounded-full bg-slate-200 font-semibold text-slate-600">
-                  {getInitials(selectedUserData.label)}
-                </div>
-
-              )}
-
-              <div className="space-y-1">
-
-                <div className="flex items-center gap-2">
-                  <User size={16} className="text-slate-400" />
-                  <Text variant="h3">{selectedUserData.label}</Text>
-                </div>
-
-                <div className="flex items-center gap-2 text-slate-500">
-                  <Phone size={14} />
-                  <Text variant="muted">{selectedUserData.value}</Text>
-                </div>
-
-                <div className="flex items-center gap-2 text-slate-500">
-                  <Users size={14} />
-                  <Text variant="muted">
-                    Mentor: {selectedUserData.mentorName || "—"}
-                  </Text>
-                </div>
-
+          <div className="bg-slate-50 p-4 rounded-xl flex gap-4">
+            {hasValidPhoto ? (
+              <img
+                src={selectedUserData.photoURL}
+                className="h-14 w-14 rounded-full"
+              />
+            ) : (
+              <div className="h-14 w-14 rounded-full bg-slate-200 flex items-center justify-center">
+                {getInitials(selectedUserData.label)}
               </div>
+            )}
 
+            <div>
+              <Text variant="h3">{selectedUserData.label}</Text>
+              <Text variant="muted">{selectedUserData.value}</Text>
             </div>
-
           </div>
-
         )}
 
         {/* DOB */}
-
-        <FormField label="Date of Birth" required error={errors.dob}>
-          <DateInput
-            value={dob}
-            onChange={(e) => {
-              setDob(e.target.value);
-              setErrors((p) => ({ ...p, dob: null }));
-            }}
-          />
+        <FormField label="Date of Birth">
+          <div className="bg-slate-100 px-3 py-2 rounded">
+            {dob || "No DOB"}
+          </div>
         </FormField>
 
-        {dobInfo && (
-          <div className="flex items-center gap-2 pl-1 text-slate-500">
+        {/* DOB INFO */}
+        {dobInfo && !isNaN(dobInfo.age) && (
+          <div className="flex items-center gap-2 text-slate-500">
             <Cake size={16} />
             <Text variant="muted">
               Turns <strong>{dobInfo.age}</strong> on {dobInfo.day}
@@ -355,44 +293,26 @@ export default function AddBirthdayClient() {
         )}
 
         {/* IMAGE */}
+        <Input
+          type="file"
+          onChange={(e) => setImage(e.target.files?.[0])}
+        />
 
-        <FormField label="Image">
-          <Input
-            type="file"
-            accept="image/*"
-            disabled={!selectedUser}
-            onChange={(e) => handleImageChange(e.target.files?.[0])}
-          />
-        </FormField>
-
-        {mounted && image && (
-          <img
-            src={URL.createObjectURL(image)}
-            className="h-32 w-32 rounded-xl object-cover"
-          />
-        )}
-
+        {/* SAVE */}
         <Button
           loading={saving}
-          disabled={!selectedUser || !dob || existing || saving}
+          disabled={!selectedUser || !dob || existing}
           onClick={() => setShowConfirm(true)}
         >
           Save
         </Button>
-
       </Card>
 
       <ConfirmModal
         open={showConfirm}
-        title="Confirm Birthday Canva"
-        description={`Create Birthday Canva for ${
-          selectedUserData?.label || ""
-        }?`}
-        confirmText="Save"
         onConfirm={handleSave}
         onClose={() => setShowConfirm(false)}
       />
-
     </>
   );
 }
