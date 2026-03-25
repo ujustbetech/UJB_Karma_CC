@@ -24,49 +24,46 @@ export default function LoginPage() {
     }
   }, []);
 
-  const handleMicrosoftLogin = async () => {
+const handleMicrosoftLogin = async () => {
+  setLoading(true);
 
-    setLoading(true);
+  try {
+    const result = await signInWithPopup(auth, microsoftProvider);
+    const user = result.user;
 
-    try {
+    const adminSnapshot = await getDocs(collection(db, "AdminUsers"));
+    const admins = adminSnapshot.docs.map(doc => doc.data());
 
-      const result = await signInWithPopup(auth, microsoftProvider);
-      const user = result.user;
+    const matchedAdmin = admins.find(
+      (a) => a.email.toLowerCase() === user.email.toLowerCase()
+    );
 
-      const adminSnapshot = await getDocs(collection(db, "AdminUsers"));
-      const admins = adminSnapshot.docs.map(doc => doc.data());
-
-      const matchedAdmin = admins.find(a =>
-        a.email.toLowerCase() === user.email.toLowerCase()
-      );
-
-      if (!matchedAdmin) {
-        alert("You are not an Admin ❌");
-        setLoading(false);
-        return;
-      }
-
-      // 🔴 SAVE IN SESSION STORAGE
-      const adminData = {
-        email: user.email,
-        name: matchedAdmin.name,
-        role: matchedAdmin.role,
-        designation: matchedAdmin.designation,
-        photo: user.photoURL,
-        currentuser: matchedAdmin.name
-      };
-
-      sessionStorage.setItem("AdminData", JSON.stringify(adminData));
-
-      router.replace("/admin/orbiters");
-
-    } catch (err) {
-      console.error(err);
-      alert("Login Failed ❌");
+    if (!matchedAdmin) {
+      alert("You are not an Admin ❌");
+      setLoading(false);
+      return;
     }
 
-    setLoading(false);
-  };
+    // ✅ CLEAN DATA
+    const adminData = {
+      email: user.email,
+      name: matchedAdmin.name,
+      role: matchedAdmin.role,
+      designation: matchedAdmin.designation,
+      photo: user.photoURL || null,
+    };
+
+    sessionStorage.setItem("AdminData", JSON.stringify(adminData));
+
+    router.replace("/admin/orbiters");
+
+  } catch (err) {
+    console.error(err);
+    alert("Login Failed ❌");
+  }
+
+  setLoading(false);
+};
 
   return (
     <div className="min-h-screen bg-neutral-100 flex items-center justify-center">
