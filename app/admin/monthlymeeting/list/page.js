@@ -127,7 +127,7 @@ export default function EventsListingPage() {
     }, [nameFilter]);
 
     const copyEventLink = (id) => {
-        const link = `${window.location.origin}/monthlymeeting/${id}`;
+        const link = `${window.location.origin}/user/monthlymeeting/${id}`;
         navigator.clipboard.writeText(link);
         toast.success("Event link copied");
     };
