@@ -44,13 +44,16 @@ const handleMicrosoftLogin = async () => {
       return;
     }
 
-    // ✅ CLEAN DATA
+    // ✅ PRIORITY: Firestore image > Microsoft image
     const adminData = {
       email: user.email,
       name: matchedAdmin.name,
       role: matchedAdmin.role,
       designation: matchedAdmin.designation,
-      photo: user.photoURL || null,
+      photo:
+        matchedAdmin.photo ||   // Firestore image
+        user.photoURL ||        // Microsoft image
+        null,
     };
 
     sessionStorage.setItem("AdminData", JSON.stringify(adminData));
