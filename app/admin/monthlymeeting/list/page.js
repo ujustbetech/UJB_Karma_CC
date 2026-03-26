@@ -95,7 +95,22 @@ export default function EventsListingPage() {
                 })
             );
 
-            setEvents(list);
+      // sort latest first (newest date on top)
+const sorted = list.sort((a, b) => {
+    const getTime = (t) => {
+        if (!t) return 0;
+
+        if (t?.seconds) return t.seconds * 1000;
+        if (typeof t === "string" || typeof t === "number") return new Date(t).getTime();
+        if (t instanceof Date) return t.getTime();
+
+        return 0;
+    };
+
+    return getTime(b.time) - getTime(a.time); // DESC (latest first)
+});
+
+setEvents(sorted);
         } catch (err) {
             console.error("Fetch events error:", err);
             toast.error("Failed to fetch events");
