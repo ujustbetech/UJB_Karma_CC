@@ -1,3 +1,5 @@
+"use client";
+
 import clsx from "clsx";
 
 export default function Select({
@@ -6,6 +8,12 @@ export default function Select({
   onChange,
   error = false,
 }) {
+  // ✅ Remove duplicate values (based on value)
+  const uniqueOptions = options.filter(
+    (opt, index, self) =>
+      index === self.findIndex((o) => o.value === opt.value)
+  );
+
   return (
     <select
       value={value}
@@ -17,8 +25,11 @@ export default function Select({
           : "border border-slate-200 focus:border-slate-300"
       )}
     >
-      {options.map((opt) => (
-        <option key={opt.value} value={opt.value}>
+      {uniqueOptions.map((opt, index) => (
+        <option
+          key={`${opt.value}-${index}`} // ✅ ALWAYS UNIQUE
+          value={opt.value}
+        >
           {opt.label}
         </option>
       ))}

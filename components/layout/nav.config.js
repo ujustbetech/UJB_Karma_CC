@@ -65,7 +65,15 @@ export const NAV_ITEMS = [
       { label: "Add Meeting", href: "/admin/monthlymeeting/add" },
     ],
   },
-
+{
+    label: "Conclave Meeting",
+    icon: CalendarDays,
+    children: [
+      { label: "Dashboard", href: "/admin/conclave" },
+      { label: "Meeting List", href: "/admin/conclave/list" },
+      { label: "Add Meeting", href: "/admin/conclave/add" },
+    ],
+  },
   {
     label: "Birthdays",
     icon: Gift,
