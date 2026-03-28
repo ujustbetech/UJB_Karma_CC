@@ -139,8 +139,8 @@ export default function ConclavesListingPage() {
           <div className="flex items-center justify-between gap-4">
             <Button
               onClick={() =>
-                (window.location.href =
-                  "/admin/conclaves/create")
+                            (window.location.href =
+                              `/admin/conclave/add`)
               }
             >
               Add Conclave

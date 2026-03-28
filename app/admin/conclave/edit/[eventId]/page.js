@@ -7,9 +7,8 @@ import {
   getDoc,
   getDocs,
   collection,
-  addDoc,
-  deleteDoc,
   updateDoc,
+  addDoc,
   Timestamp,
 } from "firebase/firestore";
 import { db } from "@/firebaseConfig";
@@ -20,20 +19,10 @@ import Button from "@/components/ui/Button";
 import Text from "@/components/ui/Text";
 import Input from "@/components/ui/Input";
 import Textarea from "@/components/ui/Textarea";
-import DateInput from "@/components/ui/DateInput";
 import FormField from "@/components/ui/FormField";
-import ActionButton from "@/components/ui/ActionButton";
-import Tooltip from "@/components/ui/Tooltip";
-import ConfirmModal from "@/components/ui/ConfirmModal";
-import Table from "@/components/table/Table";
-import TableHeader from "@/components/table/TableHeader";
-import TableRow from "@/components/table/TableRow";
 import { useToast } from "@/components/ui/ToastProvider";
 
-import { Pencil, Trash2 } from "lucide-react";
-
 export default function EditConclavePage() {
-
   const { eventId } = useParams();
   const id = eventId;
 
@@ -46,35 +35,58 @@ export default function EditConclavePage() {
     conclaveStream: "",
     startDate: "",
     initiationDate: "",
+    leader: "",
+    ntMembers: [],
+    orbiters: [],
     leaderRole: "",
     ntRoles: "",
   });
 
   const [meetings, setMeetings] = useState([]);
 
-  const [deleteOpen, setDeleteOpen] = useState(false);
-  const [meetingToDelete, setMeetingToDelete] = useState(null);
+  const [showMeetingForm, setShowMeetingForm] = useState(false);
 
-  const columns = [
-    { key: "name", label: "Meeting Name" },
-    { key: "mode", label: "Mode" },
-    { key: "time", label: "Date & Time" },
-    { key: "actions", label: "Actions" },
-  ];
+  const [meetingForm, setMeetingForm] = useState({
+    meetingName: "",
+    datetime: "",
+    agenda: "",
+    mode: "online",
+    link: "",
+    venue: "",
+  });
 
+  // ✅ Convert Firestore → input
+  const convertTimestampToInput = (ts) => {
+    if (!ts?.seconds) return "";
+    const d = new Date(ts.seconds * 1000);
+    const pad = (n) => n.toString().padStart(2, "0");
+
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(
+      d.getDate()
+    )}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  };
+
+  const convertInputToTimestamp = (value) => {
+    if (!value) return null;
+    return Timestamp.fromDate(new Date(value));
+  };
+
+  // 🔥 FETCH DATA
   const fetchData = async () => {
     setLoading(true);
     try {
-      const snap = await getDoc(
-        doc(db, COLLECTIONS.conclaves, id)
-      );
+      const snap = await getDoc(doc(db, COLLECTIONS.conclaves, id));
 
       if (snap.exists()) {
         const data = snap.data();
+
         setConclave({
           conclaveStream: data.conclaveStream || "",
-          startDate: data.startDate || "",
-          initiationDate: data.initiationDate || "",
+          startDate: convertTimestampToInput(data.startDate),
+          initiationDate: convertTimestampToInput(data.initiationDate),
+          leader: data.leader || "",
+          ntMembers: data.ntMembers || [],
+          orbiters: data.orbiters || [],
           leaderRole: data.leaderRole || "",
           ntRoles: data.ntRoles || "",
         });
@@ -89,6 +101,13 @@ export default function EditConclavePage() {
         ...d.data(),
       }));
 
+      // latest first
+      list.sort(
+        (a, b) =>
+          (b.datetime?.seconds || 0) -
+          (a.datetime?.seconds || 0)
+      );
+
       setMeetings(list);
     } catch {
       toast.error("Failed to load data");
@@ -101,225 +120,210 @@ export default function EditConclavePage() {
     if (id) fetchData();
   }, [id]);
 
-  const handleConclaveChange = (name, value) => {
+  // 🔥 HANDLE CHANGE
+  const handleChange = (name, value) => {
     setConclave((prev) => ({
       ...prev,
       [name]: value,
     }));
   };
 
-  const handleUpdateConclave = async (e) => {
+  const handleMeetingChange = (e) => {
+    setMeetingForm((prev) => ({
+      ...prev,
+      [e.target.name]: e.target.value,
+    }));
+  };
+
+  // 🔥 UPDATE CONCLAVE
+  const handleUpdate = async (e) => {
     e.preventDefault();
+
     try {
-      await updateDoc(
-        doc(db, COLLECTIONS.conclaves, id),
-        {
-          ...conclave,
-        }
-      );
-      toast.success("Conclave updated successfully");
+      await updateDoc(doc(db, COLLECTIONS.conclaves, id), {
+        ...conclave,
+        startDate: convertInputToTimestamp(conclave.startDate),
+        initiationDate: convertInputToTimestamp(conclave.initiationDate),
+      });
+
+      toast.success("Updated successfully");
     } catch {
       toast.error("Update failed");
     }
   };
 
-  const openDelete = (m) => {
-    setMeetingToDelete(m);
-    setDeleteOpen(true);
-  };
+  // 🔥 ADD MEETING
+  const handleMeetingSubmit = async (e) => {
+    e.preventDefault();
 
-  const confirmDelete = async () => {
-    if (!meetingToDelete) return;
     try {
-      await deleteDoc(
-        doc(
-          db,
-          COLLECTIONS.conclaves,
-          id,
-          "meetings",
-          meetingToDelete.id
-        )
+      await addDoc(
+        collection(db, COLLECTIONS.conclaves, id, "meetings"),
+        {
+          ...meetingForm,
+          datetime: Timestamp.fromDate(
+            new Date(meetingForm.datetime)
+          ),
+          createdAt: Timestamp.now(),
+        }
       );
-      toast.success("Meeting deleted");
-      setDeleteOpen(false);
+
+      toast.success("Meeting added");
+      setShowMeetingForm(false);
       fetchData();
     } catch {
-      toast.error("Delete failed");
+      toast.error("Failed to add meeting");
     }
   };
 
-  const formatDateTime = (time) => {
-    if (!time?.seconds) return "—";
-    const date = new Date(time.seconds * 1000);
-    return date.toLocaleString("en-IN", {
-      day: "2-digit",
-      month: "short",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  };
-
   return (
-    <>
-      {/* Conclave Form */}
-      <Card className="mb-4">
-        <div className="pb-3 border-b">
-          <Text as="h3">Conclave Information</Text>
-        </div>
+    <Card>
+      <Text as="h3">Edit Conclave</Text>
 
-        <form
-          onSubmit={handleUpdateConclave}
-          className="space-y-6 pt-6"
+      {/* ADD BUTTON */}
+      <div className="my-4">
+        <Button
+          className="bg-blue-600 text-white px-4 py-2 rounded-lg"
+          onClick={() => setShowMeetingForm(true)}
         >
+          + Add Meeting
+        </Button>
+      </div>
 
-          <FormField label="Conclave Name">
-            <Input
-              value={conclave.conclaveStream}
-              disabled={loading}
-              className={loading ? "animate-pulse bg-slate-200" : ""}
-              onChange={(e) =>
-                handleConclaveChange(
-                  "conclaveStream",
-                  e.target.value
-                )
-              }
-            />
-          </FormField>
+      {/* POPUP */}
+      {showMeetingForm && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+          <div className="bg-white w-full max-w-lg rounded-2xl p-6 space-y-4">
+            <h2 className="text-xl font-semibold">Add Meeting</h2>
 
-          <FormField label="Start Date">
-            <DateInput
-              value={conclave.startDate}
-              disabled={loading}
-              className={loading ? "animate-pulse bg-slate-200" : ""}
-              onChange={(v) =>
-                handleConclaveChange("startDate", v)
-              }
-            />
-          </FormField>
+            <form onSubmit={handleMeetingSubmit} className="space-y-3">
+              <input
+                name="meetingName"
+                placeholder="Meeting Name"
+                onChange={handleMeetingChange}
+                className="w-full border p-2 rounded"
+              />
 
-          <FormField label="Initiation Date">
-            <DateInput
-              value={conclave.initiationDate}
-              disabled={loading}
-              className={loading ? "animate-pulse bg-slate-200" : ""}
-              onChange={(v) =>
-                handleConclaveChange(
-                  "initiationDate",
-                  v
-                )
-              }
-            />
-          </FormField>
+              <input
+                type="datetime-local"
+                name="datetime"
+                onChange={handleMeetingChange}
+                className="w-full border p-2 rounded"
+              />
 
-          <FormField label="Leader Role">
-            <Textarea
-              value={conclave.leaderRole}
-              disabled={loading}
-              className={loading ? "animate-pulse bg-slate-200" : ""}
-              onChange={(e) =>
-                handleConclaveChange(
-                  "leaderRole",
-                  e.target.value
-                )
-              }
-            />
-          </FormField>
+              <textarea
+                name="agenda"
+                placeholder="Agenda"
+                onChange={handleMeetingChange}
+                className="w-full border p-2 rounded"
+              />
 
-          <FormField label="NT Roles">
-            <Textarea
-              value={conclave.ntRoles}
-              disabled={loading}
-              className={loading ? "animate-pulse bg-slate-200" : ""}
-              onChange={(e) =>
-                handleConclaveChange(
-                  "ntRoles",
-                  e.target.value
-                )
-              }
-            />
-          </FormField>
-
-          <div className="flex justify-end">
-            <Button type="submit">
-              Save Changes
-            </Button>
+              <button className="bg-blue-600 text-white px-4 py-2 rounded">
+                Create
+              </button>
+            </form>
           </div>
+        </div>
+      )}
 
-        </form>
-      </Card>
+      {/* 🔥 MEETINGS */}
+      <div className="mt-6 space-y-3">
+        <h3 className="text-lg font-semibold">Meetings</h3>
 
-      {/* Meetings Table */}
-      <Card>
-        <Table>
-          <TableHeader columns={columns} />
-          <tbody>
+        {meetings.map((meeting) => (
+          <div
+            key={meeting.id}
+            className="flex justify-between items-center border p-3 rounded"
+          >
+            <div>
+              <p className="font-medium">{meeting.meetingName}</p>
+              <p className="text-sm text-gray-500">{meeting.mode}</p>
+            </div>
 
-            {/* Skeleton */}
-            {loading &&
-              Array.from({ length: 5 }).map((_, i) => (
-                <TableRow key={i}>
-                  {Array.from({ length: 4 }).map((__, j) => (
-                    <td key={j} className="px-4 py-3">
-                      <div className="h-4 w-full rounded-md bg-slate-200 animate-pulse" />
-                    </td>
-                  ))}
-                </TableRow>
-              ))
+            <button
+              className="bg-orange-500 text-white px-3 py-1 rounded"
+              onClick={() =>
+                router.push(
+                  `/admin/conclave/addmeeting/${meeting.id}?conclaveId=${id}`
+                )
+              }
+            >
+              ✏ Edit
+            </button>
+          </div>
+        ))}
+      </div>
+
+      {/* 🔥 CONCLAVE FORM */}
+      <form onSubmit={handleUpdate} className="space-y-6 mt-6">
+
+        <FormField label="Conclave Name">
+          <Input
+            value={conclave.conclaveStream}
+            onChange={(e) =>
+              handleChange("conclaveStream", e.target.value)
             }
+          />
+        </FormField>
 
-            {/* Actual */}
-            {!loading &&
-              meetings.map((m) => (
-                <TableRow key={m.id}>
-                  <td className="px-4 py-3">
-                    {m.meetingName}
-                  </td>
-                  <td className="px-4 py-3">
-                    {m.mode}
-                  </td>
-                  <td className="px-4 py-3">
-                    {formatDateTime(m.datetime)}
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex gap-2">
-                      <Tooltip content="Edit">
-                        <ActionButton
-                          icon={Pencil}
-                          onClick={() =>
-                            router.push(
-                              `/admin/conclave/addmeeting/${m.id}?conclaveId=${id}`
-                            )
-                          }
-                        />
-                      </Tooltip>
+        {/* LEADER */}
+        <FormField label="Leader">
+          <Input value={conclave.leader} disabled />
+        </FormField>
 
-                      <Tooltip content="Delete">
-                        <ActionButton
-                          icon={Trash2}
-                          variant="danger"
-                          onClick={() =>
-                            openDelete(m)
-                          }
-                        />
-                      </Tooltip>
-                    </div>
-                  </td>
-                </TableRow>
-              ))
+        {/* NT MEMBERS */}
+        <FormField label="NT Members">
+          <div className="flex flex-wrap gap-2">
+            {conclave.ntMembers.map((m, i) => (
+              <span
+                key={i}
+                className="bg-blue-100 px-3 py-1 rounded-full text-sm"
+              >
+                {m}
+              </span>
+            ))}
+          </div>
+        </FormField>
+
+        {/* ORBITERS */}
+        <FormField label="Orbiters">
+          <div className="flex flex-wrap gap-2">
+            {conclave.orbiters.map((m, i) => (
+              <span
+                key={i}
+                className="bg-green-100 px-3 py-1 rounded-full text-sm"
+              >
+                {m}
+              </span>
+            ))}
+          </div>
+        </FormField>
+
+        {/* DATES */}
+        <FormField label="Start Date">
+          <input
+            type="datetime-local"
+            value={conclave.startDate}
+            onChange={(e) =>
+              handleChange("startDate", e.target.value)
             }
+            className="w-full border p-2 rounded"
+          />
+        </FormField>
 
-          </tbody>
-        </Table>
-      </Card>
+        <FormField label="Initiation Date">
+          <input
+            type="datetime-local"
+            value={conclave.initiationDate}
+            onChange={(e) =>
+              handleChange("initiationDate", e.target.value)
+            }
+            className="w-full border p-2 rounded"
+          />
+        </FormField>
 
-      <ConfirmModal
-        open={deleteOpen}
-        title="Delete Meeting"
-        description={`Delete ${meetingToDelete?.meetingName}?`}
-        onConfirm={confirmDelete}
-        onClose={() => setDeleteOpen(false)}
-      />
-    </>
+        <Button type="submit">Save Changes</Button>
+      </form>
+    </Card>
   );
 }
