@@ -21,9 +21,8 @@ import ConfirmModal from "@/components/ui/ConfirmModal";
 import { useToast } from "@/components/ui/ToastProvider";
 
 import FormField from "@/components/ui/FormField";
-import Input from "@/components/ui/Input";
 
-import { Cake, Users, User, Phone } from "lucide-react";
+import { Cake } from "lucide-react";
 
 export default function AddBirthdayClient() {
   const toast = useToast();
@@ -33,9 +32,9 @@ export default function AddBirthdayClient() {
   const [selectedUser, setSelectedUser] = useState("");
   const [dob, setDob] = useState("");
   const [image, setImage] = useState(null);
+  const [preview, setPreview] = useState("");
 
   const [existing, setExisting] = useState(false);
-  const [errors, setErrors] = useState({});
   const [saving, setSaving] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
 
@@ -59,7 +58,6 @@ export default function AddBirthdayClient() {
               label: name,
               value: phone,
               email: d?.Email || "",
-              mentorName: d?.MentorName || "",
               photoURL: d?.ProfilePhotoURL || "",
               dob: d?.DOB || d?.dob || "",
             };
@@ -75,6 +73,18 @@ export default function AddBirthdayClient() {
 
     loadUsers();
   }, []);
+
+  /* ================= AUTO SELECT USER ================= */
+
+  useEffect(() => {
+    const exactMatch = users.find(
+      (u) => u.label.toLowerCase() === search.toLowerCase()
+    );
+
+    if (exactMatch) {
+      setSelectedUser(exactMatch.value);
+    }
+  }, [search, users]);
 
   /* ================= FILTER ================= */
 
@@ -96,7 +106,7 @@ export default function AddBirthdayClient() {
     }
   }, [selectedUserData]);
 
-  /* ================= DUPLICATE ================= */
+  /* ================= DUPLICATE CHECK ================= */
 
   useEffect(() => {
     if (!selectedUser) return;
@@ -106,71 +116,60 @@ export default function AddBirthdayClient() {
     });
   }, [selectedUser]);
 
-  /* ================= DOB FIX ================= */
+  /* ================= DOB INFO ================= */
 
-const dobInfo = dob
-  ? (() => {
-      let birthDate;
+  const dobInfo = dob
+    ? (() => {
+        let birthDate;
 
-      // ✅ Parse DOB safely (DD/MM/YYYY)
-      if (typeof dob === "string") {
         if (dob.includes("/")) {
           const [day, month, year] = dob.split("/");
           birthDate = new Date(`${year}-${month}-${day}`);
         } else {
           birthDate = new Date(dob);
         }
-      } else if (dob?.seconds) {
-        birthDate = new Date(dob.seconds * 1000);
-      } else {
-        return null;
-      }
 
-      if (isNaN(birthDate.getTime())) return null;
+        if (isNaN(birthDate.getTime())) return null;
 
-      const today = new Date();
+        const today = new Date();
 
-      // 🎯 NEXT BIRTHDAY (THIS YEAR)
-      let nextBirthday = new Date(
-        today.getFullYear(),
-        birthDate.getMonth(),
-        birthDate.getDate()
-      );
+        let nextBirthday = new Date(
+          today.getFullYear(),
+          birthDate.getMonth(),
+          birthDate.getDate()
+        );
 
-      // 🎯 If already passed → next year
-      if (nextBirthday < today) {
-        nextBirthday.setFullYear(today.getFullYear() + 1);
-      }
+        if (nextBirthday < today) {
+          nextBirthday.setFullYear(today.getFullYear() + 1);
+        }
 
-      // 🎯 AGE ON NEXT BIRTHDAY
-      const age = nextBirthday.getFullYear() - birthDate.getFullYear();
+        const age = nextBirthday.getFullYear() - birthDate.getFullYear();
 
-      // 🎯 DAY OF NEXT BIRTHDAY
-      const day = nextBirthday.toLocaleDateString("en-US", {
-        weekday: "long",
-      });
+        const day = nextBirthday.toLocaleDateString("en-US", {
+          weekday: "long",
+        });
 
-      return { age, day };
-    })()
-  : null;
-  /* ================= HELPERS ================= */
+        return { age, day };
+      })()
+    : null;
 
-  const getInitials = (name = "") =>
-    name
-      .split(" ")
-      .slice(0, 2)
-      .map((n) => n[0])
-      .join("")
-      .toUpperCase();
+  /* ================= FILE HANDLER ================= */
 
-  const hasValidPhoto =
-    selectedUserData?.photoURL &&
-    selectedUserData.photoURL.startsWith("http");
+  const handleFileChange = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    setImage(file);
+    setPreview(URL.createObjectURL(file));
+  };
 
   /* ================= SAVE ================= */
 
   const handleSave = async () => {
-    if (!selectedUser || !dob || existing) return;
+    if (!selectedUser || !dob) {
+      toast.error("Missing fields");
+      return;
+    }
 
     setSaving(true);
 
@@ -180,10 +179,19 @@ const dobInfo = dob
       if (image) {
         const imageRef = ref(
           storage,
-          `birthdayImages/${selectedUser}/${Date.now()}`
+          `birthdayImages/${selectedUser}/${Date.now()}_${image.name}`
         );
+
         await uploadBytes(imageRef, image);
         imageUrl = await getDownloadURL(imageRef);
+      }
+
+      let dobDate;
+      if (dob.includes("/")) {
+        const [day, month, year] = dob.split("/");
+        dobDate = new Date(`${year}-${month}-${day}`);
+      } else {
+        dobDate = new Date(dob);
       }
 
       await setDoc(doc(db, COLLECTIONS.birthdayCanva, selectedUser), {
@@ -191,20 +199,21 @@ const dobInfo = dob
         phone: selectedUserData.value,
         email: selectedUserData.email,
         dob,
-        dobTimestamp: new Date(dob),
+        dobTimestamp: dobDate,
         imageUrl,
         registeredAt: serverTimestamp(),
       });
 
-      toast.success("Saved successfully");
+      toast.success("Saved successfully 🎉");
 
       setSearch("");
       setSelectedUser("");
       setDob("");
       setImage(null);
+      setPreview("");
     } catch (err) {
       console.error(err);
-      toast.error("Error saving");
+      toast.error("Upload failed ❌");
     } finally {
       setSaving(false);
       setShowConfirm(false);
@@ -220,7 +229,8 @@ const dobInfo = dob
 
         {/* SEARCH */}
         <FormField label="Search User">
-          <Input
+          <input
+            className="w-full border px-3 py-2 rounded"
             placeholder="Search user..."
             value={search}
             onChange={(e) => {
@@ -229,45 +239,31 @@ const dobInfo = dob
             }}
           />
 
-          {/* SEARCH LIST */}
           {search && (
-            <div className="mt-2 border rounded-lg bg-white max-h-40 overflow-y-auto shadow">
-              {filteredUsers.length > 0 ? (
-                filteredUsers.map((user) => (
-                  <div
-                    key={user.value}
-                    onClick={() => {
-                      setSelectedUser(user.value);
-                      setSearch(user.label);
-                    }}
-                    className="px-3 py-2 hover:bg-slate-100 cursor-pointer text-sm"
-                  >
-                    {user.label} ({user.value})
-                  </div>
-                ))
-              ) : (
-                <div className="px-3 py-2 text-sm text-slate-400">
-                  No users found
+            <div className="mt-2 border rounded bg-white max-h-40 overflow-y-auto">
+              {filteredUsers.map((user) => (
+                <div
+                  key={user.value}
+                  onClick={() => {
+                    setSelectedUser(user.value);
+                    setSearch(user.label);
+                  }}
+                  className="px-3 py-2 hover:bg-gray-100 cursor-pointer"
+                >
+                  {user.label} ({user.value})
                 </div>
-              )}
+              ))}
             </div>
           )}
         </FormField>
 
-        {/* USER PREVIEW */}
+        {/* USER */}
         {selectedUserData && (
-          <div className="bg-slate-50 p-4 rounded-xl flex gap-4">
-            {hasValidPhoto ? (
-              <img
-                src={selectedUserData.photoURL}
-                className="h-14 w-14 rounded-full"
-              />
-            ) : (
-              <div className="h-14 w-14 rounded-full bg-slate-200 flex items-center justify-center">
-                {getInitials(selectedUserData.label)}
-              </div>
-            )}
-
+          <div className="flex gap-3 items-center bg-gray-100 p-3 rounded">
+            <img
+              src={selectedUserData.photoURL || "/default.png"}
+              className="w-12 h-12 rounded-full"
+            />
             <div>
               <Text variant="h3">{selectedUserData.label}</Text>
               <Text variant="muted">{selectedUserData.value}</Text>
@@ -277,34 +273,41 @@ const dobInfo = dob
 
         {/* DOB */}
         <FormField label="Date of Birth">
-          <div className="bg-slate-100 px-3 py-2 rounded">
-            {dob || "No DOB"}
-          </div>
+          <div className="bg-gray-100 p-2 rounded">{dob || "No DOB"}</div>
         </FormField>
 
         {/* DOB INFO */}
-        {dobInfo && !isNaN(dobInfo.age) && (
-          <div className="flex items-center gap-2 text-slate-500">
+        {dobInfo && (
+          <div className="flex gap-2 text-gray-500">
             <Cake size={16} />
-            <Text variant="muted">
-              Turns <strong>{dobInfo.age}</strong> on {dobInfo.day}
-            </Text>
+            Turns {dobInfo.age} on {dobInfo.day}
           </div>
         )}
 
-        {/* IMAGE */}
-        <Input
-          type="file"
-          onChange={(e) => setImage(e.target.files?.[0])}
-        />
+        {/* FILE */}
+        <input type="file" accept="image/*" onChange={handleFileChange} />
 
-        {/* SAVE */}
+        {/* PREVIEW */}
+        {preview && (
+          <img
+            src={preview}
+            className="w-32 h-32 object-cover rounded border"
+          />
+        )}
+
+        {/* SAVE BUTTON (FIXED UX) */}
         <Button
           loading={saving}
           disabled={!selectedUser || !dob || existing}
           onClick={() => setShowConfirm(true)}
         >
-          Save
+          {!selectedUser
+            ? "Select user"
+            : !dob
+            ? "DOB missing"
+            : existing
+            ? "Already exists"
+            : "Save"}
         </Button>
       </Card>
 
