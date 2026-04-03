@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import jwt from "jsonwebtoken";
-import { adminDb } from "@/lib/firebase/firebaseAdmin";
+import {
+  adminDb,
+  getFirebaseAdminInitError,
+} from "@/lib/firebase/firebaseAdmin";
 import { serverEnv } from "@/lib/config/serverEnv";
 import {
   buildUserSessionResponse,
@@ -11,6 +14,18 @@ import {
 
 export async function GET(req) {
   try {
+    const firebaseAdminInitError = getFirebaseAdminInitError();
+
+    if (firebaseAdminInitError || !adminDb) {
+      return NextResponse.json(
+        {
+          message:
+            "Session validation is not configured. Missing or invalid Firebase Admin credentials.",
+        },
+        { status: 500 }
+      );
+    }
+
     const token = req.cookies.get("crm_token")?.value;
 
     if (!token) {
@@ -21,7 +36,7 @@ export async function GET(req) {
     const sessionRef = adminDb.collection("user_sessions").doc(decoded.sessionId);
     const sessionSnap = await sessionRef.get();
 
-    if (!sessionSnap.exists()) {
+    if (!sessionSnap.exists) {
       return NextResponse.json({ message: "Session not found" }, { status: 401 });
     }
 

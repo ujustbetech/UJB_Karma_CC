@@ -1,5 +1,8 @@
 import { NextResponse } from "next/server";
-import { adminDb } from "@/lib/firebase/firebaseAdmin";
+import {
+  adminDb,
+  getFirebaseAdminInitError,
+} from "@/lib/firebase/firebaseAdmin";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { v4 as uuidv4 } from "uuid";
@@ -11,6 +14,19 @@ import {
 
 export async function POST(req) {
   try {
+    const firebaseAdminInitError = getFirebaseAdminInitError();
+
+    if (firebaseAdminInitError || !adminDb) {
+      return NextResponse.json(
+        {
+          success: false,
+          message:
+            "Login is not configured. Missing or invalid Firebase Admin credentials.",
+        },
+        { status: 500 }
+      );
+    }
+
     const { phone, otp } = await req.json();
     const mobile = phone?.trim();
 
@@ -21,7 +37,7 @@ export async function POST(req) {
     const otpRef = adminDb.collection("otp_verifications").doc(mobile);
     const otpSnap = await otpRef.get();
 
-    if (!otpSnap.exists()) {
+    if (!otpSnap.exists) {
       return NextResponse.json({ success: false, message: "OTP not found" });
     }
 

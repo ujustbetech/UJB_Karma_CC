@@ -1,7 +1,6 @@
 "use client";
 
 import { createContext, useContext, useEffect, useState } from "react";
-import { ADMIN_COOKIE_NAME } from "@/lib/auth/accessControl";
 
 const AdminSessionContext = createContext(null);
 
@@ -43,14 +42,6 @@ export function AdminSessionProvider({ children }) {
   };
 
   useEffect(() => {
-    const hasSessionCookie = document.cookie.includes(`${ADMIN_COOKIE_NAME}=`);
-
-    if (!hasSessionCookie) {
-      setAdmin(null);
-      setLoading(false);
-      return;
-    }
-
     refreshSession();
   }, []);
 

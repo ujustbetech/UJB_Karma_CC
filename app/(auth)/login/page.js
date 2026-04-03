@@ -3,6 +3,7 @@
 import { forum } from "@/app/fonts";
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
+import { useAuth } from "@/context/authContext";
 import {
   Phone,
   ShieldCheck,
@@ -13,12 +14,14 @@ import Card from "@/components/user-ui/Card";
 
 export default function LoginPage() {
   const router = useRouter();
+  const { refreshSession } = useAuth();
 
   const [phone, setPhone] = useState("");
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [countdown, setCountdown] = useState(0);
+  const [isVerifying, setIsVerifying] = useState(false);
 
   const [otp, setOtp] = useState(["", "", "", ""]);
   const inputsRef = useRef([]);
@@ -129,8 +132,9 @@ const res = await fetch("/api/session/validate", {
   const verifyOTP = async (enteredOtp) => {
     const finalOtp = enteredOtp || otp.join("");
 
-    if (finalOtp.length !== 4) return;
+    if (finalOtp.length !== 4 || isVerifying) return;
 
+    setIsVerifying(true);
     setLoading(true);
     setError("");
 
@@ -145,16 +149,17 @@ const res = await fetch("/api/session/validate", {
 
       if (!data.success) {
         setError(data.message);
-        setLoading(false);
         return;
       }
 
-    router.replace("/user");
+      await refreshSession();
+      router.replace("/user");
     } catch (err) {
       setError("Verification failed");
+    } finally {
+      setLoading(false);
+      setIsVerifying(false);
     }
-
-    setLoading(false);
   };
 
   return (
@@ -253,7 +258,7 @@ const res = await fetch("/api/session/validate", {
 
               <button
                 onClick={() => verifyOTP()}
-                disabled={loading}
+                disabled={loading || isVerifying}
                 className="w-full py-4 rounded-xl bg-orange-500 hover:bg-orange-600 disabled:opacity-50 transition font-semibold text-white uppercase tracking-wider shadow-lg shadow-orange-500/40"
               >
                 {loading ? "VERIFYING..." : "VERIFY & LOGIN"}

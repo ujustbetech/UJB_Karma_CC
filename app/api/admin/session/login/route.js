@@ -1,5 +1,9 @@
 import { NextResponse } from "next/server";
-import { adminAuth, adminDb } from "@/lib/firebase/firebaseAdmin";
+import {
+  adminAuth,
+  adminDb,
+  getFirebaseAdminInitError,
+} from "@/lib/firebase/firebaseAdmin";
 import { hasAdminAccess } from "@/lib/auth/accessControl";
 import {
   buildAdminSessionPayload,
@@ -12,6 +16,19 @@ import {
 
 export async function POST(req) {
   try {
+    const firebaseAdminInitError = getFirebaseAdminInitError();
+
+    if (firebaseAdminInitError || !adminAuth || !adminDb) {
+      return NextResponse.json(
+        {
+          success: false,
+          message:
+            "Admin login is not configured. Missing or invalid Firebase Admin credentials.",
+        },
+        { status: 500 }
+      );
+    }
+
     const { idToken } = await req.json();
 
     if (!idToken) {
@@ -50,7 +67,7 @@ export async function POST(req) {
 
     return NextResponse.json(
       { success: false, message: "Admin login failed" },
-      { status: 401 }
+      { status: 500 }
     );
   }
 }

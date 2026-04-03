@@ -2,7 +2,6 @@
 
 import { createContext, useContext, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { USER_COOKIE_NAME } from "@/lib/auth/accessControl";
 
 const AuthContext = createContext();
 
@@ -34,14 +33,6 @@ export function AuthProvider({ children }) {
   };
 
   useEffect(() => {
-    const hasSessionCookie = document.cookie.includes(`${USER_COOKIE_NAME}=`);
-
-    if (!hasSessionCookie) {
-      setUser(null);
-      setLoading(false);
-      return;
-    }
-
     refreshSession();
   }, []);
 
