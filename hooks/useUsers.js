@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { collection, getDocs } from "firebase/firestore";
-import { db } from "../firebaseConfig";
-import { COLLECTIONS } from "/utility_collection";
+import { db } from "@/lib/firebase/firebaseClient";
+import { COLLECTIONS } from "@/lib/utility_collection";
 
 export default function useUsers() {
   const [users, setUsers] = useState([]);
@@ -14,10 +14,10 @@ export default function useUsers() {
       try {
         const snap = await getDocs(collection(db, COLLECTIONS.userDetail));
 
-        const list = snap.docs.map(doc => ({
-          ujbCode: doc.id,
-          name: doc.data()["Name"] || "",
-          phone: doc.data().MobileNo || "",
+        const list = snap.docs.map((docSnap) => ({
+          ujbCode: docSnap.id,
+          name: docSnap.data().Name || "",
+          phone: docSnap.data().MobileNo || "",
         }));
 
         setUsers(list);

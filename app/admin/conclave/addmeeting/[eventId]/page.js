@@ -1,190 +1,325 @@
 "use client";
 
-import { useParams, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
-import { doc, getDoc } from "firebase/firestore";
-import { db } from "@/firebaseConfig";
+import {
+  addDoc,
+  collection,
+  getDocs,
+  getDoc,
+  doc,
+  Timestamp,
+  setDoc,
+  updateDoc,
+  query,
+  where,
+} from "firebase/firestore";
+
+import { db } from "@/lib/firebase/firebaseClient";
 import { COLLECTIONS } from "@/lib/utility_collection";
+import ReactSelect from "react-select";
 
 import Card from "@/components/ui/Card";
-import Text from "@/components/ui/Text";
 import Button from "@/components/ui/Button";
-import EventInfoSkeleton from "@/components/skeleton/EventInfoSkeleton";
+import Input from "@/components/ui/Input";
+import Textarea from "@/components/ui/Textarea";
+import FormField from "@/components/ui/FormField";
+import { useToast } from "@/components/ui/ToastProvider";
 
-import KnowledgeSharingSection from "@/components/admin/conclave/sections/KnowledgeSharingSection";
-import ParticipantSection from "@/components/admin/conclave/sections/ParticipantSection";
-import RequirementSection from "@/components/admin/conclave/sections/RequirementSection";
-import ProspectSection from "@/components/admin/conclave/sections/ProspectSection";
-import ReferralSection from "@/components/admin/conclave/sections/ReferralSection";
-import DocumentUploadSection from "@/components/admin/conclave/sections/DocumentUploadSection";
-import RegisteredUsersSection from "@/components/admin/conclave/sections/RegisteredUsersSection";
-import MeetingDetailsSection from "@/components/admin/conclave/sections/MeetingDetailsSection";
+export default function CreateConclavePage() {
+  const toast = useToast();
 
-import {
-  Info,
-  Brain,
-  Users,
-  ClipboardList,
-  Target,
-  Network,
-  FileText,
-} from "lucide-react";
+  const [users, setUsers] = useState([]);
+  const [loading, setLoading] = useState(false);
 
-export default function ConclaveMeetingDetailsPage() {
+  const [form, setForm] = useState({
+    conclaveStream: "",
+    startDate: null,
+    initiationDate: null,
+    leader: "",
+    ntMembers: [],
+    orbiters: [],
+    leaderRole: "",
+    ntRoles: "",
+  });
 
-  const params = useParams();
-  const searchParams = useSearchParams();
+  const [tempNt, setTempNt] = useState("");
+  const [tempOrbiter, setTempOrbiter] = useState("");
+  const [errors, setErrors] = useState({});
 
-  const meetingId = params?.eventId;
-  const conclaveId = searchParams.get("conclaveId");
+  useEffect(() => {
+    const fetchUsers = async () => {
+      const snap = await getDocs(collection(db, COLLECTIONS.userDetail));
+      const list = snap.docs.map((doc) => ({
+        label: doc.data()["Name"],
+        value: doc.id,
+      }));
+      setUsers(list);
+    };
+    fetchUsers();
+  }, []);
 
-  const [data, setData] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [activeSection, setActiveSection] = useState("details");
-  const [savingAll, setSavingAll] = useState(false);
+  const handleChange = (name, value) => {
+    setForm((prev) => ({ ...prev, [name]: value }));
+    setErrors((prev) => ({ ...prev, [name]: "" }));
+  };
 
-  const fetchData = async () => {
-    if (!conclaveId || !meetingId) return;
+  const addToList = (field, value) => {
+    if (!value) return;
+    setForm((prev) => ({
+      ...prev,
+      [field]: prev[field].includes(value)
+        ? prev[field]
+        : [...prev[field], value],
+    }));
+  };
 
+  const convertDatetimeLocalToTimestamp = (value) => {
+    if (!value) return null;
+    const [datePart, timePart] = value.split("T");
+    const [year, month, day] = datePart.split("-").map(Number);
+    let hours = 0;
+    let minutes = 0;
+
+    if (timePart) {
+      [hours, minutes] = timePart.split(":").map(Number);
+    }
+
+    const localDate = new Date(year, month - 1, day, hours, minutes);
+    return Timestamp.fromDate(localDate);
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
     setLoading(true);
 
     try {
-      const ref = doc(
-        db,
-        COLLECTIONS.conclaves,
-        conclaveId,
-        "meetings",
-        meetingId
-      );
+      const startTS = convertDatetimeLocalToTimestamp(form.startDate);
+      const initTS = convertDatetimeLocalToTimestamp(form.initiationDate);
 
-      const snap = await getDoc(ref);
-      setData(snap.exists() ? snap.data() : {});
+      if (!startTS || !initTS) {
+        toast.error("Please select valid Date & Time");
+        setLoading(false);
+        return;
+      }
+
+      let finalForm = {
+        ...form,
+        startDate: startTS,
+        initiationDate: initTS,
+      };
+
+      const convertToPhones = async (ids) => {
+        const phones = [];
+        for (const id of ids) {
+          const ref = doc(db, COLLECTIONS.userDetail, id);
+          const snap = await getDoc(ref);
+          if (snap.exists()) phones.push(snap.data().MobileNo);
+        }
+        return phones;
+      };
+
+      if (form.leader) {
+        const ref = doc(db, COLLECTIONS.userDetail, form.leader);
+        const snap = await getDoc(ref);
+        if (snap.exists()) {
+          finalForm.leader = snap.data().MobileNo;
+        }
+      }
+
+      finalForm.ntMembers = await convertToPhones(form.ntMembers);
+      finalForm.orbiters = await convertToPhones(form.orbiters);
+
+      await addDoc(collection(db, COLLECTIONS.conclaves), {
+        ...finalForm,
+        createdAt: Timestamp.now(),
+      });
+
+      toast.success("Conclave created successfully");
     } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
+      console.log(err);
+      toast.error("Failed to create conclave");
     }
-  };
 
-  useEffect(() => {
-    fetchData();
-  }, [meetingId, conclaveId]);
-
-  const handleSaveAll = async () => {
-    setSavingAll(true);
-    await fetchData();
-    setSavingAll(false);
-  };
-
-  const menuItems = [
-    { id: "details", label: "Meeting Details", icon: Info },
-    { id: "knowledge", label: "Knowledge Sharing", icon: Brain },
-    { id: "participants", label: "121 Interaction", icon: Users },
-    { id: "requirements", label: "Requirements", icon: ClipboardList },
-    { id: "prospects", label: "Prospects", icon: Target },
-    { id: "referrals", label: "Referrals", icon: Network },
-    { id: "documents", label: "Upload Agenda", icon: FileText },
-    { id: "registered", label: "Registered Users", icon: Users },
-  ];
-
-  const renderSection = () => {
-    switch (activeSection) {
-      case "details":
-        return <MeetingDetailsSection conclaveId={conclaveId} meetingId={meetingId} data={data} fetchData={fetchData} />;
-      case "knowledge":
-        return <KnowledgeSharingSection conclaveId={conclaveId} meetingId={meetingId} data={data} fetchData={fetchData} />;
-      case "participants":
-        return <ParticipantSection conclaveId={conclaveId} meetingId={meetingId} data={data} fetchData={fetchData} />;
-      case "requirements":
-        return <RequirementSection conclaveId={conclaveId} meetingId={meetingId} data={data} fetchData={fetchData} />;
-      case "prospects":
-        return <ProspectSection conclaveId={conclaveId} meetingId={meetingId} data={data} fetchData={fetchData} />;
-      case "referrals":
-        return <ReferralSection conclaveId={conclaveId} meetingId={meetingId} data={data} fetchData={fetchData} />;
-      case "documents":
-        return <DocumentUploadSection conclaveId={conclaveId} meetingId={meetingId} data={data} fetchData={fetchData} />;
-      case "registered":
-        return <RegisteredUsersSection conclaveId={conclaveId} meetingId={meetingId} data={data} />;
-    }
+    setLoading(false);
   };
 
   return (
-    <div className="grid grid-cols-[260px_1fr_300px] gap-6 min-h-screen pb-32">
+    <Card>
+      <form onSubmit={handleSubmit} className="space-y-6 pt-6">
+        <FormField label="Conclave Name & Stream" required>
+          <Input
+            value={form.conclaveStream}
+            onChange={(e) =>
+              handleChange("conclaveStream", e.target.value)
+            }
+          />
+        </FormField>
 
-      {/* LEFT SIDEBAR */}
-      <Card className="px-3 py-4 h-fit sticky top-4 bg-[#f3f4f6] border-0 shadow-none rounded-2xl">
-        <Text variant="h3" className="mb-4">Meeting Profile</Text>
-
-        <div className="space-y-1">
-          {menuItems.map((item) => {
-            const Icon = item.icon;
-            const isActive = activeSection === item.id;
-
-            return (
-              <div
-                key={item.id}
-                onClick={() => setActiveSection(item.id)}
-                className={`
-                  relative flex items-center gap-3 px-3 py-2 rounded-lg text-sm cursor-pointer transition-all
-                  ${isActive ? "bg-gray-200 text-slate-900 font-medium" : "text-slate-600 hover:bg-gray-100"}
-                `}
-              >
-                {isActive && (
-                  <div className="absolute left-0 top-1 bottom-1 w-1 bg-slate-800 rounded-r" />
-                )}
-                <Icon size={16} />
-                {item.label}
-              </div>
-            );
-          })}
+        <div>
+          <label className="block mb-1 text-sm font-medium">
+            Start Date *
+          </label>
+          <input
+            type="datetime-local"
+            className="w-full border rounded p-2"
+            value={form.startDate || ""}
+            onChange={(e) =>
+              handleChange("startDate", e.target.value)
+            }
+          />
         </div>
-      </Card>
 
-      {/* CENTER */}
-      <div className="space-y-6">
+        <div>
+          <label className="block mb-1 text-sm font-medium">
+            Initiation Date *
+          </label>
+          <input
+            type="datetime-local"
+            className="w-full border rounded p-2"
+            value={form.initiationDate || ""}
+            onChange={(e) =>
+              handleChange("initiationDate", e.target.value)
+            }
+          />
+        </div>
 
-        <Card className="flex items-center justify-between">
-          <div>
-            <Text variant="h1">Conclave Meeting Details</Text>
-            <Text variant="muted">Conclave ID: {conclaveId}</Text>
-          </div>
+        {/* Leader */}
+        <FormField label="Leader" required>
+          <ReactSelect
+            options={users}
+            value={users.find((u) => u.value === form.leader) || null}
+            onChange={(selected) =>
+              handleChange("leader", selected?.value)
+            }
+          />
+        </FormField>
 
-          <Button onClick={handleSaveAll}>
-            {savingAll ? "Saving..." : "Save All Changes"}
-          </Button>
-        </Card>
+        {/* NT MEMBERS */}
+        <FormField label="NT Members" required>
+          <>
+            <ReactSelect
+              options={users}
+              value={users.find((u) => u.value === tempNt) || null}
+              onChange={(selected) =>
+                setTempNt(selected?.value)
+              }
+            />
 
-        <Card>
-          {loading ? (
-            <EventInfoSkeleton />
-          ) : (
-            renderSection()
-          )}
-        </Card>
-
-      </div>
-
-      {/* RIGHT SUMMARY PANEL */}
-      <div className="space-y-4">
-        <Card>
-          <Text variant="muted">Meeting Summary</Text>
-        </Card>
-      </div>
-
-      {/* STICKY SAVE BAR */}
-      <div className="fixed bottom-0 left-0 right-0 z-40">
-        <div className="max-w-[1400px] mx-auto px-6 pb-4">
-          <Card className="flex items-center justify-between px-4 py-3 shadow-lg border">
-            <Text className="text-sm text-slate-600">
-              Don’t forget to save your changes
-            </Text>
-            <Button onClick={handleSaveAll}>
-              {savingAll ? "Saving..." : "Save All Changes"}
+            <Button
+              type="button"
+              onClick={() => {
+                addToList("ntMembers", tempNt);
+                setTempNt("");
+              }}
+            >
+              Add NT Member
             </Button>
-          </Card>
-        </div>
-      </div>
 
-    </div>
+            <div className="flex flex-wrap gap-2 mt-2">
+              {form.ntMembers.map((id) => {
+                const user = users.find((u) => u.value === id);
+                return (
+                  <div
+                    key={id}
+                    className="px-3 py-1 bg-blue-100 rounded-full text-sm flex items-center gap-2"
+                  >
+                    {user?.label}
+                    <span
+                      className="cursor-pointer text-red-500"
+                      onClick={() =>
+                        setForm((prev) => ({
+                          ...prev,
+                          ntMembers: prev.ntMembers.filter(
+                            (m) => m !== id
+                          ),
+                        }))
+                      }
+                    >
+                      ✕
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </>
+        </FormField>
+
+        {/* ORBITERS */}
+        <FormField label="Orbiters" required>
+          <>
+            <ReactSelect
+              options={users}
+              value={
+                users.find((u) => u.value === tempOrbiter) || null
+              }
+              onChange={(selected) =>
+                setTempOrbiter(selected?.value)
+              }
+            />
+
+            <Button
+              type="button"
+              onClick={() => {
+                addToList("orbiters", tempOrbiter);
+                setTempOrbiter("");
+              }}
+            >
+              Add Orbiter
+            </Button>
+
+            <div className="flex flex-wrap gap-2 mt-2">
+              {form.orbiters.map((id) => {
+                const user = users.find((u) => u.value === id);
+                return (
+                  <div
+                    key={id}
+                    className="px-3 py-1 bg-green-100 rounded-full text-sm flex items-center gap-2"
+                  >
+                    {user?.label}
+                    <span
+                      className="cursor-pointer text-red-500"
+                      onClick={() =>
+                        setForm((prev) => ({
+                          ...prev,
+                          orbiters: prev.orbiters.filter(
+                            (m) => m !== id
+                          ),
+                        }))
+                      }
+                    >
+                      ✕
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </>
+        </FormField>
+
+        <FormField label="Leader Role" required>
+          <Textarea
+            value={form.leaderRole}
+            onChange={(e) =>
+              handleChange("leaderRole", e.target.value)
+            }
+          />
+        </FormField>
+
+        <FormField label="NT Roles" required>
+          <Textarea
+            value={form.ntRoles}
+            onChange={(e) =>
+              handleChange("ntRoles", e.target.value)
+            }
+          />
+        </FormField>
+
+        <div className="flex justify-end pt-6 border-t">
+          <Button type="submit" disabled={loading}>
+            {loading ? "Creating..." : "Create Conclave"}
+          </Button>
+        </div>
+      </form>
+    </Card>
   );
 }

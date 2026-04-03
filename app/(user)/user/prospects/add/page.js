@@ -8,7 +8,7 @@ import {
   collection,
   serverTimestamp,
 } from "firebase/firestore";
-import { db } from "@/firebaseConfig";
+import { db } from "@/lib/firebase/firebaseClient";
 import { useAuth } from "@/context/authContext";
 import { COLLECTIONS } from "@/lib/utility_collection";
 

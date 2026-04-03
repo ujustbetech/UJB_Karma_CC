@@ -6,11 +6,11 @@ import { doc, updateDoc, getDoc,collection,
   setDoc,
   addDoc,
   serverTimestamp, } from "firebase/firestore";
-import { db } from "@/firebaseConfig";
+import { db } from "@/lib/firebase/firebaseClient";
 import emailjs from "@emailjs/browser";
 import { COLLECTIONS } from "@/lib/utility_collection";
-import axios from "axios";
 import Swal from "sweetalert2";
+import { sendWhatsAppTextRequest } from "@/utils/whatsappClient";
 
 
 const KnowledgeSeries4 = ({ id, fetchData }) => {
@@ -18,11 +18,6 @@ const KnowledgeSeries4 = ({ id, fetchData }) => {
   const [activeTab, setActiveTab] = useState("morning");
   const [morningData, setMorningData] = useState(null);
   const [eveningData, setEveningData] = useState(null);
-
-  const WHATSAPP_API_URL =
-    "https://graph.facebook.com/v22.0/527476310441806/messages";
-  const WHATSAPP_API_TOKEN =
-    "Bearer EAAHwbR1fvgsBOwUInBvR1SGmVLSZCpDZAkn9aZCDJYaT0h5cwyiLyIq7BnKmXAgNs0ZCC8C33UzhGWTlwhUarfbcVoBdkc1bhuxZBXvroCHiXNwZCZBVxXlZBdinVoVnTB7IC1OYS4lhNEQprXm5l0XZAICVYISvkfwTEju6kV4Aqzt4lPpN8D3FD7eIWXDhnA4SG6QZDZD";
 
   // 🔹 Load saved data
   useEffect(() => {
@@ -180,19 +175,10 @@ const addCpForKnowledgeSeriesMorning = async (
     const content = getContent(tab);
     const bodyText = `Hi ${prospectName},\n\n${content.subject}\n\n${content.body}\n\nRegards,\n${orbiterName}`;
 
-    const payload = {
-      messaging_product: "whatsapp",
-      to: `91${phone}`,
-      type: "text",
-      text: { body: bodyText },
-    };
-
     try {
-      await axios.post(WHATSAPP_API_URL, payload, {
-        headers: {
-          Authorization: WHATSAPP_API_TOKEN,
-          "Content-Type": "application/json",
-        },
+      await sendWhatsAppTextRequest({
+        phone,
+        text: bodyText,
       });
       console.log(`✅ WhatsApp ${tab} Knowledge Series sent to ${prospectName}`);
       return true;
@@ -399,3 +385,4 @@ const addCpForKnowledgeSeriesMorning = async (
 };
 
 export default KnowledgeSeries4;
+

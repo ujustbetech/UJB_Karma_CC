@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { X } from "lucide-react";
 import { doc, updateDoc } from "firebase/firestore";
-import { db } from "@/firebaseConfig";
+import { db } from "@/lib/firebase/firebaseClient";
 import { COLLECTIONS } from "@/lib/utility_collection";
 
 export default function EditAboutSheet({

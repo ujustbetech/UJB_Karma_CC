@@ -2,38 +2,24 @@
 
 import { Search, Plus } from "lucide-react";
 import { usePageMeta } from "@/hooks/usePageMeta";
-import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Swal from "sweetalert2";
+import { useAdminSession } from "@/hooks/useAdminSession";
 
 export default function Topbar() {
   const { title } = usePageMeta();
   const router = useRouter();
+  const { admin: currentUser, loading, logout } = useAdminSession();
 
-  const [currentUser, setCurrentUser] = useState(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    const data = sessionStorage.getItem("AdminData");
-
-    if (data) {
-      const parsed = JSON.parse(data);
-      setCurrentUser(parsed);
-    }
-
-    setLoading(false);
-  }, []);
-
-  const getName = () => {
-    return currentUser?.name || "";
-  };
+  const getName = () => currentUser?.name || "";
 
   const getInitials = (name) => {
     if (!name) return "U";
+
     return name
       .trim()
       .split(" ")
-      .map((w) => w[0])
+      .map((word) => word[0])
       .join("")
       .toUpperCase()
       .slice(0, 2);
@@ -54,21 +40,21 @@ export default function Topbar() {
       confirmButtonText: "Yes, Logout",
     });
 
-    if (result.isConfirmed) {
-      // ✅ Clear session
-      sessionStorage.removeItem("AdminData");
-
-      await Swal.fire({
-        title: "Logged out!",
-        text: "You have been successfully logged out.",
-        icon: "success",
-        timer: 1500,
-        showConfirmButton: false,
-      });
-
-      // ✅ Redirect to login page
-      router.replace("/");
+    if (!result.isConfirmed) {
+      return;
     }
+
+    await logout();
+
+    await Swal.fire({
+      title: "Logged out!",
+      text: "You have been successfully logged out.",
+      icon: "success",
+      timer: 1500,
+      showConfirmButton: false,
+    });
+
+    router.replace("/");
   };
 
   const userName = getName();
@@ -76,7 +62,6 @@ export default function Topbar() {
   return (
     <header className="sticky top-0 z-30 h-16 bg-gray-200 shadow-sm">
       <div className="flex items-center h-16 px-6">
-        
         <h1 className="text-3xl font-bold tracking-tight text-slate-800">
           {title}
         </h1>
@@ -84,13 +69,10 @@ export default function Topbar() {
         <div className="flex-1" />
 
         <div className="flex items-center gap-3">
-          
-          {/* Add Button */}
           <button className="flex h-10 w-10 items-center justify-center rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-100">
             <Plus className="h-4 w-4" />
           </button>
 
-          {/* Search */}
           <div className="relative">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
             <input
@@ -100,19 +82,18 @@ export default function Topbar() {
             />
           </div>
 
-          {/* ✅ PROFILE CLICKABLE */}
           <div title="Logout" onClick={handleLogout} className="cursor-pointer">
             {loading ? (
-              <div className="h-10 w-10 rounded-full bg-gray-300 animate-pulse" />
+              <div className="h-10 w-10 animate-pulse rounded-full bg-gray-300" />
             ) : currentUser?.photo ? (
               <img
                 src={currentUser.photo}
                 alt="profile"
-                className="h-10 w-10 rounded-full object-cover border border-slate-300 hover:opacity-80 transition"
+                className="h-10 w-10 rounded-full border border-slate-300 object-cover transition hover:opacity-80"
               />
             ) : (
               <div
-                className={`h-10 w-10 rounded-full flex items-center justify-center text-white font-semibold hover:opacity-80 transition ${getRoleColor(
+                className={`flex h-10 w-10 items-center justify-center rounded-full text-white font-semibold transition hover:opacity-80 ${getRoleColor(
                   currentUser?.role
                 )}`}
               >
@@ -120,7 +101,6 @@ export default function Topbar() {
               </div>
             )}
           </div>
-
         </div>
       </div>
     </header>

@@ -2,7 +2,7 @@
 
 import jsPDF from "jspdf";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
-import { storage } from "@/firebaseConfig";
+import { storage } from "@/lib/firebase/firebaseClient";
 
 /* ================= AGREEMENT TEXTS ================= */
 

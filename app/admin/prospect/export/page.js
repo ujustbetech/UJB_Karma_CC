@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { db } from '@/firebaseConfig';
+import { db } from '@/lib/firebase/firebaseClient';
 import { collection, getDocs } from 'firebase/firestore';
 import * as XLSX from 'xlsx';
 
@@ -122,3 +122,4 @@ const ExportProspects = () => {
 };
 
 export default ExportProspects;
+

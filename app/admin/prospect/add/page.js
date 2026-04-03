@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { db } from "@/firebaseConfig";
+import { db } from "@/lib/firebase/firebaseClient";
 
 import {
   collection,
@@ -26,7 +26,7 @@ import FormField from "@/components/ui/FormField";
 
 import Swal from "sweetalert2";
 import emailjs from "@emailjs/browser";
-import axios from "axios";
+import { sendWhatsAppTemplateRequest } from "@/utils/whatsappClient";
 
 export default function Register() {
 
@@ -51,12 +51,6 @@ export default function Register() {
   const [userSearch, setUserSearch] = useState("");
   const [filteredUsers, setFilteredUsers] = useState([]);
   const [selectedOrbiter, setSelectedOrbiter] = useState(null);
-
-  const WHATSAPP_API_URL =
-    "https://graph.facebook.com/v22.0/527476310441806/messages";
-
-  const WHATSAPP_API_TOKEN =
-    "Bearer EAAHwbR1fvgsBOwUInBvR1SGmVLSZCpDZAkn9aZCDJYaT0h5cwyiLyIq7BnKmXAgNs0ZCC8C33UzhGWTlwhUarfbcVoBdkc1bhuxZBXvroCHiXNwZCZBVxXlZBdinVoVnTB7IC1OYS4lhNEQprXm5l0XZAICVYISvkfwTEju6kV4Aqzt4lPpN8D3FD7eIWXDhnA4SG6QZDZD";
 
   /* ---------------------------------- */
   /* FETCH USERS */
@@ -175,33 +169,11 @@ UJustBe Team
     phone,
     formLink
   ) => {
-
-    const payload = {
-      messaging_product: "whatsapp",
-      to: `91${phone}`,
-      type: "template",
-      template: {
-        name: "mentorbiter_assesment_form",
-        language: { code: "en" },
-        components: [
-          {
-            type: "body",
-            parameters: [
-              { type: "text", text: orbiterName },
-              { type: "text", text: prospectName },
-              { type: "text", text: formLink },
-            ],
-          },
-        ],
-      },
-    };
-
     try {
-      await axios.post(WHATSAPP_API_URL, payload, {
-        headers: {
-          Authorization: WHATSAPP_API_TOKEN,
-          "Content-Type": "application/json",
-        },
+      await sendWhatsAppTemplateRequest({
+        phone,
+        templateName: "mentorbiter_assesment_form",
+        parameters: [orbiterName, prospectName, formLink],
       });
     } catch (error) {
       console.error("WhatsApp error:", error);
@@ -456,3 +428,4 @@ UJustBe Team
     </>
   );
 }
+

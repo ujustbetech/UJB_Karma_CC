@@ -1,4 +1,5 @@
 import "./globals.css";
+import "@/lib/config/bootstrap";
 import { ToastProvider } from "@/components/ui/ToastProvider";
 import { AuthProvider } from "@/context/authContext";
 import { mukta } from "./fonts";

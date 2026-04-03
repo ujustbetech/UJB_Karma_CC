@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { collection, onSnapshot } from 'firebase/firestore';
-import { db } from '@/firebaseConfig';
+import { db } from '@/lib/firebase/firebaseClient';
 import { COLLECTIONS } from '@/lib/utility_collection';
 
 import Card from '@/components/ui/Card';
@@ -224,3 +224,4 @@ function KPI({title,value,icon:Icon}){
     </Card>
   )
 }
+

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { collection, getDocs } from 'firebase/firestore';
-import { db } from '@/firebaseConfig';
+import { db } from '@/lib/firebase/firebaseClient';
 
 import Card from '@/components/ui/Card';
 import Text from '@/components/ui/Text';
@@ -297,3 +297,4 @@ function BarChartView({ data }) {
     </ResponsiveContainer>
   );
 }
+

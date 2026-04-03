@@ -1,7 +1,7 @@
 import axios from "axios";
-import { db } from "@/firebaseConfig";
-import { doc, getDoc } from "firebase/firestore";
+import { adminDb } from "@/lib/firebase/firebaseAdmin";
 import { COLLECTIONS } from "@/lib/utility_collection";
+import { serverEnv } from "@/lib/config/serverEnv";
 
 /* ----------- SANITIZE TEXT FOR WHATSAPP ----------- */
 
@@ -25,8 +25,7 @@ export async function POST(req) {
 
     const templateName = "daily_reminder";
 
-    const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID;
-    const accessToken = process.env.WHATSAPP_ACCESS_TOKEN;
+    const { phoneNumberId, accessToken } = serverEnv.whatsapp;
 
     let phoneNumber = user.phone.replace(/\D/g, "");
     const originalPhone = phoneNumber;
@@ -84,8 +83,10 @@ export async function POST(req) {
 
     /* ---------------- FETCH MENTOR ---------------- */
 
-    const mentorRef = doc(db, COLLECTIONS.userDetail, originalPhone);
-    const mentorSnap = await getDoc(mentorRef);
+    const mentorSnap = await adminDb
+      .collection(COLLECTIONS.userDetail)
+      .doc(originalPhone)
+      .get();
 
     if (mentorSnap.exists()) {
       const mentorData = mentorSnap.data();

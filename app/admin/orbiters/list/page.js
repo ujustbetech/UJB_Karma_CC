@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
-import { db } from "@/firebaseConfig";
+import { db } from "@/lib/firebase/firebaseClient";
 import { collection, getDocs, deleteDoc, doc } from "firebase/firestore";
 import { COLLECTIONS } from "@/lib/utility_collection";
 import * as XLSX from "xlsx";
@@ -355,3 +355,4 @@ export default function OrbitersListingPage() {
         </>
     );
 }
+

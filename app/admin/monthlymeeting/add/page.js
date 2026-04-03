@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { addDoc, collection, Timestamp } from "firebase/firestore";
-import { db } from "@/firebaseConfig";
+import { db } from "@/lib/firebase/firebaseClient";
 import { COLLECTIONS } from "@/lib/utility_collection";
 
 import { CalendarPlus } from "lucide-react";
@@ -132,3 +132,4 @@ export default function AddEventPage() {
     </div>
   );
 }
+

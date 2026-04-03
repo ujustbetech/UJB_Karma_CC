@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { db, storage } from '@/firebaseConfig';
+import { db, storage } from '@/lib/firebase/firebaseClient';
 import {
   ref,
   uploadBytesResumable,
@@ -348,3 +348,4 @@ export default function DocumentUploadSection({ eventID, fetchData }) {
     </Card>
   );
 }
+

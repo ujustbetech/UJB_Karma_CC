@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, forwardRef, useImperativeHandle } from 'react';
 import { collection, getDocs, doc, updateDoc } from 'firebase/firestore';
-import { db, storage } from '@/firebaseConfig';
+import { db, storage } from '@/lib/firebase/firebaseClient';
 import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { COLLECTIONS } from '@/lib/utility_collection';
 
@@ -446,3 +446,4 @@ const E2ASection = forwardRef(function E2ASection({ eventId, data, fetchData }, 
 });
 
 export default E2ASection;
+

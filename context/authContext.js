@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { USER_COOKIE_NAME } from "@/lib/auth/accessControl";
 
 const AuthContext = createContext();
 
@@ -10,30 +11,40 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
   const router = useRouter();
 
-  useEffect(() => {
-    const validate = async () => {
-      try {
-        const res = await fetch("/api/session/validate", {
-          credentials: "include",
-        });
+  const refreshSession = async () => {
+    try {
+      const res = await fetch("/api/session/validate", {
+        credentials: "include",
+      });
 
-        if (res.ok) {
-          const data = await res.json();
-          setUser(data);
-        } else {
-          setUser(null);
-        }
-      } catch (err) {
-        setUser(null);
-      } finally {
-        setLoading(false);
+      if (res.ok) {
+        const data = await res.json();
+        setUser(data);
+        return data;
       }
-    };
 
-    validate();
+      setUser(null);
+      return null;
+    } catch {
+      setUser(null);
+      return null;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    const hasSessionCookie = document.cookie.includes(`${USER_COOKIE_NAME}=`);
+
+    if (!hasSessionCookie) {
+      setUser(null);
+      setLoading(false);
+      return;
+    }
+
+    refreshSession();
   }, []);
 
-  // ✅ ADD LOGOUT FUNCTION
   const logout = async () => {
     try {
       await fetch("/api/session/logout", {
@@ -42,16 +53,14 @@ export function AuthProvider({ children }) {
       });
 
       setUser(null);
-
-      // Optional redirect after logout
-    router.replace("/login");
+      router.replace("/login");
     } catch (error) {
       console.error("Logout failed:", error);
     }
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, logout }}>
+    <AuthContext.Provider value={{ user, loading, logout, refreshSession }}>
       {children}
     </AuthContext.Provider>
   );

@@ -17,7 +17,7 @@ import {
 
 import { Users, Trash2 } from 'lucide-react';
 
-import { db } from '@/firebaseConfig';
+import { db } from '@/lib/firebase/firebaseClient';
 import { COLLECTIONS } from '@/lib/utility_collection';
 
 import Card from '@/components/ui/Card';
@@ -463,3 +463,4 @@ const ParticipantSection = forwardRef(function ParticipantSection(
 });
 
 export default ParticipantSection;
+

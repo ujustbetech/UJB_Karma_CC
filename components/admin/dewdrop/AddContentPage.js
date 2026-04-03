@@ -15,9 +15,10 @@ import TagsInput from "@/components/ui/TagsInput";
 import { useToast } from "@/components/ui/ToastProvider";
 import FilePreview from "@/components/ui/FilePreview";
 import { COLLECTIONS } from "@/lib/utility_collection";
+import { useAdminSession } from "@/hooks/useAdminSession";
 import { Eye, User, Layers, Tag, Upload, Rocket, AlignLeft, Shapes, Type, Hash, FileText, Folder, Users, Video, Link } from "lucide-react";
 
-import { db, storage } from "@/firebaseConfig";
+import { db, storage } from "@/lib/firebase/firebaseClient";
 import {
     collection,
     addDoc,
@@ -34,6 +35,7 @@ import {
 
 export default function AddContentPage() {
     const toast = useToast(); // object-style API
+    const { admin } = useAdminSession();
 
     const firstFieldRef = useRef(null);
 const [imageItems, setImageItems] = useState([]);
@@ -331,10 +333,8 @@ const handleMainFile = (file) => {
             setContentFileUrls(prev => [...prev, ...contentUploads]);
             setThumbnailUrls(prev => [...prev, ...thumbUploads]);
 
-            const adminDetails = JSON.parse(localStorage.getItem("AdminData") || "{}");
-
             await addDoc(collection(db, "ContentData"), {
-                AdminName: adminDetails?.currentuser || "",
+                AdminName: admin?.name || "",
                 Thumbnail: thumbUploads,
                 contentFileImages: contentUploads,
                 contentFormat,
@@ -375,10 +375,8 @@ const handleMainFile = (file) => {
         setLoading(true);
 
         try {
-            const adminDetails = JSON.parse(localStorage.getItem("AdminData") || "{}");
-
             await addDoc(collection(db, "ContentData"), {
-                AdminName: adminDetails?.currentuser || "",
+                AdminName: admin?.name || "",
                 Thumbnail: [],
                 contentFileImages: [],
                 contentFormat,
@@ -425,10 +423,8 @@ const handleMainFile = (file) => {
             const contentUploads = await uploadFiles(contentFiles);
             const thumbUploads = await uploadFiles(thumbnailFiles);
 
-            const adminDetails = JSON.parse(localStorage.getItem("AdminData") || "{}");
-
             await addDoc(collection(db, "ContentData"), {
-                AdminName: adminDetails?.currentuser || "",
+                AdminName: admin?.name || "",
                 Thumbnail: thumbUploads,
                 contentFileImages: contentUploads,
                 contentFormat,
@@ -1173,3 +1169,4 @@ lpProfile: ownershipType === "Partner" ? lpProfile : "",
         </>
     );
 }
+

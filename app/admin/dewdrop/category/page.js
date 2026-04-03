@@ -16,7 +16,7 @@ import {
     getDocs
 } from 'firebase/firestore';
 
-import { auth, db } from '@/firebaseConfig';
+import { auth, db } from '@/lib/firebase/firebaseClient';
 
 import Card from '@/components/ui/Card';
 import Text from '@/components/ui/Text';
@@ -408,3 +408,4 @@ export default function ContentCategoryPage() {
         </>
     );
 }
+

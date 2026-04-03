@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { db, storage } from '@/firebaseConfig';
+import { db, storage } from '@/lib/firebase/firebaseClient';
 import {
   ref,
   uploadBytesResumable,
@@ -403,3 +403,4 @@ export default function ImageUploadSection({ eventID, fetchData }) {
     </div>
   );
 }
+

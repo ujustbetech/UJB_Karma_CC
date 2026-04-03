@@ -17,7 +17,7 @@ import {
   startAfter,
   getDocs,
 } from "firebase/firestore";
-import { app } from "@/firebaseConfig";
+import { app } from "@/lib/firebase/firebaseClient";
 import Link from "next/link";
 import {
   MapPin,

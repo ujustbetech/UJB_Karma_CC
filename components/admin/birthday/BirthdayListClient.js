@@ -10,7 +10,7 @@ import {
 
 import Swal from "sweetalert2";
 
-import { db } from "@/firebaseConfig";
+import { db } from "@/lib/firebase/firebaseClient";
 import { COLLECTIONS } from "@/lib/utility_collection";
 
 import Card from "@/components/ui/Card";

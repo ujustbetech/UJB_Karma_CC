@@ -1,7 +1,13 @@
 import { NextResponse } from "next/server";
 import jwt from "jsonwebtoken";
-import { db } from "@/firebaseConfig";
-import { doc, getDoc, updateDoc } from "firebase/firestore";
+import { adminDb } from "@/lib/firebase/firebaseAdmin";
+import { serverEnv } from "@/lib/config/serverEnv";
+import {
+  buildUserSessionResponse,
+  shouldRefreshUserSession,
+  USER_SESSION_MAX_AGE_MS,
+  validateUserSessionRecord,
+} from "@/lib/auth/userSessionWorkflow.mjs";
 
 export async function GET(req) {
   try {
@@ -11,39 +17,28 @@ export async function GET(req) {
       return NextResponse.json({ message: "No token" }, { status: 401 });
     }
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-
-    const sessionRef = doc(db, "user_sessions", decoded.sessionId);
-    const sessionSnap = await getDoc(sessionRef);
+    const decoded = jwt.verify(token, serverEnv.jwtSecret);
+    const sessionRef = adminDb.collection("user_sessions").doc(decoded.sessionId);
+    const sessionSnap = await sessionRef.get();
 
     if (!sessionSnap.exists()) {
       return NextResponse.json({ message: "Session not found" }, { status: 401 });
     }
 
     const session = sessionSnap.data();
+    const validation = validateUserSessionRecord(session, Date.now());
 
-    if (session.revoked || Date.now() > session.expiry) {
+    if (!validation.ok) {
       return NextResponse.json({ message: "Session invalid" }, { status: 401 });
     }
 
-    // Sliding refresh
-    const sevenDays = 1000 * 60 * 60 * 24 * 7;
-    if (session.expiry - Date.now() < sevenDays) {
-      await updateDoc(sessionRef, {
-        expiry: Date.now() + 1000 * 60 * 60 * 24 * 180,
+    if (shouldRefreshUserSession(session, Date.now())) {
+      await sessionRef.update({
+        expiry: Date.now() + USER_SESSION_MAX_AGE_MS,
       });
     }
 
-    return NextResponse.json({
-      phone: session.phone,
-      role: "user",
-      profile: {
-        ujbCode: session.ujbCode,
-        name: session.name,
-        type: session.type,
-      },
-    });
-
+    return NextResponse.json(buildUserSessionResponse(session));
   } catch {
     return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
   }

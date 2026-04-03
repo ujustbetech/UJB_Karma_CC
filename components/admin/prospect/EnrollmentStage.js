@@ -9,11 +9,11 @@ import {  doc,
   where,
   addDoc,
   serverTimestamp,} from 'firebase/firestore';
-import { db } from '@/firebaseConfig';
+import { db } from '@/lib/firebase/firebaseClient';
 import { COLLECTIONS } from "@/lib/utility_collection";
 import emailjs from '@emailjs/browser';
-import axios from 'axios';
 import Swal from 'sweetalert2';
+import { sendWhatsAppTemplateRequest } from '@/utils/whatsappClient';
 
 const dropdownOptions = {
   'Enrollment Initiation': ['In Progress', 'Completed', 'Not Started'],
@@ -22,8 +22,6 @@ const dropdownOptions = {
   'Enrollment fees Option Opted for': ['Upfront', 'Adjustment', 'No Response Adjustment' , 'Upfront Enrollment fees Confirmation'],
   'Enrollments Completion Status': ['Completed', 'Pending', 'Withdrawn']
 };
-const WHATSAPP_API_URL = 'https://graph.facebook.com/v22.0/527476310441806/messages';
-const WHATSAPP_API_TOKEN = 'Bearer EAAHwbR1fvgsBOwUInBvR1SGmVLSZCpDZAkn9aZCDJYaT0h5cwyiLyIq7BnKmXAgNs0ZCC8C33UzhGWTlwhUarfbcVoBdkc1bhuxZBXvroCHiXNwZCZBVxXlZBdinVoVnTB7IC1OYS4lhNEQprXm5l0XZAICVYISvkfwTEju6kV4Aqzt4lPpN8D3FD7eIWXDhnA4SG6QZDZD';
 const EnrollmentStage = ({ id, fetchData }) => {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -123,32 +121,14 @@ const addCpForEnrollmentFeeUpfront = async (
   };
   
   const sendAssesmentMessage = async (orbiterName, prospectName, bodyText, phone) => {
-    const payload = {
-      messaging_product: 'whatsapp',
-      to: `91${phone}`,
-      type: 'template',
-      template: {
-        name: 'enrollment_journey',
-        language: { code: 'en' },
-        components: [
-          {
-            type: 'body',
-            parameters: [
-          
-              { type: 'text', text: sanitizeText(bodyText) },
-              { type: 'text', text: sanitizeText(orbiterName) }
-            ]
-          }
-        ]
-      }
-    };
-  
     try {
-      await axios.post(WHATSAPP_API_URL, payload, {
-        headers: {
-          Authorization: WHATSAPP_API_TOKEN,
-          'Content-Type': 'application/json',
-        },
+      await sendWhatsAppTemplateRequest({
+        phone,
+        templateName: 'enrollment_journey',
+        parameters: [
+          sanitizeText(bodyText),
+          sanitizeText(orbiterName),
+        ],
       });
       console.log(`✅ WhatsApp message sent to ${prospectName}`);
     } catch (error) {
@@ -959,3 +939,4 @@ Thank you for considering UJustBe, and we hope to reconnect in the future! `;
 };
 
 export default EnrollmentStage;
+

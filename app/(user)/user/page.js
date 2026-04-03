@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 import { doc, getDoc, updateDoc } from "firebase/firestore";
-import { db } from "@/firebaseConfig";
+import { db } from "@/lib/firebase/firebaseClient";
 import { COLLECTIONS } from "@/lib/utility_collection";
 import Swal from "sweetalert2";
 
@@ -17,13 +17,14 @@ import TopOrbitersLeaderboard from "@/components/home/TopOrbitersLeaderboard";
 import NetworkOverview from "@/components/home/NetworkOverview";
 import RecentReferrals from "@/components/home/RecentReferrals";
 
-/* ================= PDF FUNCTION ================= */
-import { generateAgreementPDF } from "@/utils/generateAgreementPDF"; 
-// 👆 move your big PDF function into utils/generateAgreementPDF.js
+import { generateAgreementPDF } from "@/utils/generateAgreementPDF";
+import {
+  buildAgreementAcceptanceUpdate,
+  getAgreementTitle,
+  shouldPromptAgreement,
+} from "@/lib/agreements/agreementWorkflow.mjs";
 
 export default function HomePage() {
-
-  /* ================= AGREEMENT CHECK ================= */
   useEffect(() => {
     const checkAgreement = async () => {
       const ujbCode = localStorage.getItem("mmUJBCode");
@@ -37,14 +38,10 @@ export default function HomePage() {
 
         const data = userSnap.data();
 
-        // Already accepted → exit
-        if (data.agreementAccepted === true) return;
+        if (!shouldPromptAgreement(data)) return;
 
         const result = await Swal.fire({
-          title:
-            data.Category === "CosmOrbiter"
-              ? "Listed Partner Agreement"
-              : "Partner Agreement",
+          title: getAgreementTitle(data.Category),
           html: `
             <div style="text-align:left; max-height:250px; overflow:auto;">
               <p>• You have read and understood the agreement</p>
@@ -59,17 +56,11 @@ export default function HomePage() {
         });
 
         if (result.isConfirmed) {
-
-          const name =
-            data.Name ||
-            data.BusinessName ||
-            "User";
-
-          const address = data.Address || "—";
-          const city = data.City || "—";
+          const name = data.Name || data.BusinessName || "User";
+          const address = data.Address || "-";
+          const city = data.City || "-";
           const category = data.Category;
 
-          // ✅ Generate + Upload PDF
           const pdfUrl = await generateAgreementPDF({
             name,
             address,
@@ -77,16 +68,14 @@ export default function HomePage() {
             category,
           });
 
-          // ✅ Save in Firestore
-          await updateDoc(userRef, {
-            agreementAccepted: true,
-            agreementAcceptedAt: new Date(),
-            agreementType:
-              category === "CosmOrbiter"
-                ? "LISTED_PARTNER"
-                : "PARTNER",
-            agreementPdfUrl: pdfUrl,
-          });
+          await updateDoc(
+            userRef,
+            buildAgreementAcceptanceUpdate({
+              category,
+              pdfUrl,
+              acceptedAt: new Date(),
+            })
+          );
 
           Swal.fire(
             "Agreement Accepted",
@@ -94,7 +83,6 @@ export default function HomePage() {
             "success"
           );
         }
-
       } catch (err) {
         console.error("Agreement error:", err);
         Swal.fire(
@@ -110,27 +98,16 @@ export default function HomePage() {
 
   return (
     <div className="space-y-6 pb-28">
-
       <NetworkOverview />
-
       <HeroReferralCTA />
-
       <EventEnrollmentCard />
-
       <RecentReferrals />
-
       <RecommendedServices />
-
       <DewdropLearningSection />
-
       <PerformanceSnapshot />
-
       <NetworkActivity />
-
       <NewlyAddedSection />
-
       <TopOrbitersLeaderboard />
-
     </div>
   );
 }

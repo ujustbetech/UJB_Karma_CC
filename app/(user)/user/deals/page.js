@@ -10,7 +10,7 @@ import {
   addDoc,
 } from "firebase/firestore";
 
-import { app } from "@/firebaseConfig";
+import { app } from "@/lib/firebase/firebaseClient";
 import toast from "react-hot-toast";
 import { COLLECTIONS } from "@/lib/utility_collection";
 import { Search } from "lucide-react";

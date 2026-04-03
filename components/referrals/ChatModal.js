@@ -12,7 +12,7 @@ import {
     onSnapshot,
     serverTimestamp
 } from "firebase/firestore";
-import { db } from "@/firebaseConfig";
+import { db } from "@/lib/firebase/firebaseClient";
 
 export default function ChatModal({
     referralId,

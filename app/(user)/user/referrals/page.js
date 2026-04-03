@@ -13,7 +13,7 @@ import {
     arrayUnion,
     onSnapshot,
 } from "firebase/firestore";
-import { app } from "@/firebaseConfig";
+import { app } from "@/lib/firebase/firebaseClient";
 import Link from "next/link";
 // import HeaderNav from "../component/HeaderNav";
 // import Swal from "sweetalert2";
@@ -38,6 +38,7 @@ import {
 } from "lucide-react";
 
 import { SlidersHorizontal } from "lucide-react";
+import { sendWhatsAppTemplateRequest } from "@/utils/whatsappClient";
 
 const db = getFirestore(app);
 
@@ -123,45 +124,11 @@ const statusOptions = [
 // WhatsApp sending
 const sendWhatsAppTemplate = async (phone, name, message) => {
     if (!message || !phone) return;
-
-    const formatted = String(phone).replace(/\D/g, ""); // clean phone
-
-
-
-    const payload = {
-        messaging_product: "whatsapp",
-        to: formatted,
-        type: "template",
-        template: {
-            name: "referral_module", // must match WhatsApp template name
-            language: { code: "en" },
-            components: [
-                {
-                    type: "body",
-                    parameters: [
-                        { type: "text", text: name },
-                        { type: "text", text: message },
-                    ],
-                },
-            ],
-        },
-    };
-
-    const res = await fetch(
-        "https://graph.facebook.com/v19.0/527476310441806/messages",
-        {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-                Authorization:
-                    "Bearer EAAHwbR1fvgsBOwUInBvR1SGmVLSZCpDZAkn9aZCDJYaT0h5cwyiLyIq7BnKmXAgNs0ZCC8C33UzhGWTlwhUarfbcVoBdkc1bhuxZBXvroCHiXNwZCZBVxXlZBdinVoVnTB7IC1OYS4lhNEQprXm5l0XZAICVYISvkfwTEju6kV4Aqzt4lPpN8D3FD7eIWXDhnA4SG6QZDZD", // move to env in real app
-            },
-            body: JSON.stringify(payload),
-        }
-    );
-
-    const result = await res.json();
-    console.log("WhatsApp API Response:", result);
+    await sendWhatsAppTemplateRequest({
+        phone,
+        templateName: "referral_module",
+        parameters: [name, message],
+    });
 };
 
 const UserReferrals = () => {
@@ -1027,3 +994,4 @@ const UserReferrals = () => {
 };
 
 export default UserReferrals;
+

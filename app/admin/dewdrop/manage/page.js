@@ -1,9 +1,5 @@
 "use client";
-import { useEffect, useMemo, useState } from "react";
-import { db } from "@/firebaseConfig";
-import { collection, getDocs, deleteDoc, doc } from "firebase/firestore";
 
-import Text from "@/components/ui/Text";
 import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
 import ActionButton from "@/components/ui/ActionButton";
@@ -20,24 +16,33 @@ import { useToast } from "@/components/ui/ToastProvider";
 import { Pencil, Trash2, Copy } from "lucide-react";
 import * as XLSX from "xlsx";
 import Select from "@/components/ui/Select";
+import { useContentListing } from "@/hooks/useContentListing";
 
 export default function ContentListingPage() {
 
     const toast = useToast();
-
-    const [content, setContent] = useState([]);
-    const [loading, setLoading] = useState(true);
-
-    const [search, setSearch] = useState("");
-    const [partnerFilter, setPartnerFilter] = useState("");
-    const [typeFilter, setTypeFilter] = useState("");
-    const [statusFilter, setStatusFilter] = useState("");
-
-    const [page, setPage] = useState(1);
-    const perPage = 10;
-
-    const [deleteOpen, setDeleteOpen] = useState(false);
-    const [contentToDelete, setContentToDelete] = useState(null);
+    const {
+        confirmDelete,
+        contentToDelete,
+        deleteOpen,
+        filtered,
+        loading,
+        openDelete,
+        page,
+        paginated,
+        partnerFilter,
+        perPage,
+        resetFilters,
+        search,
+        setDeleteOpen,
+        setPage,
+        setPartnerFilter,
+        setSearch,
+        setStatusFilter,
+        setTypeFilter,
+        statusFilter,
+        typeFilter,
+    } = useContentListing(toast);
 
     const columns = [
         { key: "sr", label: "Sr no" },
@@ -57,70 +62,6 @@ export default function ContentListingPage() {
         { label: "Active", value: "active" },
         { label: "Inactive", value: "inactive" },
     ];
-    const fetchContent = async () => {
-        setLoading(true);
-        try {
-            const snap = await getDocs(collection(db, "ContentData"));
-
-            const list = snap.docs.map((d) => {
-                const data = d.data();
-                return {
-                    id: d.id,
-                    partner: data.partnerNamelp || "",
-                    partnerType: data.partnerDesig || "",
-                    name: data.contentName || "",
-                    format: data.contentFormat || "",
-                    type: data.contentType || "",
-                    views: data.totalViews || 0,
-                    likes: data.totallike || 0,
-                    status: data.switchValue ? "active" : "inactive",
-                };
-            });
-
-            setContent(list);
-        } catch {
-            toast.error("Failed to fetch content");
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    useEffect(() => {
-        fetchContent();
-    }, []);
-
-    /* ---------------- ADVANCED FILTER ---------------- */
-    const filtered = useMemo(() => {
-        return content.filter((c) => {
-            const nameMatch = (c.name || "")
-                .toLowerCase()
-                .includes(search.toLowerCase());
-
-            const partnerMatch = partnerFilter
-                ? c.partnerType.toLowerCase().includes(partnerFilter.toLowerCase())
-                : true;
-
-            const typeMatch = typeFilter
-                ? c.type.toLowerCase().includes(typeFilter.toLowerCase())
-                : true;
-
-            const statusMatch = statusFilter
-                ? c.status === statusFilter
-                : true;
-
-            return nameMatch && partnerMatch && typeMatch && statusMatch;
-        });
-    }, [content, search, partnerFilter, typeFilter, statusFilter]);
-
-    const paginated = filtered.slice(
-        (page - 1) * perPage,
-        page * perPage
-    );
-
-    useEffect(() => {
-        setPage(1);
-    }, [search, partnerFilter, typeFilter, statusFilter]);
-
     /* ---------------- EXPORT CSV ---------------- */
     const exportCSV = () => {
         if (!filtered.length) return toast.error("No data");
@@ -181,25 +122,6 @@ export default function ContentListingPage() {
 
         XLSX.writeFile(wb, "content_export.xlsx");
         toast.success("Excel Exported");
-    };
-
-    const resetFilters = () => {
-        setSearch("");
-        setPartnerFilter("");
-        setTypeFilter("");
-        setStatusFilter("");
-    };
-
-    const openDelete = (item) => {
-        setContentToDelete(item);
-        setDeleteOpen(true);
-    };
-
-    const confirmDelete = async () => {
-        await deleteDoc(doc(db, "ContentData", contentToDelete.id));
-        toast.success("Content deleted");
-        setDeleteOpen(false);
-        fetchContent();
     };
 
     const copyContentLink = (id) => {
@@ -359,3 +281,4 @@ export default function ContentListingPage() {
         </>
     );
 }
+

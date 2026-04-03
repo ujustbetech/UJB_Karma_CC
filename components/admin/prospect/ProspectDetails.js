@@ -11,7 +11,7 @@ import {
 } from "firebase/firestore";
 
 import Swal from "sweetalert2";
-import { db } from "@/firebaseConfig";
+import { db } from "@/lib/firebase/firebaseClient";
 import { COLLECTIONS } from "@/lib/utility_collection";
 
 import Text from "@/components/ui/Text";

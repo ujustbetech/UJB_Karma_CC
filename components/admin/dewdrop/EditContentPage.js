@@ -16,10 +16,11 @@ import { useToast } from "@/components/ui/ToastProvider";
 import FilePreview from "@/components/ui/FilePreview";
 import { useParams, useRouter } from "next/navigation";
 import { updateDoc } from "firebase/firestore";
+import { useAdminSession } from "@/hooks/useAdminSession";
 
 import { Eye, User, Layers, Tag, Upload, Rocket, AlignLeft, Shapes, Type, Hash, FileText, Folder, Users, Video, Link } from "lucide-react";
 
-import { db, storage } from "@/firebaseConfig";
+import { db, storage } from "@/lib/firebase/firebaseClient";
 import {
     collection,
     addDoc,
@@ -36,6 +37,7 @@ import {
 
 export default function EditContentPage({ id }) {
     const toast = useToast(); // object-style API
+    const { admin } = useAdminSession();
 
     const firstFieldRef = useRef(null);
 
@@ -355,10 +357,8 @@ export default function EditContentPage({ id }) {
         setLoading(true);
 
         try {
-            const adminDetails = JSON.parse(localStorage.getItem("AdminData") || "{}");
-
             await addDoc(collection(db, "ContentData"), {
-                AdminName: adminDetails?.currentuser || "",
+                AdminName: admin?.name || "",
                 Thumbnail: [],
                 contentFileImages: [],
                 contentFormat,
@@ -405,10 +405,8 @@ export default function EditContentPage({ id }) {
             const contentUploads = await uploadFiles(contentFiles);
             const thumbUploads = await uploadFiles(thumbnailFiles);
 
-            const adminDetails = JSON.parse(localStorage.getItem("AdminData") || "{}");
-
             await addDoc(collection(db, "ContentData"), {
-                AdminName: adminDetails?.currentuser || "",
+                AdminName: admin?.name || "",
                 Thumbnail: thumbUploads,
                 contentFileImages: contentUploads,
                 contentFormat,
@@ -1171,3 +1169,4 @@ export default function EditContentPage({ id }) {
         </>
     );
 }
+

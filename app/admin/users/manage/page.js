@@ -9,7 +9,7 @@ import {
   updateDoc,
 } from "firebase/firestore";
 
-import { db } from "@/firebaseConfig";
+import { db } from "@/lib/firebase/firebaseClient";
 
 import Card from "@/components/ui/Card";
 import Text from "@/components/ui/Text";
@@ -19,6 +19,7 @@ import ActionButton from "@/components/ui/ActionButton";
 import ConfirmModal from "@/components/ui/ConfirmModal";
 import { useToast } from "@/components/ui/ToastProvider";
 import Select from "@/components/ui/Select";
+import { useAdminSession } from "@/hooks/useAdminSession";
 
 import Table from "@/components/table/Table";
 import TableHeader from "@/components/table/TableHeader";
@@ -39,23 +40,12 @@ export default function ManageAdminsPage() {
   const [deleteId, setDeleteId] = useState(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
 
-  const [currentAdmin, setCurrentAdmin] = useState(null);
-
   const toast = useToast();
+  const { admin: currentAdmin } = useAdminSession();
 
   /* ================= GET LOGGED IN ADMIN ================= */
-  useEffect(() => {
-    const admin = JSON.parse(sessionStorage.getItem("AdminData"));
-    setCurrentAdmin(admin);
-  }, []);
-
  const isSuper =
   currentAdmin?.role?.trim().toLowerCase() === "super";
-useEffect(() => {
-  const admin = JSON.parse(sessionStorage.getItem("AdminData"));
-  console.log("Logged Admin:", admin);
-  setCurrentAdmin(admin);
-}, []);
   /* ================= FETCH ================= */
   useEffect(() => {
     const fetchAdmins = async () => {
@@ -399,3 +389,4 @@ useEffect(() => {
     </div>
   );
 }
+

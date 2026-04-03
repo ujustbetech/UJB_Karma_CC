@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { X, Plus, Trash2, FileText } from "lucide-react";
 import { doc, updateDoc } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
-import { db, storage } from "@/firebaseConfig";
+import { db, storage } from "@/lib/firebase/firebaseClient";
 import { COLLECTIONS } from "@/lib/utility_collection";
 
 export default function EditAchievementSheet({

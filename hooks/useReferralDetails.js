@@ -9,7 +9,7 @@ import {
   arrayUnion,
 } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
-import { db, storage } from "@/firebaseConfig";
+import { db, storage } from "@/lib/firebase/firebaseClient";
 import { COLLECTIONS } from "@/lib/utility_collection";
 
 export default function useReferralDetails(id) {

@@ -14,7 +14,7 @@ import {
   where,
 } from "firebase/firestore";
 
-import { db } from "@/firebaseConfig";
+import { db } from "@/lib/firebase/firebaseClient";
 import { COLLECTIONS } from "@/lib/utility_collection";
 import ReactSelect from "react-select";
 

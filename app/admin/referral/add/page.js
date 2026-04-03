@@ -16,7 +16,7 @@ import {
     serverTimestamp,
 } from 'firebase/firestore';
 
-import { db } from '@/firebaseConfig';
+import { db } from '@/lib/firebase/firebaseClient';
 import { COLLECTIONS } from '@/lib/utility_collection';
 
 import AdminLayout from '@/components/layout/AdminLayout';
@@ -30,6 +30,7 @@ import FormField from '@/components/ui/FormField';
 import { useToast } from '@/components/ui/ToastProvider';
 
 import { UserPlus, Users, Briefcase, Settings } from 'lucide-react';
+import { sendWhatsAppTemplateRequest } from '@/utils/whatsappClient';
 
 export default function AddReferralPage() {
     const toast = useToast();
@@ -348,35 +349,10 @@ export default function AddReferralPage() {
 
     // ================== WHATSAPP TEMPLATE (UNCHANGED) ==================
     const sendWhatsAppTemplate = async (phone, name, message) => {
-        const formatted = String(phone || "").replace(/\s+/g, "");
-
-        const payload = {
-            messaging_product: "whatsapp",
-            to: formatted,
-            type: "template",
-            template: {
-                name: "referral_module",
-                language: { code: "en" },
-                components: [
-                    {
-                        type: "body",
-                        parameters: [
-                            { type: "text", text: name },
-                            { type: "text", text: message },
-                        ],
-                    },
-                ],
-            },
-        };
-
-        await fetch("https://graph.facebook.com/v19.0/527476310441806/messages", {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-                Authorization:
-                    "Bearer EAAHwbR1fvgsBOwUInBvR1SGmVLSZCpDZAkn9aZCDJYaT0h5cwyiLyIq7BnKmXAgNs0ZCC8C33UzhGWTlwhUarfbcVoBdkc1bhuxZBXvroCHiXNwZCZBVxXlZBdinVoVnTB7IC1OYS4lhNEQprXm5l0XZAICVYISvkfwTEju6kV4Aqzt4lPpN8D3FD7eIWXDhnA4SG6QZDZD",
-            },
-            body: JSON.stringify(payload),
+        await sendWhatsAppTemplateRequest({
+            phone,
+            templateName: "referral_module",
+            parameters: [name, message],
         });
     };
 
@@ -986,3 +962,4 @@ firstFieldRef.current?.focus(); // focus back to first field
         </>
     );
 }
+

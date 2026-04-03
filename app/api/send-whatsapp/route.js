@@ -1,54 +1,49 @@
 import { NextResponse } from "next/server";
+import {
+  sendWhatsAppTemplate,
+  sendWhatsAppText,
+} from "@/lib/server/whatsapp";
 
 export async function POST(req) {
   try {
-    const { phone, name, message } = await req.json();
+    const {
+      phone,
+      name,
+      message,
+      templateName,
+      parameters,
+      text,
+    } = await req.json();
 
-    if (!phone || !message) {
+    if (!phone) {
       return NextResponse.json(
-        { error: "Missing phone or message" },
+        { error: "Missing phone number" },
         { status: 400 }
       );
     }
 
-    const formatted = String(phone).replace(/\D/g, "");
-
-    const payload = {
-      messaging_product: "whatsapp",
-      to: formatted,
-      type: "template",
-      template: {
-        name: "referral_module",
-        language: { code: "en" },
-        components: [
-          {
-            type: "body",
-            parameters: [
-              { type: "text", text: name || "User" },
-              { type: "text", text: message },
-            ],
-          },
-        ],
-      },
-    };
-
-    const res = await fetch(
-      `https://graph.facebook.com/v19.0/${process.env.WHATSAPP_PHONE_NUMBER_ID}/messages`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${process.env.WHATSAPP_ACCESS_TOKEN}`,
-        },
-        body: JSON.stringify(payload),
-      }
-    );
-
-    const data = await res.json();
-
-    if (!res.ok) {
-      return NextResponse.json(data, { status: 500 });
+    if (text) {
+      await sendWhatsAppText({ phone, text });
+      return NextResponse.json({ success: true });
     }
+
+    const finalParameters =
+      Array.isArray(parameters) && parameters.length
+        ? parameters
+        : [name || "User", message];
+
+    if (!finalParameters.every((value) => value != null && value !== "")) {
+      return NextResponse.json(
+        { error: "Missing WhatsApp template parameters" },
+        { status: 400 }
+      );
+    }
+
+    await sendWhatsAppTemplate({
+      phone,
+      templateName: templateName || "referral_module",
+      parameters: finalParameters,
+    });
 
     return NextResponse.json({ success: true });
 

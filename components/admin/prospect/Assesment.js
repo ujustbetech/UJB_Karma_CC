@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { doc, updateDoc, getDoc,query,collection,setDoc,where,getDocs,addDoc,serverTimestamp } from 'firebase/firestore';
-import { db } from '@/firebaseConfig';
+import { db } from '@/lib/firebase/firebaseClient';
 import emailjs from '@emailjs/browser';
 import { COLLECTIONS } from "@/lib/utility_collection";
-import axios from 'axios';
 import Swal from 'sweetalert2';
+import { sendWhatsAppTemplateRequest } from '@/utils/whatsappClient';
 
 const Assessment = ({ id, fetchData }) => {
   const [loading, setLoading] = useState(false);
@@ -12,9 +12,6 @@ const Assessment = ({ id, fetchData }) => {
   const [currentDate, setCurrentDate] = useState('');
   const [declineReason, setDeclineReason] = useState('');
 const isFrozen = loading || (status && status !== "No status yet");
-  const WHATSAPP_API_URL = 'https://graph.facebook.com/v22.0/527476310441806/messages';
-const WHATSAPP_API_TOKEN = 'Bearer EAAHwbR1fvgsBOwUInBvR1SGmVLSZCpDZAkn9aZCDJYaT0h5cwyiLyIq7BnKmXAgNs0ZCC8C33UzhGWTlwhUarfbcVoBdkc1bhuxZBXvroCHiXNwZCZBVxXlZBdinVoVnTB7IC1OYS4lhNEQprXm5l0XZAICVYISvkfwTEju6kV4Aqzt4lPpN8D3FD7eIWXDhnA4SG6QZDZD';
-
   // Fetch the status from Firestore
   useEffect(() => {
     const fetchStatus = async () => {
@@ -243,32 +240,14 @@ const sanitizeText = (text) => {
 };
 
 const sendAssesmentMessage = async (orbiterName, prospectName, bodyText, phone) => {
-  const payload = {
-    messaging_product: 'whatsapp',
-    to: `91${phone}`,
-    type: 'template',
-    template: {
-      name: 'enrollment_journey', // Make sure this is correct!
-      language: { code: 'en' },
-      components: [
-        {
-          type: 'body',
-          parameters: [
-      
-            { type: 'text', text: sanitizeText(bodyText) },
-            { type: 'text', text: sanitizeText(orbiterName) }
-          ]
-        }
-      ]
-    }
-  };
-
   try {
-    await axios.post(WHATSAPP_API_URL, payload, {
-      headers: {
-        Authorization: WHATSAPP_API_TOKEN,
-        'Content-Type': 'application/json',
-      },
+    await sendWhatsAppTemplateRequest({
+      phone,
+      templateName: 'enrollment_journey',
+      parameters: [
+        sanitizeText(bodyText),
+        sanitizeText(orbiterName),
+      ],
     });
     console.log(`✅ WhatsApp message sent to ${prospectName}`);
   } catch (error) {
@@ -527,3 +506,4 @@ disabled={isFrozen}
 };
 
 export default Assessment;
+

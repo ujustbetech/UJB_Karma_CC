@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { db } from "@/firebaseConfig";
+import { db } from "@/lib/firebase/firebaseClient";
 import { collection, getDocs } from "firebase/firestore";
 import { useRouter } from "next/navigation";
 import Slider from "react-slick";

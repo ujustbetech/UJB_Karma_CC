@@ -8,27 +8,15 @@ import {
   serverTimestamp,
 } from "firebase/firestore";
 
-import { db } from "@/firebaseConfig";
+import { db } from "@/lib/firebase/firebaseClient";
 import { COLLECTIONS } from "@/lib/utility_collection";
+import {
+  buildReferralId,
+  buildReferralNotifications,
+  buildReferralWritePayload,
+  normalizeReferralItem,
+} from "@/lib/referrals/referralWorkflow.mjs";
 
-/* ================= NORMALIZE AGREED VALUE ================= */
-function normalizeItem(item) {
-  if (!item) return null;
-
-  const it = JSON.parse(JSON.stringify(item));
-
-  if (!it.agreedValue && it.percentage != null) {
-    it.agreedValue = {
-      mode: "single",
-      single: { type: "percentage", value: String(it.percentage) },
-      multiple: { slabs: [], itemSlabs: [] },
-    };
-  }
-
-  return it;
-}
-
-/* ================= FETCH CANONICAL ITEM ================= */
 async function getCanonicalItem(cosmoUjbCode, selectedItem) {
   const cosmoRef = doc(db, COLLECTIONS.userDetail, cosmoUjbCode);
   const snap = await getDoc(cosmoRef);
@@ -52,13 +40,12 @@ async function getCanonicalItem(cosmoUjbCode, selectedItem) {
   const label = selectedItem.label;
 
   return (
-    rawServices.find((s) => (s.serviceName || s.name) === label) ||
-    rawProducts.find((p) => (p.productName || p.name) === label) ||
+    rawServices.find((service) => (service.serviceName || service.name) === label) ||
+    rawProducts.find((product) => (product.productName || product.name) === label) ||
     selectedItem.raw
   );
 }
 
-/* ================= MAIN FUNCTION ================= */
 export async function createReferral({
   selectedItem,
   leadDescription,
@@ -71,10 +58,7 @@ export async function createReferral({
 }) {
   if (!selectedItem) throw new Error("No item selected");
 
-  return await runTransaction(db, async (transaction) => {
-
-    /* ================= SAFE COUNTER ================= */
-
+  return runTransaction(db, async (transaction) => {
     const counterRef = doc(db, "counters", "referral");
     const counterSnap = await transaction.get(counterRef);
 
@@ -89,94 +73,44 @@ export async function createReferral({
       lastNumber: nextNumber,
     });
 
-    const now = new Date();
-    const year1 = now.getFullYear() % 100;
-    const year2 = (now.getFullYear() + 1) % 100;
-
-    const referralId =
-      `Ref/${year1}-${year2}/${String(nextNumber).padStart(8, "0")}`;
-
-    /* ================= ITEM LOGIC ================= */
-
-    const canonical = await getCanonicalItem(
-      cosmoDetails.ujbCode,
-      selectedItem
-    );
-
-    const finalItem = normalizeItem(canonical);
-
+    const referralId = buildReferralId(nextNumber, new Date());
+    const canonical = await getCanonicalItem(cosmoDetails.ujbCode, selectedItem);
+    const finalItem = normalizeReferralItem(canonical);
     const newReferralRef = doc(collection(db, COLLECTIONS.referral));
 
-    transaction.set(newReferralRef, {
-      referralId,
-      referralSource: "User",
-      referralType: selectedFor === "self" ? "Self" : "Others",
-      leadDescription,
-      dealStatus: "Pending",
-      lastUpdated: serverTimestamp(),
-      timestamp: serverTimestamp(),
-
-      cosmoUjbCode: cosmoDetails.ujbCode,
-
-      cosmoOrbiter: {
-        name: cosmoDetails.name,
-        email: cosmoDetails.email,
-        phone: cosmoDetails.phone,
-        ujbCode: cosmoDetails.ujbCode,
-        mentorName: cosmoDetails.mentorName || null,
-        mentorPhone: cosmoDetails.mentorPhone || null,
-      },
-
-      orbiter: {
-        name: orbiterDetails.name,
-        email: orbiterDetails.email,
-        phone: orbiterDetails.phone,
-        ujbCode: orbiterDetails.ujbCode,
-        mentorName: orbiterDetails.mentorName || null,
-        mentorPhone: orbiterDetails.mentorPhone || null,
-      },
-
-      referredForName: selectedFor === "someone" ? otherName : null,
-      referredForPhone: selectedFor === "someone" ? otherPhone : null,
-      referredForEmail: selectedFor === "someone" ? otherEmail : null,
-
-      service: selectedItem.type === "service" ? finalItem : null,
-      product: selectedItem.type === "product" ? finalItem : null,
-
-      dealLogs: [],
-      followups: [],
-      statusLogs: [],
-    });
-
-    /* ================= WHATSAPP ================= */
+    transaction.set(
+      newReferralRef,
+      buildReferralWritePayload({
+        referralId,
+        leadDescription,
+        selectedFor,
+        otherName,
+        otherPhone,
+        otherEmail,
+        selectedItem,
+        finalItem,
+        cosmoDetails,
+        orbiterDetails,
+        timestampValue: serverTimestamp(),
+      })
+    );
 
     try {
-      const itemLabel = selectedItem.label;
+      const notifications = buildReferralNotifications({
+        selectedItem,
+        orbiterDetails,
+        cosmoDetails,
+      });
 
-      await Promise.all([
-        fetch("/api/send-whatsapp", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            phone: orbiterDetails.phone,
-            parameters: [
-              orbiterDetails.name,
-              `🚀 You’ve successfully passed a referral for ${itemLabel}.`,
-            ],
-          }),
-        }),
-        fetch("/api/send-whatsapp", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            phone: cosmoDetails.phone,
-            parameters: [
-              cosmoDetails.name,
-              `✨ You’ve received a referral for ${itemLabel}.`,
-            ],
-          }),
-        }),
-      ]);
+      await Promise.all(
+        notifications.map((payload) =>
+          fetch("/api/send-whatsapp", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+          })
+        )
+      );
     } catch (err) {
       console.warn("WhatsApp failed:", err);
     }

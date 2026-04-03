@@ -13,7 +13,7 @@ import {
     startAfter,
 } from 'firebase/firestore';
 
-import { db } from '@/firebaseConfig';
+import { db } from '@/lib/firebase/firebaseClient';
 import { COLLECTIONS } from '@/lib/utility_collection';
 
 import AdminLayout from '@/components/layout/AdminLayout';
@@ -543,3 +543,4 @@ export default function ManageReferralsPage() {
         </>
     );
 }
+

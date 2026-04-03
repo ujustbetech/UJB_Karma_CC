@@ -8,7 +8,7 @@ import {
   useImperativeHandle
 } from 'react';
 import { collection, getDocs, doc, updateDoc } from 'firebase/firestore';
-import { db } from '@/firebaseConfig';
+import { db } from '@/lib/firebase/firebaseClient';
 import { COLLECTIONS } from '@/lib/utility_collection';
 
 import Card from '@/components/ui/Card';
@@ -382,3 +382,4 @@ const RequirementSection = forwardRef(function RequirementSection(
 });
 
 export default RequirementSection;
+

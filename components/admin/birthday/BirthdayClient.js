@@ -1,8 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { collection, getDocs, doc, updateDoc } from "firebase/firestore";
-import axios from "axios";
+import { useMemo } from "react";
 import {
   CalendarDays,
   CalendarClock,
@@ -13,21 +11,8 @@ import {
   User,
 } from "lucide-react";
 
-import { db } from "@/firebaseConfig";
-import { COLLECTIONS } from "@/lib/utility_collection";
-
-import AdminLayout from "@/components/layout/AdminLayout";
 import { useToast } from "@/components/ui/ToastProvider";
-
-/* ---------------- HELPERS ---------------- */
-
-const getFormattedDate = (offset = 0) => {
-  const d = new Date();
-  d.setDate(d.getDate() + offset);
-  return `${String(d.getDate()).padStart(2, "0")}/${String(
-    d.getMonth() + 1
-  ).padStart(2, "0")}`;
-};
+import { useBirthdayAdmin } from "@/hooks/useBirthdayAdmin";
 
 /* ---------------- SMALL UI PARTS ---------------- */
 
@@ -70,99 +55,16 @@ const Status = ({ sent, sending }) => {
 
 export default function BirthdayClient() {
   const toast = useToast();
+  const {
+    loading,
+    sendMessage,
+    sendingUserId,
+    sentMessages,
+    todayList,
+    tomorrowList,
+  } = useBirthdayAdmin(toast);
 
-  const [users, setUsers] = useState([]);
-  const [sentMessages, setSentMessages] = useState([]);
-  const [sendingUserId, setSendingUserId] = useState(null);
-  const [loading, setLoading] = useState(true);
-
-  const today = getFormattedDate(0);
-  const tomorrow = getFormattedDate(1);
-
-  /* ---------------- FETCH USERS ---------------- */
-
-  const fetchBirthdayUsers = async () => {
-    setLoading(true);
-
-    try {
-      const snapshot = await getDocs(
-        collection(db, COLLECTIONS.birthdayCanva)
-      );
-
-      const result = [];
-      const sentIds = [];
-
-      snapshot.forEach((docSnap) => {
-        const data = docSnap.data();
-        if (!data.dob) return;
-
-        const dobDate =
-          data.dob?.toDate ? data.dob.toDate() : new Date(data.dob);
-
-        const dayMonth = `${String(dobDate.getDate()).padStart(
-          2,
-          "0"
-        )}/${String(dobDate.getMonth() + 1).padStart(2, "0")}`;
-
-        if (dayMonth === today || dayMonth === tomorrow) {
-          const userData = {
-            id: docSnap.id,
-            ...data,
-            dayMonth,
-            birthdayMessageSent: data.birthdayMessageSent || false,
-          };
-
-          result.push(userData);
-
-          if (data.birthdayMessageSent) {
-            sentIds.push(docSnap.id);
-          }
-        }
-      });
-
-      setUsers(result);
-      setSentMessages(sentIds);
-    } catch (error) {
-      console.error(error);
-      toast.error("Failed to load birthday users");
-    }
-
-    setLoading(false);
-  };
-
-  useEffect(() => {
-    fetchBirthdayUsers();
-  }, []);
-
-  /* ---------------- SEND WHATSAPP ---------------- */
-
-  const sendWhatsAppMessage = async (user) => {
-    setSendingUserId(user.id);
-
-    try {
-      await axios.post("/api/send-birthday", { user });
-
-      /* STORE SENT STATUS IN FIRESTORE */
-      await updateDoc(doc(db, COLLECTIONS.birthdayCanva, user.id), {
-        birthdayMessageSent: true,
-        birthdayMessageSentDate: today,
-      });
-
-      setSentMessages((prev) => [...prev, user.id]);
-
-      toast.success(`WhatsApp sent to ${user.name}`);
-    } catch (error) {
-      console.error(error);
-      toast.error("Failed to send WhatsApp message");
-    } finally {
-      setSendingUserId(null);
-    }
-  };
-
-  /* ---------------- FILTERS ---------------- */
-
-  const todayList = users.filter((u) => u.dayMonth === today);
-  const tomorrowList = users.filter((u) => u.dayMonth === tomorrow);
+  const sentCount = useMemo(() => sentMessages.length, [sentMessages]);
 
   /* ---------------- ROW ---------------- */
 
@@ -194,7 +96,7 @@ export default function BirthdayClient() {
           <Status sent={isSent} sending={isSending} />
 
           <button
-            onClick={() => sendWhatsAppMessage(user)}
+            onClick={() => sendMessage(user)}
             disabled={isSent || isSending}
             className="p-2 rounded-md hover:bg-slate-100 disabled:opacity-40"
           >
@@ -263,7 +165,7 @@ export default function BirthdayClient() {
         <StatItem
           icon={CheckCircle}
           label="Sent"
-          value={sentMessages.length}
+          value={sentCount}
         />
       </div>
 

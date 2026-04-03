@@ -12,7 +12,7 @@ import {
   query,
   where,
 } from "firebase/firestore";
-import { app } from "@/firebaseConfig";
+import { app } from "@/lib/firebase/firebaseClient";
 import { COLLECTIONS } from "@/lib/utility_collection";
 
 import {

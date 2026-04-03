@@ -1,19 +1,13 @@
 import { NextResponse } from "next/server";
-import { db } from "@/firebaseConfig";
-import {
-  doc,
-  getDoc,
-  deleteDoc,
-  updateDoc,
-  setDoc,
-  collection,
-  query,
-  where,
-  getDocs,
-} from "firebase/firestore";
+import { adminDb } from "@/lib/firebase/firebaseAdmin";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { v4 as uuidv4 } from "uuid";
+import { serverEnv } from "@/lib/config/serverEnv";
+import {
+  buildUserSessionRecord,
+  getUserSessionCookieOptions,
+} from "@/lib/auth/userSessionWorkflow.mjs";
 
 export async function POST(req) {
   try {
@@ -24,9 +18,8 @@ export async function POST(req) {
       return NextResponse.json({ success: false, message: "Missing data" });
     }
 
-    // 🔐 OTP VALIDATION
-    const otpRef = doc(db, "otp_verifications", mobile);
-    const otpSnap = await getDoc(otpRef);
+    const otpRef = adminDb.collection("otp_verifications").doc(mobile);
+    const otpSnap = await otpRef.get();
 
     if (!otpSnap.exists()) {
       return NextResponse.json({ success: false, message: "OTP not found" });
@@ -35,7 +28,7 @@ export async function POST(req) {
     const data = otpSnap.data();
 
     if (Date.now() > data.expiry) {
-      await deleteDoc(otpRef);
+      await otpRef.delete();
       return NextResponse.json({ success: false, message: "OTP expired" });
     }
 
@@ -46,9 +39,9 @@ export async function POST(req) {
     const isMatch = await bcrypt.compare(otp, data.otp);
 
     if (!isMatch) {
-      await updateDoc(otpRef, { attempts: data.attempts + 1 });
+      await otpRef.update({ attempts: data.attempts + 1 });
 
-      await setDoc(doc(collection(db, "security_logs")), {
+      await adminDb.collection("security_logs").add({
         type: "FAILED_OTP",
         phone: mobile,
         time: Date.now(),
@@ -57,15 +50,12 @@ export async function POST(req) {
       return NextResponse.json({ success: false, message: "Incorrect OTP" });
     }
 
-    await deleteDoc(otpRef);
+    await otpRef.delete();
 
-    // 🔎 FETCH USER FROM usersdetail
-    const userQuery = query(
-      collection(db, "usersdetail"),
-      where("MobileNo", "==", mobile)
-    );
-
-    const userSnapshot = await getDocs(userQuery);
+    const userSnapshot = await adminDb
+      .collection("usersdetail")
+      .where("MobileNo", "==", mobile)
+      .get();
 
     if (userSnapshot.empty) {
       return NextResponse.json(
@@ -76,15 +66,13 @@ export async function POST(req) {
 
     const userDocSnap = userSnapshot.docs[0];
     const userData = userDocSnap.data();
-    const ujbCode = userDocSnap.id; // document ID = UJBCode
+    const ujbCode = userDocSnap.id;
 
-    // 🌍 IP DETECTION
     const ip =
       req.headers.get("x-forwarded-for")?.split(",")[0] ||
       req.headers.get("x-real-ip") ||
       "Unknown";
 
-    // 🌍 GEO LOOKUP
     let geo = {
       country: "Unknown",
       region: "Unknown",
@@ -110,7 +98,6 @@ export async function POST(req) {
       console.log("Geo lookup failed");
     }
 
-    // 📱 DEVICE DETECTION
     const userAgent = req.headers.get("user-agent") || "";
 
     const deviceInfo = {
@@ -119,7 +106,6 @@ export async function POST(req) {
         : /tablet/i.test(userAgent)
         ? "Tablet"
         : "Desktop",
-
       os: /android/i.test(userAgent)
         ? "Android"
         : /iphone|ipad|ipod/i.test(userAgent)
@@ -131,7 +117,6 @@ export async function POST(req) {
         : /linux/i.test(userAgent)
         ? "Linux"
         : "Unknown",
-
       browser: /chrome/i.test(userAgent)
         ? "Chrome"
         : /safari/i.test(userAgent) && !/chrome/i.test(userAgent)
@@ -143,32 +128,29 @@ export async function POST(req) {
         : "Unknown",
     };
 
-    // 🔒 DEVICE LIMIT (Auto revoke oldest, ignore expired)
-    const sessionQuery = query(
-      collection(db, "user_sessions"),
-      where("phone", "==", mobile),
-      where("revoked", "==", false)
-    );
-
-    const sessionSnap = await getDocs(sessionQuery);
+    const sessionSnap = await adminDb
+      .collection("user_sessions")
+      .where("phone", "==", mobile)
+      .where("revoked", "==", false)
+      .get();
 
     const activeSessions = sessionSnap.docs
-      .map(docSnap => ({
+      .map((docSnap) => ({
         id: docSnap.id,
-        ...docSnap.data()
+        ...docSnap.data(),
       }))
-      .filter(session => session.expiry > Date.now());
+      .filter((session) => session.expiry > Date.now());
 
     if (activeSessions.length >= 3) {
       activeSessions.sort((a, b) => a.createdAt - b.createdAt);
 
       const oldestSession = activeSessions[0];
 
-      await updateDoc(doc(db, "user_sessions", oldestSession.id), {
+      await adminDb.collection("user_sessions").doc(oldestSession.id).update({
         revoked: true,
       });
 
-      await setDoc(doc(collection(db, "security_logs")), {
+      await adminDb.collection("security_logs").add({
         type: "AUTO_REVOKE_OLDEST_SESSION",
         phone: mobile,
         revokedSessionId: oldestSession.id,
@@ -176,25 +158,20 @@ export async function POST(req) {
       });
     }
 
-    // 🔐 CREATE SESSION
     const sessionId = uuidv4();
-    const expiry = Date.now() + 1000 * 60 * 60 * 24 * 180;
-
-    await setDoc(doc(collection(db, "user_sessions"), sessionId), {
+    const sessionRecord = buildUserSessionRecord({
       phone: mobile,
       ujbCode,
-      name: userData.Name || "",
-      type: userData.Type || "",
+      userData,
       ip,
       geo,
       deviceInfo,
-      createdAt: Date.now(),
-      expiry,
-      revoked: false,
+      now: Date.now(),
     });
 
-    // 📊 LOGIN HISTORY
-    await setDoc(doc(collection(db, "login_history")), {
+    await adminDb.collection("user_sessions").doc(sessionId).set(sessionRecord);
+
+    await adminDb.collection("login_history").add({
       phone: mobile,
       ujbCode,
       ip,
@@ -203,25 +180,20 @@ export async function POST(req) {
       loginTime: Date.now(),
     });
 
-    // 🔐 CREATE JWT
     const token = jwt.sign(
       { phone: mobile, sessionId, ujbCode },
-      process.env.JWT_SECRET,
+      serverEnv.jwtSecret,
       { expiresIn: "180d" }
     );
 
     const response = NextResponse.json({ success: true });
-
-    response.cookies.set("crm_token", token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      path: "/",
-      maxAge: 60 * 60 * 24 * 180,
-    });
+    response.cookies.set(
+      "crm_token",
+      token,
+      getUserSessionCookieOptions(serverEnv.isProduction)
+    );
 
     return response;
-
   } catch (err) {
     console.error("Verify OTP Error:", err);
     return NextResponse.json({ success: false, message: "Server error" });

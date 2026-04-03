@@ -1,1032 +1,546 @@
-// pages/referral/[id].js
 'use client';
 
-import { useRouter, useParams } from "next/navigation";
-
-import { useState } from "react";
-
-import { doc, updateDoc, arrayUnion } from "firebase/firestore";
-import { db } from "@/firebaseConfig";
-import { COLLECTIONS } from "@/lib/utility_collection";
-
-
-
-import useReferralDetails from "@/hooks/useReferralDetails";
-import useReferralPayments from "@/hooks/useReferralPayments";
-import { useUjbDistribution } from "@/hooks/useUjbDistribution";
-import { useReferralAdjustment } from "@/hooks/useReferralAdjustment";
-
-// LEFT COLUMN CARDS
-import StatusCard from "@/components/admin/referral/StatusCard";
-import ReferralInfoCard from "@/components/admin/referral/ReferralInfoCard";
-import OrbiterDetailsCard from "@/components/admin/referral/OrbiterDetailsCard";
-import CosmoOrbiterDetailsCard from "@/components/admin/referral/CosmoOrbiterDetailsCard";
-import ServiceDetailsCard from "@/components/admin/referral/ServiceDetailsCard";
-import PaymentHistory from "@/components/admin/referral/PaymentHistory";
-
-// RIGHT STICKY COLUMN
-import FollowupList from "@/components/admin/referral/FollowupList";
-import FollowupForm from "@/components/admin/referral/FollowupForm";
-
-// BOTTOM PAYMENT BAR + DRAWER
-import PaymentSummary from "@/components/admin/referral/PaymentSummary";
-import PaymentDrawer from "@/components/admin/referral/PaymentDrawer";
-import Text from "@/components/ui/Card";
-import Card from "@/components/ui/Card";
-import StatusBadge from "@/components/ui/StatusBadge";
-import Button from "@/components/ui/Button";
-import Modal from "@/components/ui/Modal";
-import FormField from "@/components/ui/FormField";
-import Input from "@/components/ui/Input";
-import Select from "@/components/ui/Select";
-import NumberInput from "@/components/ui/NumberInput";
-import DateInput from "@/components/ui/DateInput";
-// import Layout from "@/component/Layout";
-
-export default function ReferralDetailsPage() {
-  const router = useRouter();
-  const { id } = useParams();
-  const [activeTab, setActiveTab] = useState("overview");
-
-  const {
-    loading,
-    referralData,
-    orbiter,
-    cosmoOrbiter,
-    payments,
-    setPayments,
-    followups,
-    formState,
-    setFormState,
-    dealLogs,
-    dealAlreadyCalculated,
-    dealEverWon,
-    handleStatusUpdate,
-    handleSaveDealLog,
-    addFollowup,
-    editFollowup,
-    deleteFollowup,
-    uploadLeadDoc,
-  } = useReferralDetails(id);
-
-  const payment = useReferralPayments({
-    id,
-    referralData,
-    payments,
-    setPayments,
-    dealLogs,
-  });
-  const getUjbTdsRate = (isNri) => (isNri ? 0.20 : 0.05);
-
-  const calculateUjbTDS = (gross, isNri) => {
-    const g = Number(gross || 0);
-    const rate = getUjbTdsRate(isNri);
-    const tds = Math.round(g * rate);
-    const net = g - tds;
-    return { gross: g, tds, net, rate };
-  };
-
-  const ujb = useUjbDistribution({
-    referralId: id,
-    referralData,
-    payments,
-    onPaymentsUpdate: setPayments,
-    orbiter,
-    cosmoOrbiter,
-  });
-
-  // Use the primary orbiter UJB code for the preload hook (but for mentors we will pass exact UJB codes)
-  const primaryOrbiterUjb =
-    referralData?.orbiterUJBCode ||
-    orbiter?.ujbCode ||
-    orbiter?.UJBCode ||
-    null;
-
-  const adjustment = useReferralAdjustment(id, primaryOrbiterUjb);
-
-  // Followup form state
-  const defaultFollowupForm = {
-    priority: "Medium",
-    date: "",
-    description: "",
-    status: "Pending",
-  };
-  const [followupForm, setFollowupForm] = useState(defaultFollowupForm);
-  const [isEditingFollowup, setIsEditingFollowup] = useState(false);
-  const [editIndex, setEditIndex] = useState(null);
-
-  // Payment Drawer
-  const [showPaymentDrawer, setShowPaymentDrawer] = useState(false);
-
-  // Payout modal state (manual per-slot payout)
-  const [payoutModal, setPayoutModal] = useState({
-    open: false,
-    cosmoPaymentId: null,
-    slot: "", // "Orbiter" | "OrbiterMentor" | "CosmoMentor"
-    logicalAmount: 0, // how much this slot logically represents
-    recipientUjb: null,
-    recipientName: "",
-    preview: null,
-    modeOfPayment: "",
-    transactionRef: "",
-    paymentDate: new Date().toISOString().split("T")[0],
-    processing: false,
-  });
-  // ================= TDS DERIVED VALUES FOR MODAL =================
-  // ================= TDS DERIVED VALUES FOR MODAL =================
-
-
-  // Helper: sanitize number
-  const n = (v) => Math.max(0, Number(v || 0));
-  const getRecipientInfo = (slot) => {
-    const normalize = (status) =>
-      status === "Non-Resident" ? "nri" : "resident";
-
-    switch (slot) {
-      case "Orbiter":
-        return {
-          ujb:
-            referralData?.orbiterUJBCode ||
-            orbiter?.ujbCode ||
-            null,
-          name: orbiter?.name || "Orbiter",
-          payeeType: normalize(
-            referralData?.orbiter?.residentStatus ??
-            orbiter?.residentStatus
-          ),
-        };
-
-      case "OrbiterMentor":
-        return {
-          ujb:
-            referralData?.orbiterMentorUJBCode ||
-            orbiter?.mentorUJBCode ||
-            null,
-          name: orbiter?.mentorName || "Orbiter Mentor",
-          payeeType: normalize(
-            referralData?.orbiter?.mentorResidentStatus ??
-            orbiter?.mentorResidentStatus
-          ),
-        };
-
-
-      case "CosmoMentor":
-        return {
-          ujb:
-            referralData?.cosmoMentorUJBCode ||
-            cosmoOrbiter?.mentorUJBCode ||
-            null,
-
-          name: cosmoOrbiter?.mentorName || "Cosmo Mentor",
-
-          payeeType:
-            cosmoOrbiter?.mentorResidentStatus === "Non-Resident"
-              ? "nri"
-              : "resident",
-        };
-
-
-
-      default:
-        return { ujb: null, name: "", payeeType: "resident" };
-    }
-  };
-
-
-
-  // ================= TDS DERIVED VALUES FOR MODAL =================
-  let previewGross = 0;
-  let previewTds = 0;
-  let previewNet = 0;
-  let previewIsNri = false;
-  if (payoutModal.open && payoutModal.preview) {
-    const deducted = Number(payoutModal.preview?.deducted || 0);
-    const logical = Number(payoutModal.logicalAmount || 0);
-
-    const adjustedGross =
-      deducted > 0 ? Math.max(logical - deducted, 0) : logical;
-
-    const recipientInfo = getRecipientInfo(payoutModal.slot);
-    previewIsNri = recipientInfo.payeeType === "nri";
-
-    const { gross, tds, net } =
-      calculateUjbTDS(adjustedGross, previewIsNri);
-
-    previewGross = gross;
-    previewTds = tds;
-    previewNet = net;
-  }
-
-
-
-  // Map slot -> recipient info (we will use referral-level flat fields as authoritative)
-
-
-  // Open payout modal for a slot (manual)
-  const openPayoutModal = ({ cosmoPaymentId, slot, amount }) => {
-    const logical = n(amount);
-    const info = getRecipientInfo(slot);
-
-    setPayoutModal({
-      open: true,
-      cosmoPaymentId: cosmoPaymentId || null,
-      slot,
-      logicalAmount: logical,
-      recipientUjb: info.ujb,
-      recipientName: info.name,
-      preview: null,
-      modeOfPayment: "",
-      transactionRef: "",
-      paymentDate: new Date().toISOString().split("T")[0],
-      processing: false,
-    });
-
-    // fetch preview (non-blocking)
-    (async () => {
-      try {
-        const lastDeal = dealLogs?.[dealLogs.length - 1];
-        const dealValue = lastDeal?.dealValue || null;
-
-        const preview = await adjustment.applyAdjustmentForRole({
-          role: slot,
-          requestedAmount: logical,
-          dealValue,
-          ujbCode: info.ujb,
-          previewOnly: true,
-          referral: { id },
-        });
-
-        setPayoutModal((p) => ({ ...p, preview }));
-      } catch (err) {
-        setPayoutModal((p) => ({ ...p, preview: { error: "Preview failed" } }));
-      }
-    })();
-  };
-
-  const closePayoutModal = () => {
-    setPayoutModal((p) => ({ ...p, open: false, preview: null }));
-  };
-
-  // Confirm payout => commit adjustment and create UJB payout
-  const confirmPayout = async () => {
-    const {
-      cosmoPaymentId,
-      slot,
-      logicalAmount,
-      recipientUjb,
-      modeOfPayment,
-      transactionRef,
-      paymentDate,
-    } = payoutModal;
-
-    if (!slot || logicalAmount <= 0) {
-      alert("Invalid payout slot or amount");
-      return;
-    }
-
-    if (!modeOfPayment) {
-      alert("Please select mode of payment");
-      return;
-    }
-
-    if (!transactionRef) {
-      alert("Transaction / reference required");
-      return;
-    }
-
-    // Slot cap check: ensure not paying more than slot remaining for that cosmo payment
-    // compute remaining for this cosmo payment & slot from payments array
-    const cosmoPayment =
-      (payments || []).find(
-        (p) =>
-          p.paymentId === payoutModal.cosmoPaymentId ||
-          p.meta?.belongsToPaymentId === payoutModal.cosmoPaymentId
-      ) || null;
-
-
-    // We'll rely on server-side check via remaining computed earlier in UI, but still prevent obvious overshoot:
-    // For simplicity here we compute paid so far for this cosmo payment & slot:
-    const paidForThisPaymentAndSlot = (payments || [])
-      .filter(
-        (p) =>
-          p.meta?.isUjbPayout === true &&
-          p.meta?.belongsToPaymentId === payoutModal.cosmoPaymentId &&
-          p.meta?.slot === slot
-      )
-      .reduce((s, p) => {
-        if (typeof p?.meta?.logicalAmount === "number") {
-          return s + n(p.meta.logicalAmount);
-        }
-        return s + n(p.amountReceived);
-      }, 0);
-
-
-    // Find the cosmo distribution for this cosmo payment so we know slot total
-    const cosmoEntry = (payments || []).find(
-      (p) => p.paymentId === payoutModal.cosmoPaymentId || p.meta?.paymentId === payoutModal.cosmoPaymentId
-    );
-
-    // If cosmoEntry available compute slotTotal
-    let slotTotal = null;
-    if (cosmoEntry && cosmoEntry.distribution) {
-      slotTotal = n(cosmoEntry.distribution[slot === "Orbiter" ? "orbiter" : slot === "OrbiterMentor" ? "orbiterMentor" : "cosmoMentor"]);
-    }
-
-    // If slotTotal known, ensure not overpaying logicalAmount beyond remaining
-    if (slotTotal != null) {
-      const remaining = Math.max(slotTotal - paidForThisPaymentAndSlot, 0);
-      if (logicalAmount > remaining) {
-        if (!confirm(`Requested amount ₹${logicalAmount} exceeds remaining for this slot (₹${remaining}). Do you want to proceed and pay only remaining ₹${remaining}?`)) {
-          return;
-        }
-      }
-    }
-
-    setPayoutModal((p) => ({ ...p, processing: true }));
-
-    try {
-      const lastDeal = dealLogs?.[dealLogs.length - 1];
-      const dealValue = lastDeal?.dealValue || null;
-
-      // 1) Apply adjustment (commit)
-      const adjResult = await adjustment.applyAdjustmentForRole({
-        role: slot,
-        requestedAmount: logicalAmount,
-        dealValue,
-        ujbCode: recipientUjb,
-        referral: { id },
-      });
-
-      const { deducted = 0, newGlobalRemaining } = adjResult || {};
-
-      // gross after adjustment
-      const adjustedGross = Math.max(logicalAmount - deducted, 0);
-
-      // TDS calculation
-      const recipientInfo = getRecipientInfo(slot);
-      const isNri = recipientInfo.payeeType === "nri";
-
-      const { gross, tds, net, rate } =
-        calculateUjbTDS(adjustedGross, isNri);
-
-
-
-      // ✅ EARLY UJB BALANCE CHECK (CRITICAL FIX)
-      const availableBalance = Number(referralData?.ujbBalance || 0);
-
-      if (net > 0 && net > availableBalance) {
-        alert(
-          `Insufficient UJB balance.\n\n` +
-          `Net payable: ₹${net}\n` +
-          `Available balance: ₹${availableBalance}`
-        );
-        setPayoutModal((p) => ({ ...p, processing: false }));
-        return;
-      }
-
-
-      // ✅ CASE: FULLY ADJUSTED — LOG ONLY (NO CASH PAYOUT)
-      if (adjustedGross <= 0 && deducted > 0) {
-
-        const adjustmentOnlyEntry = {
-          paymentId: `ADJ-${Date.now()}`,
-          paymentFrom: "UJustBe",
-          paymentTo: slot,
-          paymentToName: payoutModal.recipientName,
-          amountReceived: 0,
-          paymentDate,
-          createdAt: new Date(),
-          comment: "Fully adjusted against pending fees",
-          meta: {
-            isUjbPayout: true,
-            isAdjustmentOnly: true,
-            slot,
-            belongsToPaymentId: payoutModal.cosmoPaymentId || null,
-            adjustment: {
-              deducted,
-              cashPaid: 0,
-              previousRemaining: newGlobalRemaining + deducted,
-              newRemaining: newGlobalRemaining,
-            },
-          },
-        };
-
-        // 🔐 LOG ONLY — NO BALANCE CHANGE
-        await updateDoc(doc(db, COLLECTIONS.referral, id), {
-          payments: arrayUnion(adjustmentOnlyEntry),
-        });
-
-      setPayments((prev = []) => {
-  const exists = prev.find(p => p.paymentId === adjustmentOnlyEntry.paymentId);
-  if (exists) return prev;
-  return [...prev, adjustmentOnlyEntry];
-});
-        closePayoutModal();
-        return;
-      }
-
-
-
-      // 2) Perform UJB payout (actual cash = cashToPay; logical increment = logicalAmount)
-      const payRes = await ujb.payFromSlot({
-        recipient: slot,
-
-        // 💰 BANK
-        amount: net,
-
-        // 📘 ACCOUNTING (ABSOLUTELY REQUIRED)
-        logicalAmount: gross,
-        tdsAmount: tds,
-
-        fromPaymentId: payoutModal.cosmoPaymentId,
-        modeOfPayment,
-        transactionRef,
-        paymentDate,
-
-        adjustmentMeta:
-          deducted > 0
-            ? {
-              deducted,
-              cashPaid: net,
+import { useEffect, useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import {
+    collection,
+    getDocs,
+    deleteDoc,
+    doc,
+    query,
+    orderBy,
+    limit,
+    startAfter,
+} from 'firebase/firestore';
+
+import { db } from '@/lib/firebase/firebaseClient';
+import { COLLECTIONS } from '@/lib/utility_collection';
+
+import AdminLayout from '@/components/layout/AdminLayout';
+import Card from '@/components/ui/Card';
+import Text from '@/components/ui/Text';
+import Input from '@/components/ui/Input';
+import Button from '@/components/ui/Button';
+import ActionButton from '@/components/ui/ActionButton';
+import ConfirmModal from '@/components/ui/ConfirmModal';
+import { useToast } from '@/components/ui/ToastProvider';
+import Select from '@/components/ui/Select';
+import StatusBadge from '@/components/ui/StatusBadge';
+
+import Table from '@/components/table/Table';
+import TableHeader from '@/components/table/TableHeader';
+import TableRow from '@/components/table/TableRow';
+
+import ReferralExportButton from '@/components/admin/referral/ReferralExportButton';
+
+import {
+    BarChart3,
+    User,
+    Users,
+    Clock,
+    Pencil,
+    Trash2,
+} from 'lucide-react';
+
+export default function ManageReferralsPage() {
+    const router = useRouter();
+    const toast = useToast();
+
+    const [referrals, setReferrals] = useState([]);
+    const [loading, setLoading] = useState(true);
+
+    const [lastDoc, setLastDoc] = useState(null);
+    const [loadingMore, setLoadingMore] = useState(false);
+
+    const [confirmOpen, setConfirmOpen] = useState(false);
+    const [deleteId, setDeleteId] = useState(null);
+
+    // search + filters
+    const [search, setSearch] = useState('');
+    const [debouncedSearch, setDebouncedSearch] = useState('');
+    const [typeFilter, setTypeFilter] = useState('');
+    const [statusFilter, setStatusFilter] = useState('');
+    const [orbiterFilter, setOrbiterFilter] = useState('');
+
+    /* ================= Debounce ================= */
+    useEffect(() => {
+        const t = setTimeout(() => setDebouncedSearch(search), 300);
+        return () => clearTimeout(t);
+    }, [search]);
+
+    /* ================= Initial Fetch ================= */
+    useEffect(() => {
+        const fetchReferrals = async () => {
+            try {
+                setLoading(true);
+
+                const q = query(
+                    collection(db, COLLECTIONS.referral),
+                    orderBy('timestamp', 'desc'),
+                    limit(50)
+                );
+
+                const snap = await getDocs(q);
+
+                const data = snap.docs.map((d) => ({
+                    id: d.id,
+                    ...d.data(),
+                }));
+
+                setReferrals(data);
+                setLastDoc(snap.docs[snap.docs.length - 1] || null);
+            } catch {
+                toast.error('Failed to load referrals');
+            } finally {
+                setLoading(false);
             }
-            : undefined,
-      });
+        };
 
+        fetchReferrals();
+    }, []);
 
+    /* ================= Load More ================= */
+    const loadMore = async () => {
+        if (!lastDoc) return;
 
+        try {
+            setLoadingMore(true);
 
-      if (payRes?.error) {
-        alert(payRes.error || "Payout failed");
-        setPayoutModal((p) => ({ ...p, processing: false }));
-        return;
-      }
+            const q = query(
+                collection(db, COLLECTIONS.referral),
+                orderBy('timestamp', 'desc'),
+                startAfter(lastDoc),
+                limit(50)
+            );
 
-      // optional: send WhatsApp notifications (preserve earlier behavior)
-      try {
-        const refId = referralData?.referralId || id;
-        // notify recipient (if phone exists)
-        const recipientPhone =
-          slot === "Orbiter" ? orbiter?.phone : slot === "OrbiterMentor" ? orbiter?.mentorPhone : cosmoOrbiter?.mentorPhone;
-        if (recipientPhone) {
-          const msg = `Hello ${slot === "Orbiter" ? orbiter?.name : slot === "OrbiterMentor" ? orbiter?.mentorName : cosmoOrbiter?.mentorName}, a payout of ₹${logicalAmount} (cash: ₹${cashToPay}) for referral ${refId} has been processed.`;
-          await sendWhatsAppMessage(recipientPhone, [
-            slot === "Orbiter" ? orbiter?.name : slot === "OrbiterMentor" ? orbiter?.mentorName : cosmoOrbiter?.mentorName,
-            msg,
-          ]);
+            const snap = await getDocs(q);
+
+            const data = snap.docs.map((d) => ({
+                id: d.id,
+                ...d.data(),
+            }));
+
+            setReferrals((prev) => [...prev, ...data]);
+            setLastDoc(snap.docs[snap.docs.length - 1] || null);
+        } catch {
+            toast.error('Failed to load more');
+        } finally {
+            setLoadingMore(false);
         }
-      } catch (err) {
-        // silent per preference
-      }
+    };
 
-      // update local payments (use onPaymentsUpdate in hook already pushing entry; but ensure UI updates)
-      // setPayments handled by useUjbDistribution via onPaymentsUpdate
+    /* ================= Unique Orbiters ================= */
+    const orbiterOptions = useMemo(() => {
+        const names = Array.from(
+            new Set(referrals.map((r) => r.orbiter?.name).filter(Boolean))
+        );
 
-      closePayoutModal();
-    } catch (err) {
-      console.error("confirmPayout error:", err);
-      alert("Payout failed");
-      setPayoutModal((p) => ({ ...p, processing: false }));
-    }
-  };
+        return [
+            { label: 'All Orbiters', value: '' },
+            ...names.map((n) => ({ label: n, value: n })),
+        ];
+    }, [referrals]);
 
-  // small helper to normalize payment id when different shapes
-  const cosmoPaymentIdFrom = (pid) => pid;
+    /* ================= Filtered ================= */
+    const filtered = useMemo(() => {
+        const s = debouncedSearch.toLowerCase();
 
+        return referrals.filter((r) => {
+            const text = `${r.orbiter?.name || ''} ${r.cosmoOrbiter?.name || ''} ${r.referralId || ''}`
+                .toLowerCase();
 
+            const matchSearch = !s || text.includes(s);
+            const matchType = !typeFilter || r.referralType === typeFilter;
+            const matchStatus = !statusFilter || r.dealStatus === statusFilter;
+            const matchOrbiter = !orbiterFilter || r.orbiter?.name === orbiterFilter;
 
-  // WhatsApp sender (kept from your earlier file)
-  async function sendWhatsAppMessage(phone, parameters = []) {
-    try {
-      const formattedPhone = String(phone || "").replace(/\s+/g, "");
+            return matchSearch && matchType && matchStatus && matchOrbiter;
+        });
+    }, [referrals, debouncedSearch, typeFilter, statusFilter, orbiterFilter]);
 
-      const payload = {
-        messaging_product: "whatsapp",
-        to: formattedPhone,
-        type: "template",
-        template: {
-          name: "referral_module",
-          language: { code: "en" },
-          components: [
-            {
-              type: "body",
-              parameters: parameters.map((param) => ({
-                type: "text",
-                text: param,
-              })),
-            },
-          ],
-        },
-      };
+    /* ================= Counters ================= */
+    const total = filtered.length;
+    const selfCount = filtered.filter((r) => r.referralType === 'Self').length;
+    const othersCount = filtered.filter((r) => r.referralType === 'Others').length;
+    const pendingCount = filtered.filter((r) => r.dealStatus === 'Pending').length;
 
-      await fetch(
-        "https://graph.facebook.com/v19.0/527476310441806/messages",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization:
-              "Bearer EAAHwbR1fvgsBOwUInBvR1SGmVLSZCpDZAkn9aZCDJYaT0h5cwyiLyIq7BnKmXAgNs0ZCC8C33UzhGWTlwhUarfbcVoBdkc1bhuxZBXvroCHiXNwZCZBVxXlZBdinVoVnTB7IC1OYS4lhNEQprXm5l0XZAICVYISvkfwTEju6kV4Aqzt4lPpN8D3FD7eIWXDhnA4SG6QZDZD",
-          },
-          body: JSON.stringify(payload),
+    /* ================= Delete ================= */
+    const askDelete = (id) => {
+        setDeleteId(id);
+        setConfirmOpen(true);
+    };
+
+    const confirmDelete = async () => {
+        if (!deleteId) return;
+
+        try {
+            await deleteDoc(doc(db, COLLECTIONS.referral, deleteId));
+            setReferrals((prev) => prev.filter((r) => r.id !== deleteId));
+            toast.success('Referral deleted');
+        } catch {
+            toast.error('Delete failed');
+        } finally {
+            setConfirmOpen(false);
+            setDeleteId(null);
         }
-      );
-      // intentionally silent
-    } catch (error) {
-      // silent fail per preference
-    }
-  }
+    };
 
-  if (loading || !referralData) {
-    return <p style={{ padding: 20 }}>Loading referral...</p>;
-  }
-
-  const mapName = (key) => {
-    switch (key) {
-      case "Orbiter":
-        return orbiter?.name || orbiter?.Name || "Orbiter";
-      case "OrbiterMentor":
-        return orbiter?.mentorName || orbiter?.MentorName || "Orbiter Mentor";
-      case "CosmoOrbiter":
-        return cosmoOrbiter?.name || cosmoOrbiter?.Name || "Cosmo Orbiter";
-      case "CosmoMentor":
-        return cosmoOrbiter?.mentorName || cosmoOrbiter?.MentorName || "Cosmo Mentor";
-      case "UJustBe":
-        return "UJustBe";
-      default:
-        return key || "";
-    }
-  };
-
-  const paidToOrbiter = Number(referralData?.paidToOrbiter || 0);
-  const paidToOrbiterMentor = Number(referralData?.paidToOrbiterMentor || 0);
-  const paidToCosmoMentor = Number(referralData?.paidToCosmoMentor || 0);
-
-  const ujbBalance = Number(referralData?.ujbBalance || 0);
-
-  const totalEarned =
-    Number(payment.cosmoPaid || 0) -
-    (paidToOrbiter + paidToOrbiterMentor + paidToCosmoMentor);
-
-  return (
-    <>
-      {/* HEADER */}
-      <Card>
-        <div className="flex items-center justify-between">
-          <div>
-            <Text as="h1" variant="h1">
-              Referral #{referralData?.referralId}
-            </Text>
-            <Text muted>
-              Source: {referralData?.referralSource || "Referral"}
-            </Text>
-          </div>
-
-          <div className="flex items-center gap-3">
-            <StatusBadge status={formState.dealStatus} />
-            <Text>
-              UJB Balance: ₹{ujbBalance.toLocaleString("en-IN")}
-            </Text>
-          </div>
-        </div>
-      </Card>
-
-      {/* MAIN CONTENT */}
-      <div className="grid grid-cols-3 gap-4 mt-4">
-        {/* LEFT COLUMN */}
-        <div className="col-span-2 space-y-4">
-          <Card>
-            <Text as="h3">Status</Text>
-            <StatusCard
-              formState={formState}
-              setFormState={setFormState}
-              onUpdate={async () => {
-                await handleStatusUpdate(formState.dealStatus)
-
-                try {
-                  const refId = referralData?.referralId || id;
-                  const newStatus = formState.dealStatus;
-
-                  const orbiterPhone = orbiter?.phone || orbiter?.MobileNo;
-                  const cosmoPhone = cosmoOrbiter?.phone || cosmoOrbiter?.MobileNo;
-
-                  if (orbiterPhone) {
-                    const statusMsgOrbiter =
-                      {
-                        "Not Connected": `Hello ${orbiter?.name}, your referral (ID: ${refId}) is still marked Not Connected. Please check in.`,
-                        "Called but Not Responded": `Hello ${orbiter?.name}, ${cosmoOrbiter?.name} tried reaching your referral (ID: ${refId}) but couldn't connect. Please help facilitate.`,
-                        "Discussion in Progress": `Hello ${orbiter?.name}, discussion has started for your referral (ID: ${refId}) with ${cosmoOrbiter?.name}.`,
-                        Rejected: `Hello ${orbiter?.name}, your referral (ID: ${refId}) was marked as Rejected by ${cosmoOrbiter?.name}.`,
-                        "Deal Won": `🎉 Hello ${orbiter?.name}, your referral (ID: ${refId}) has been marked as Deal Won!`,
-                      }[newStatus] || `Referral #${refId} status updated to ${newStatus}.`;
-
-                    await sendWhatsAppMessage(orbiterPhone, [orbiter?.name || "Orbiter", statusMsgOrbiter]);
-                  }
-
-                  if (cosmoPhone) {
-                    const statusMsgCosmo =
-                      {
-                        "Not Connected": `Hello ${cosmoOrbiter?.name}, referral (ID: ${refId}) is still Not Connected. Please take action.`,
-                        "Called but Not Responded": `Hello ${cosmoOrbiter?.name}, thank you for trying to connect. Status updated to Called but Not Responded.`,
-                        "Discussion in Progress": `Hello ${cosmoOrbiter?.name}, thank you for progressing referral (ID: ${refId}). Please continue.`,
-                        Rejected: `Hello ${cosmoOrbiter?.name}, referral (ID: ${refId}) marked Rejected. Reason recorded.`,
-                        "Deal Won": `🎉 Hello ${cosmoOrbiter?.name}, referral (ID: ${refId}) is Deal Won. Great job!`,
-                      }[newStatus] || `Referral #${refId} updated to ${newStatus}.`;
-
-                    await sendWhatsAppMessage(cosmoPhone, [cosmoOrbiter?.name || "CosmoOrbiter", statusMsgCosmo]);
-                  }
-                } catch (err) { }
-              }}
-              statusLogs={referralData.statusLogs || []}
-            />
-          </Card>
-
-          <Card>
-            <Text as="h3">Service Details</Text>
-            <ServiceDetailsCard
-              referralData={referralData}
-              dealLogs={dealLogs}
-              dealAlreadyCalculated={dealAlreadyCalculated}
-              onSaveDealLog={handleSaveDealLog}
-            />
-          </Card>
-
-          <Card>
-            <Text as="h3">Referral Info</Text>
-            <ReferralInfoCard referralData={referralData} onUploadLeadDoc={uploadLeadDoc} />
-          </Card>
-
-          <Card>
-            <Text as="h3">Participants</Text>
-            <OrbiterDetailsCard orbiter={orbiter} referralData={referralData} />
-            <CosmoOrbiterDetailsCard cosmoOrbiter={cosmoOrbiter} referralData={referralData} />
-          </Card>
-
-          <Card>
-            <Text as="h3">Payment History</Text>
-            <PaymentHistory
-              payments={payments}
-              mapName={mapName}
-              paidToOrbiter={paidToOrbiter}
-              paidToOrbiterMentor={paidToOrbiterMentor}
-              paidToCosmoMentor={paidToCosmoMentor}
-              onRequestPayout={(data) => {
-                console.log("PAGE RECEIVED", data);
-                openPayoutModal(data);
-              }}
-            />
-          </Card>
-        </div>
-
-        {/* RIGHT COLUMN */}
-        <div className="space-y-4">
-          <Card>
-            <Text as="h3">Followups</Text>
-            <FollowupList
-              followups={followups}
-              onEdit={(i) => {
-                setEditIndex(i);
-                setFollowupForm(followups[i]);
-                setIsEditingFollowup(true);
-              }}
-              onDelete={deleteFollowup}
-            />
-          </Card>
-
-          <Card>
-            <Text as="h3">Add / Edit Followup</Text>
-            <FollowupForm
-              form={followupForm}
-              setForm={setFollowupForm}
-              isEditing={isEditingFollowup}
-              onSave={async () => {
-                if (isEditingFollowup && editIndex !== null) {
-                  await editFollowup(editIndex, followupForm);
-                } else {
-                  await addFollowup(followupForm);
-                }
-                setFollowupForm(defaultFollowupForm);
-                setEditIndex(null);
-                setIsEditingFollowup(false);
-              }}
-              onCancel={() => {
-                setFollowupForm(defaultFollowupForm);
-                setIsEditingFollowup(false);
-                setEditIndex(null);
-              }}
-            />
-          </Card>
-        </div>
-      </div>
-
-      {/* PAYMENT SUMMARY */}
-      {dealEverWon && (
-        <Card className="mt-4">
-          <Text as="h3">Payment Summary</Text>
-          <PaymentSummary
-            agreedAmount={payment.agreedAmount}
-            cosmoPaid={payment.cosmoPaid}
-            agreedRemaining={payment.agreedRemaining}
-            totalEarned={totalEarned}
-            ujbBalance={ujbBalance}
-            paidTo={{
-              orbiter: paidToOrbiter,
-              orbiterMentor: paidToOrbiterMentor,
-              cosmoMentor: paidToCosmoMentor,
-            }}
-            referralData={referralData}
-            onAddPayment={payment.openPaymentModal}
-          />
-
-          <div className="mt-3">
-            <Button variant="secondary" onClick={() => setShowPaymentDrawer(true)}>
-              Open Payment Panel
-            </Button>
-          </div>
-        </Card>
-      )}
-      {/* ADD COSMO → UJB PAYMENT MODAL */}
-      <Modal
-        open={payment.showAddPaymentForm}
-        onClose={payment.closePaymentModal}
-        title="Add Payment (Cosmo → UJB)"
-      >
-        <div className="space-y-4">
-
-          <Text variant="muted">
-            Remaining Agreed: ₹{payment.agreedRemaining.toLocaleString("en-IN")}
-          </Text>
-
-          <FormField
-            label="Amount"
-            required
-            error={payment.errors?.amountReceived}
-          >
-            <NumberInput
-              value={payment.newPayment.amountReceived || ""}
-              onChange={(value) =>
-                payment.updateNewPayment("amountReceived", value)
-              }
-              error={!!payment.errors?.amountReceived}
-            />
-          </FormField>
+    const handleEdit = (id) => {
+        router.push(`/admin/referral/${id}`);
+    };
 
 
-          <FormField label="TDS Deducted by Cosmo?">
-            <Select
-              value={payment.newPayment.tdsDeducted ?? "no"}
-              onChange={(v) =>
-                payment.updateNewPayment("tdsDeducted", v)
-              }
-              options={[
-                { label: "No", value: "no" },
-                { label: "Yes", value: "yes" },
-              ]}
-            />
-          </FormField>
+    const getServiceProductName = (ref) => {
+        if (ref.service?.name && ref.product?.name)
+            return `${ref.service.name} / ${ref.product.name}`;
+        return ref.service?.name || ref.product?.name || '—';
+    };
 
-          {payment.newPayment.tdsDeducted === "yes" && (
-            <FormField label="TDS %" error={payment.errors?.tdsRate}>
-              <NumberInput
-                value={payment.newPayment.tdsRate ?? 10}
-                onChange={(v) =>
-                  payment.updateNewPayment("tdsRate", v)
-                }
-                error={!!payment.errors?.tdsRate}
-              />
-            </FormField>
-          )}
+    const columns = [
+        { label: '#', key: 'index' },
+        { label: 'Orbiter', key: 'orbiter' },
+        { label: 'Cosmo', key: 'cosmo' },
+        { label: 'Type', key: 'type' },
+        { label: 'Deal Status', key: 'dealStatus' },
+        { label: 'Referral ID', key: 'referralId' },
+        { label: 'Deal Value', key: 'dealValue' },
+        { label: 'Next Follow-up', key: 'followUp' },
+        { label: 'Referral Date', key: 'referralDate' },
+        { label: 'Updated', key: 'updated' },
+        { label: 'Actions', key: 'actions' },
+    ];
 
-          <FormField
-            label="Mode of Payment"
-            required
-            error={payment.errors?.modeOfPayment}
-          >
-            <Select
-              value={payment.newPayment.modeOfPayment}
-              onChange={(v) =>
-                payment.updateNewPayment("modeOfPayment", v)
-              }
-              options={[
-                { label: "Bank Transfer", value: "Bank Transfer" },
-                { label: "GPay", value: "GPay" },
-                { label: "Razorpay", value: "Razorpay" },
-                { label: "Cash", value: "Cash" },
-              ]}
-              error={!!payment.errors?.modeOfPayment}
-            />
-          </FormField>
+    const formatCurrency = (val) => {
+        if (!val) return '—';
+        return `₹ ${Number(val).toLocaleString()}`;
+    };
 
-          <FormField
-            label="Transaction Ref"
-            error={payment.errors?.transactionRef}
-          >
-            <Input
-              value={payment.newPayment.transactionRef}
-              onChange={(e) =>
-                payment.updateNewPayment("transactionRef", e.target.value)
-              }
-              error={!!payment.errors?.transactionRef}
-            />
-          </FormField>
+    const formatDate = (ts) => {
+        if (!ts?.seconds) return '—';
+        return new Date(ts.seconds * 1000).toLocaleDateString();
+    };
 
-          <FormField label="Payment Date">
-            <DateInput
-              value={payment.newPayment.paymentDate}
-              onChange={(v) =>
-                payment.updateNewPayment("paymentDate", v)
-              }
-            />
-          </FormField>
+    const getLatestStatus = (ref) => {
+        if (!ref.statusLogs || ref.statusLogs.length === 0) {
+            return 'Pending';
+        }
+        return ref.statusLogs[ref.statusLogs.length - 1].status || 'Pending';
+    };
 
-          <div className="flex justify-end gap-2 pt-2">
-            <Button
-              variant="ghost"
-              onClick={payment.closePaymentModal}
-              disabled={payment.isSubmitting}
-            >
-              Cancel
-            </Button>
+    const getDealValue = (ref) => {
+        if (!ref.dealLogs || ref.dealLogs.length === 0) return '—';
 
-            <Button
-              variant="primary"
-              onClick={payment.handleSavePayment}
-              disabled={payment.isSubmitting}
-            >
-              {payment.isSubmitting ? "Saving…" : "Save"}
-            </Button>
-          </div>
-        </div>
-      </Modal>
+        const latest = ref.dealLogs[ref.dealLogs.length - 1];
+        const value = latest?.dealValue ?? latest?.agreedAmount ?? null;
 
-      {/* PAYMENT DRAWER → MODAL */}
-      <Modal
-        open={showPaymentDrawer}
-        onClose={() => setShowPaymentDrawer(false)}
-        title="Payment Panel"
-      >
-        <PaymentDrawer
-          isOpen={showPaymentDrawer}
-          onClose={() => setShowPaymentDrawer(false)}
-          payment={payment}
-          referralData={referralData}
-          ujbBalance={ujb.ujbBalance}
-          paidTo={{
-            orbiter: paidToOrbiter,
-            orbiterMentor: paidToOrbiterMentor,
-            cosmoMentor: paidToCosmoMentor,
-          }}
-          payments={payments}
-          mapName={mapName}
-          dealEverWon={dealEverWon}
-          totalEarned={totalEarned}
-          onRequestPayout={({ recipient, slotKey, amount, fromPaymentId }) =>
-            openPayoutModal({ cosmoPaymentId: fromPaymentId || null, slot: slotKey || recipient, amount })
-          }
-        />
-      </Modal>
+        if (!value) return '—';
+        return `₹ ${Number(value).toLocaleString()}`;
+    };
 
-      <Modal
-        open={payoutModal.open}
-        onClose={closePayoutModal}
-        title={`Payout — ${payoutModal.slot} (${payoutModal.recipientName})`}
-      >
-        <div className="space-y-4">
+    const getReferralType = (ref) => {
+        return (
+            ref?.referralType ||
+            ref?.refType ||
+            ref?.type ||
+            '—'
+        );
+    };
 
-          {/* BASIC INFO */}
-          <div className="space-y-1">
-            <Text>
-              <strong>Slot Logical (Due):</strong>{" "}
-              ₹{Number(payoutModal.logicalAmount || 0).toLocaleString("en-IN")}
-            </Text>
+    const getDealStatus = (ref) => {
+        if (!ref?.statusLogs) return 'Pending';
 
-            <Text>
-              <strong>Recipient UJB:</strong> {payoutModal.recipientUjb || "—"}
-            </Text>
-          </div>
+        if (!Array.isArray(ref.statusLogs)) return 'Pending';
 
-          {/* PREVIEW BOX */}
-          {payoutModal.open && (
-            <Card>
-              <Text variant="h4">Payout Breakdown</Text>
+        if (ref.statusLogs.length === 0) return 'Pending';
 
-              <div className="space-y-1 mt-2">
-                <Text>
-                  Logical Amount: ₹
-                  {payoutModal.logicalAmount.toLocaleString("en-IN")}
+        const last = ref.statusLogs[ref.statusLogs.length - 1];
+
+        return last?.status || 'Pending';
+    };
+
+    const mapStatusColor = (status) => {
+        if (!status) return 'secondary';
+
+        const s = status.toLowerCase();
+
+        if (s.includes('won')) return 'success';
+        if (s.includes('completed')) return 'success';
+        if (s.includes('progress')) return 'info';
+        if (s.includes('lost')) return 'danger';
+        if (s.includes('pending')) return 'warning';
+
+        return 'secondary';
+    };
+
+    return (
+        <>
+            <div className="p-6 space-y-6">
+                {/* Header */}
+                <Text as="h1">Manage Referrals</Text>
+
+                {/* ================= STAT CARDS ================= */}
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    <Card
+                        className="p-4 cursor-pointer"
+                        onClick={() => {
+                            setTypeFilter('');
+                            setStatusFilter('');
+                        }}
+                    >
+                        <div className="flex items-center gap-3">
+                            <BarChart3 className="w-5 h-5 text-blue-600" />
+                            <div>
+                                <Text as="h3">Total</Text>
+                                <Text>{total}</Text>
+                            </div>
+                        </div>
+                    </Card>
+
+                    <Card
+                        className="p-4 cursor-pointer"
+                        onClick={() => setTypeFilter('Self')}
+                    >
+                        <div className="flex items-center gap-3">
+                            <User className="w-5 h-5 text-green-600" />
+                            <div>
+                                <Text as="h3">Self</Text>
+                                <Text>{selfCount}</Text>
+                            </div>
+                        </div>
+                    </Card>
+
+                    <Card
+                        className="p-4 cursor-pointer"
+                        onClick={() => setTypeFilter('Others')}
+                    >
+                        <div className="flex items-center gap-3">
+                            <Users className="w-5 h-5 text-purple-600" />
+                            <div>
+                                <Text as="h3">Others</Text>
+                                <Text>{othersCount}</Text>
+                            </div>
+                        </div>
+                    </Card>
+
+                    <Card
+                        className="p-4 cursor-pointer"
+                        onClick={() => setStatusFilter('Pending')}
+                    >
+                        <div className="flex items-center gap-3">
+                            <Clock className="w-5 h-5 text-orange-600" />
+                            <div>
+                                <Text as="h3">Pending</Text>
+                                <Text>{pendingCount}</Text>
+                            </div>
+                        </div>
+                    </Card>
+                </div>
+
+                {/* ================= FILTERS (HORIZONTAL) ================= */}
+                <div className="sticky top-[64px] z-20">
+                    <Card className="p-6">
+                        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+
+                            {/* LEFT: Export */}
+                            <div className="flex items-center">
+                                <ReferralExportButton />
+                            </div>
+
+                            {/* RIGHT: Horizontal Filters */}
+                            <div className="flex flex-wrap items-center gap-3">
+
+                                <div className="w-[240px]">
+                                    <Input
+                                        placeholder="Search name / ID"
+                                        value={search}
+                                        onChange={(e) => setSearch(e.target.value)}
+                                    />
+                                </div>
+
+                                <div className="w-[180px]">
+                                    <Select
+                                        value={orbiterFilter}
+                                        onChange={setOrbiterFilter}
+                                        options={orbiterOptions}
+                                    />
+                                </div>
+
+                                <div className="w-[150px]">
+                                    <Select
+                                        value={typeFilter}
+                                        onChange={setTypeFilter}
+                                        options={[
+                                            { label: 'All Types', value: '' },
+                                            { label: 'Self', value: 'Self' },
+                                            { label: 'Others', value: 'Others' },
+                                        ]}
+                                    />
+                                </div>
+
+                                <div className="w-[180px]">
+                                    <Select
+                                        value={statusFilter}
+                                        onChange={setStatusFilter}
+                                        options={[
+                                            { label: 'All Status', value: '' },
+                                            { label: 'Pending', value: 'Pending' },
+                                            { label: 'Deal Won', value: 'Deal Won' },
+                                            { label: 'Deal Lost', value: 'Deal Lost' },
+                                            { label: 'Work in Progress', value: 'Work in Progress' },
+                                            { label: 'Work Completed', value: 'Work Completed' },
+                                        ]}
+                                    />
+                                </div>
+
+                                <Button
+                                    variant="ghost"
+                                    onClick={() => {
+                                        setSearch('');
+                                        setOrbiterFilter('');
+                                        setTypeFilter('');
+                                        setStatusFilter('');
+                                    }}
+                                >
+                                    Clear
+                                </Button>
+
+                            </div>
+
+                        </div>
+                    </Card>
+                </div>
+
+
+                {/* RESULT COUNT */}
+                <Text className="text-sm text-gray-500">
+                    Showing {filtered.length} results
                 </Text>
 
-                <Text>
-                  Adjustment Used: ₹
-                  {Number(payoutModal.preview?.deducted || 0).toLocaleString("en-IN")}
-                </Text>
+                {/* ================= TABLE ================= */}
+                <Card className="p-0">
+                    {loading ? (
+                        <div className="p-6 space-y-3">
+                            <div className="h-10 bg-gray-200 rounded animate-pulse" />
+                            <div className="h-10 bg-gray-200 rounded animate-pulse" />
+                            <div className="h-10 bg-gray-200 rounded animate-pulse" />
+                        </div>
+                    ) : (
+                        <>
+                            <div className="overflow-auto max-h-[65vh]">
+                                <Table>
+                                    <TableHeader columns={columns} />
+                                    <tbody>
+                                        {filtered.map((ref, index) => (
+                                            <TableRow
+                                                key={ref.id}
+                                                className="cursor-pointer"
+                                                onClick={() => handleEdit(ref.id)}
+                                            >
+                                                <td className="px-4 py-3">{index + 1}</td>
 
-                <Text>
-                  Gross After Adjustment: ₹
-                  {previewGross.toLocaleString("en-IN")}
-                </Text>
+                                                <td className="px-4 py-3">
+                                                    {ref.orbiter?.name || '—'}
+                                                </td>
 
-                <Text>
-                  TDS ({previewIsNri ? "20%" : "5%"}): ₹
-                  {previewTds.toLocaleString("en-IN")}
-                </Text>
+                                                <td className="px-4 py-3">
+                                                    {ref.cosmoOrbiter?.name || '—'}
+                                                </td>
 
-                <Text variant="h4">
-                  Net Payable: ₹{previewNet.toLocaleString("en-IN")}
-                </Text>
-              </div>
-            </Card>
-          )}
+                                                {/* TYPE */}
+                                                <td className="px-4 py-3">
+                                                    <div className="flex items-center gap-2">
+                                                        <StatusBadge status="info" />
+                                                        <span>{getReferralType(ref)}</span>
+                                                    </div>
+                                                </td>
 
-          {/* MODE */}
-          <div>
-            <Text variant="label">Mode of Payment</Text>
-            <select
-              className="w-full border rounded-lg p-2 mt-1"
-              value={payoutModal.modeOfPayment}
-              onChange={(e) =>
-                setPayoutModal((p) => ({
-                  ...p,
-                  modeOfPayment: e.target.value,
-                }))
-              }
-            >
-              <option value="">--Select--</option>
-              <option>Bank Transfer</option>
-              <option>GPay</option>
-              <option>Razorpay</option>
-              <option>Cash</option>
-            </select>
-          </div>
+                                                {/* DEAL STATUS (from statusLogs[]) */}
+                                                <td className="px-4 py-3">
+                                                    <div className="flex items-center gap-2">
+                                                        <StatusBadge status={mapStatusColor(getDealStatus(ref))} />
+                                                        <span>{getDealStatus(ref)}</span>
+                                                    </div>
+                                                </td>
 
-          {/* TRANSACTION */}
-          <div>
-            <Text variant="label">Transaction / Ref ID</Text>
-            <input
-              className="w-full border rounded-lg p-2 mt-1"
-              value={payoutModal.transactionRef}
-              onChange={(e) =>
-                setPayoutModal((p) => ({
-                  ...p,
-                  transactionRef: e.target.value,
-                }))
-              }
-            />
-          </div>
+                                                <td className="px-4 py-3">
+                                                    {ref.referralId || '—'}
+                                                </td>
 
-          {/* DATE */}
-          <div>
-            <Text variant="label">Payment Date</Text>
-            <input
-              type="date"
-              className="w-full border rounded-lg p-2 mt-1"
-              value={payoutModal.paymentDate}
-              onChange={(e) =>
-                setPayoutModal((p) => ({
-                  ...p,
-                  paymentDate: e.target.value,
-                }))
-              }
-            />
-          </div>
+                                                {/* DEAL VALUE (from dealLogs[]) */}
+                                                <td className="px-4 py-3 font-semibold">
+                                                    {getDealValue(ref)}
+                                                </td>
 
-          {/* ACTIONS */}
-          <div className="flex gap-3 pt-2">
-            <Button
-              onClick={confirmPayout}
-              disabled={
-                payoutModal.processing ||
-                ujb.isSubmitting ||
-                adjustment.loading
-              }
-            >
-              {payoutModal.processing ||
-                ujb.isSubmitting ||
-                adjustment.loading
-                ? "Processing..."
-                : "Confirm Payout"}
-            </Button>
+                                                {/* NEXT FOLLOW-UP (only if you add this field later) */}
+                                                <td className="px-4 py-3">
+                                                    {ref.nextFollowUpDate
+                                                        ? new Date(ref.nextFollowUpDate.seconds * 1000).toLocaleDateString()
+                                                        : '—'}
+                                                </td>
 
-            <Button variant="secondary" onClick={closePayoutModal}>
-              Cancel
-            </Button>
-          </div>
+                                                {/* REFERRAL DATE */}
+                                                <td className="px-4 py-3">
+                                                    {ref.timestamp?.seconds
+                                                        ? new Date(ref.timestamp.seconds * 1000).toLocaleDateString()
+                                                        : '—'}
+                                                </td>
 
-          {adjustment.error && (
-            <Text variant="caption" className="text-red-500">
-              Adjustment error: {adjustment.error}
-            </Text>
-          )}
+                                                {/* UPDATED */}
+                                                <td className="px-4 py-3">
+                                                    {ref.lastUpdated?.seconds
+                                                        ? new Date(ref.lastUpdated.seconds * 1000).toLocaleDateString()
+                                                        : '—'}
+                                                </td>
 
-          {ujb.error && (
-            <Text variant="caption" className="text-red-500">
-              Payout error: {ujb.error}
-            </Text>
-          )}
-        </div>
-      </Modal>
+                                                {/* ACTIONS */}
+                                                <td
+                                                    className="px-4 py-3"
+                                                    onClick={(e) => e.stopPropagation()}
+                                                >
+                                                    <div className="flex items-center gap-2">
+                                                        <ActionButton
+                                                            icon={Pencil}
+                                                            label="Edit"
+                                                            variant="ghost"
+                                                            onClick={() => handleEdit(ref.id)}
+                                                        />
+                                                        <ActionButton
+                                                            icon={Trash2}
+                                                            label="Delete"
+                                                            variant="ghostDanger"
+                                                            onClick={() => askDelete(ref.id)}
+                                                        />
+                                                    </div>
+                                                </td>
+                                            </TableRow>
 
+                                        ))}
+                                    </tbody>
+                                </Table>
+                            </div>
 
-    </>
-  );
+                            <div className="flex justify-center p-4">
+                                <Button
+                                    variant="secondary"
+                                    onClick={loadMore}
+                                    disabled={loadingMore}
+                                >
+                                    {loadingMore ? 'Loading…' : 'Load More'}
+                                </Button>
+                            </div>
+                        </>
+                    )}
+                </Card>
 
+                <ConfirmModal
+                    open={confirmOpen}
+                    title="Delete this referral?"
+                    description="This referral will be permanently removed."
+                    onConfirm={confirmDelete}
+                    onClose={() => setConfirmOpen(false)}
+                />
+            </div>
+        </>
+    );
 }
+

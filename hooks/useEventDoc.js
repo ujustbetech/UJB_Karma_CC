@@ -1,8 +1,8 @@
 "use client";
 
 import { doc, updateDoc, getDoc } from "firebase/firestore";
-import { db } from "../firebaseConfig";
-import { COLLECTIONS } from "/utility_collection";
+import { db } from "@/lib/firebase/firebaseClient";
+import { COLLECTIONS } from "@/lib/utility_collection";
 
 export default function useEventDoc(eventID) {
   const ref = doc(db, COLLECTIONS.monthlyMeeting, eventID);

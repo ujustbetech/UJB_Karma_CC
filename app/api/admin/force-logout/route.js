@@ -1,21 +1,18 @@
 // /app/api/admin/force-logout/route.js
 
 import { NextResponse } from "next/server";
-import { db } from "@/firebaseConfig";
-import { collection, query, where, getDocs, updateDoc } from "firebase/firestore";
+import { adminDb } from "@/lib/firebase/firebaseAdmin";
 
 export async function POST(req) {
   const { phone } = await req.json();
 
-  const q = query(
-    collection(db, "user_sessions"),
-    where("phone", "==", phone)
-  );
-
-  const snapshot = await getDocs(q);
+  const snapshot = await adminDb
+    .collection("user_sessions")
+    .where("phone", "==", phone)
+    .get();
 
   for (const docSnap of snapshot.docs) {
-    await updateDoc(docSnap.ref, { revoked: true });
+    await docSnap.ref.update({ revoked: true });
   }
 
   return NextResponse.json({ success: true });

@@ -19,7 +19,7 @@ import { updateDoc } from "firebase/firestore";
 
 import { Eye, User, Layers, Tag, Upload, Rocket, AlignLeft, Shapes, Type, Hash, FileText, Folder, Users, Video, Link } from "lucide-react";
 
-import { db, storage } from "@/firebaseConfig";
+import { db, storage } from "@/lib/firebase/firebaseClient";
 import {
     collection,
     addDoc,
@@ -1171,3 +1171,4 @@ export default function EditContentPage({ id }) {
         </>
     );
 }
+

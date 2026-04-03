@@ -8,7 +8,7 @@ import {
   getDocs,
 } from "firebase/firestore";
 
-import { db } from "@/firebaseConfig";
+import { db } from "@/lib/firebase/firebaseClient";
 import {
   Trophy,
   Heart,

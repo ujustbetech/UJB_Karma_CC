@@ -1,20 +1,15 @@
 import React, { useState, useEffect } from "react";
 import { doc, updateDoc, getDoc } from "firebase/firestore";
-import { db } from "@/firebaseConfig";
+import { db } from "@/lib/firebase/firebaseClient";
 import emailjs from "@emailjs/browser";
 import { COLLECTIONS } from "@/lib/utility_collection";
-import axios from "axios";
 import Swal from "sweetalert2";
+import { sendWhatsAppTextRequest } from "@/utils/whatsappClient";
 
 
 const Assessment = ({ id, fetchData }) => {
   const [loading, setLoading] = useState(false);
   const [caseStudy, setCaseStudy] = useState(null);
-
-  const WHATSAPP_API_URL =
-    "https://graph.facebook.com/v22.0/527476310441806/messages";
-  const WHATSAPP_API_TOKEN =
-    "Bearer EAAHwbR1fvgsBOwUInBvR1SGmVLSZCpDZAkn9aZCDJYaT0h5cwyiLyIq7BnKmXAgNs0ZCC8C33UzhGWTlwhUarfbcVoBdkc1bhuxZBXvroCHiXNwZCZBVxXlZBdinVoVnTB7IC1OYS4lhNEQprXm5l0XZAICVYISvkfwTEju6kV4Aqzt4lPpN8D3FD7eIWXDhnA4SG6QZDZD";
 
   // 🔹 Load caseStudy1 data if already sent
   useEffect(() => {
@@ -76,19 +71,10 @@ ${orbiterName}
     const bodyText = `Hi ${prospectName},\n\nHere is your case study from UJustBe.Click the link below to view the Case Study:
 https://firebasestorage.googleapis.com/v0/b/monthlymeetingapp.appspot.com/o/CaseStudy%2FHow%20to%20pass%20referral%20Doc%20-%20Ibrahim.pdf?alt=media&token=808a9100-d250-4998-aa07-79baed831ed6. Please review it carefully and let us know your reflections.\n\nRegards,\n${orbiterName}`;
 
-    const payload = {
-      messaging_product: "whatsapp",
-      to: `91${phone}`,
-      type: "text",
-      text: { body: bodyText },
-    };
-
     try {
-      await axios.post(WHATSAPP_API_URL, payload, {
-        headers: {
-          Authorization: WHATSAPP_API_TOKEN,
-          "Content-Type": "application/json",
-        },
+      await sendWhatsAppTextRequest({
+        phone,
+        text: bodyText,
       });
       console.log(`✅ WhatsApp Case Study sent to ${prospectName}`);
       return true;
@@ -201,3 +187,4 @@ loading || caseStudy?.sent
 };
 
 export default Assessment;
+

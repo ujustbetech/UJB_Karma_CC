@@ -9,7 +9,7 @@ import {
   collection,
   getDocs,
 } from "firebase/firestore";
-import { app } from "@/firebaseConfig";
+import { app } from "@/lib/firebase/firebaseClient";
 import Link from "next/link";
 import { Calendar, Video, MapPin } from "lucide-react";
 import { COLLECTIONS } from "@/lib/utility_collection";

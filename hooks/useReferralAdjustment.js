@@ -11,7 +11,7 @@ import {
   arrayUnion,
 } from "firebase/firestore";
 
-import { db } from "@/firebaseConfig";
+import { db } from "@/lib/firebase/firebaseClient";
 import { COLLECTIONS } from "@/lib/utility_collection";
 import { applyAdjustmentBeforePayRoleCalc } from "@/utils/referralCalculations";
 import sanitizeForFirestore from "@/utils/sanitizeForFirestore";
@@ -221,3 +221,4 @@ export const useReferralAdjustment = (referralId, orbiterUjbCode) => {
     applyAdjustmentForRole,
   };
 };
+

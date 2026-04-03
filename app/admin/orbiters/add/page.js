@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
-import { db } from "@/firebaseConfig";
+import { db } from "@/lib/firebase/firebaseClient";
 import { collection, getDocs, setDoc, doc } from "firebase/firestore";
 import { COLLECTIONS } from "@/lib/utility_collection";
 import Text from "@/components/ui/Text";
@@ -307,3 +307,4 @@ export default function AddOrbiterPage() {
     </>
   );
 }
+

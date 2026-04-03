@@ -3,10 +3,10 @@ import { doc, getDoc, updateDoc, collection, getDocs ,  addDoc,
   query,
   where,setDoc,
   serverTimestamp,} from 'firebase/firestore';
-import axios from 'axios';
 import { COLLECTIONS } from "@/lib/utility_collection";
 import emailjs from '@emailjs/browser';
-import { db } from '@/firebaseConfig';
+import { db } from '@/lib/firebase/firebaseClient';
+import { sendWhatsAppTemplateRequest } from '@/utils/whatsappClient';
 
 const Followup = ({ id, data = { followups: [], comments: [] ,event: [] }, fetchData }) => {
   const [followup, setFollowup] = useState([]);
@@ -44,10 +44,6 @@ const Followup = ({ id, data = { followups: [], comments: [] ,event: [] }, fetch
     reason: ''
   });
   // === END NEW ===
-
-  const WHATSAPP_API_URL = 'https://graph.facebook.com/v22.0/527476310441806/messages';
-  // NOTE: token present as in your original code. Consider moving to backend for security.
-  const WHATSAPP_API_TOKEN = 'Bearer EAAHwbR1fvgsBOwUInBvR1SGmVLSZCpDZAkn9aZCDJYaT0h5cwyiLyIq7BnKmXAgNs0ZCC8C33UzhGWTlwhUarfbcVoBdkc1bhuxZBXvroCHiXNwZCZBVxXlZBdinVoVnTB7IC1OYS4lhNEQprXm5l0XZAICVYISvkfwTEju6kV4Aqzt4lPpN8D3FD7eIWXDhnA4SG6QZDZD';
 
 
 // ================= CP HELPERS =================
@@ -529,43 +525,13 @@ Looking forward to speaking with you soon! `;
     reason = '',
     venue = ''
   }) => {
-    const payload = {
-      messaging_product: 'whatsapp',
-      to: `91${phone}`,
-      type: 'template',
-      template: {
-        name: isReschedule ? 'reschedule_meeting_otc' : 'schedule_message_otc',
-        language: { code: 'en' },
-        components: [
-          {
-            type: 'body',
-            parameters: isReschedule
-              ? [
-                  { type: 'text', text: name },
-                  { type: 'text', text: reason },
-                  { type: 'text', text: date }
-                ]
-              : [
-                  { type: 'text', text: name },
-                  { type: 'text', text: date },
-                  {
-                    type: 'text',
-                    text: zoomLink
-                      ? `Zoom Link: ${zoomLink}`
-                      : `Venue: ${venue}`
-                  }
-                ]
-          }
-        ]
-      }
-    };
-
     try {
-      await axios.post(WHATSAPP_API_URL, payload, {
-        headers: {
-          Authorization: WHATSAPP_API_TOKEN,
-          'Content-Type': 'application/json'
-        }
+      await sendWhatsAppTemplateRequest({
+        phone,
+        templateName: isReschedule ? 'reschedule_meeting_otc' : 'schedule_message_otc',
+        parameters: isReschedule
+          ? [name, reason, date]
+          : [name, date, zoomLink ? `Zoom Link: ${zoomLink}` : `Venue: ${venue}`],
       });
 
       console.log(`✅ WhatsApp message sent to ${name} (${phone})`);
@@ -576,28 +542,11 @@ Looking forward to speaking with you soon! `;
 
   // Function to send thank you message
   const sendThankYouMessage = async (name, phone) => {
-    const payload = {
-      messaging_product: 'whatsapp',
-      to: `91${phone}`,
-      type: 'template',
-      template: {
-        name: 'meeeting_done_thankyou_otc',
-        language: { code: 'en' },
-        components: [
-          {
-            type: 'body',
-            parameters: [{ type: 'text', text: name }]
-          }
-        ]
-      }
-    };
-
     try {
-      await axios.post(WHATSAPP_API_URL, payload, {
-        headers: {
-          Authorization: WHATSAPP_API_TOKEN,
-          'Content-Type': 'application/json',
-        },
+      await sendWhatsAppTemplateRequest({
+        phone,
+        templateName: 'meeeting_done_thankyou_otc',
+        parameters: [name],
       });
       console.log(`✅ Message sent to ${name}`);
     } catch (error) {
@@ -1111,3 +1060,4 @@ Send
 };
 
 export default Followup;
+

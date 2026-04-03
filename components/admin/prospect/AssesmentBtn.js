@@ -5,11 +5,11 @@ import {
   getDoc
 } from "firebase/firestore";
 
-import { db } from "@/firebaseConfig";
+import { db } from "@/lib/firebase/firebaseClient";
 import emailjs from "@emailjs/browser";
-import axios from "axios";
 import Swal from "sweetalert2";
 import { COLLECTIONS } from "@/lib/utility_collection";
+import { sendWhatsAppTemplateRequest } from "@/utils/whatsappClient";
 
 const Assessment = ({ id, fetchData }) => {
 
@@ -19,12 +19,6 @@ const Assessment = ({ id, fetchData }) => {
   const [reason, setReason] = useState("");
 
   const isFrozen = loading || (status && status !== "No status yet");
-
-  const WHATSAPP_API_URL =
-    "https://graph.facebook.com/v22.0/527476310441806/messages";
-
-  const WHATSAPP_API_TOKEN =
-    "Bearer YOUR_TOKEN";
 
   /* ------------------------------------------------ */
   /* FETCH ASSESSMENT STATUS */
@@ -82,32 +76,15 @@ const Assessment = ({ id, fetchData }) => {
 
   const sendWhatsapp = async (prospectName, orbiterName, message, phone) => {
 
-    const payload = {
-      messaging_product: "whatsapp",
-      to: `91${phone}`,
-      type: "template",
-      template: {
-        name: "enrollment_journey",
-        language: { code: "en" },
-        components: [
-          {
-            type: "body",
-            parameters: [
-              { type: "text", text: sanitizeText(message) },
-              { type: "text", text: sanitizeText(orbiterName) }
-            ]
-          }
-        ]
-      }
-    };
-
     try {
 
-      await axios.post(WHATSAPP_API_URL, payload, {
-        headers: {
-          Authorization: WHATSAPP_API_TOKEN,
-          "Content-Type": "application/json"
-        }
+      await sendWhatsAppTemplateRequest({
+        phone,
+        templateName: "enrollment_journey",
+        parameters: [
+          sanitizeText(message),
+          sanitizeText(orbiterName),
+        ],
       });
 
       console.log("Whatsapp sent");
@@ -373,3 +350,4 @@ UJustBe Team`;
 };
 
 export default Assessment;
+

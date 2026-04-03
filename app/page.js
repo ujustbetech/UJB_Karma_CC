@@ -3,9 +3,8 @@
 import Button from "@/components/ui/Button";
 import Card from "@/components/ui/Card";
 
-import { auth, microsoftProvider, db } from "@/firebaseConfig";
+import { auth, microsoftProvider } from "@/lib/firebase/firebaseClient";
 import { signInWithPopup } from "firebase/auth";
-import { collection, getDocs } from "firebase/firestore";
 
 import { useRouter } from "next/navigation";
 import { useState, useEffect } from "react";
@@ -17,46 +16,55 @@ export default function LoginPage() {
 
   // 🔴 CHECK SESSION LOGIN
   useEffect(() => {
-    const admin = sessionStorage.getItem("AdminData");
+    const checkAdminSession = async () => {
+      try {
+        const res = await fetch("/api/admin/session/validate", {
+          credentials: "include",
+        });
 
-    if (admin) {
-      router.replace("/admin/orbiters");
-    }
-  }, []);
+        if (res.ok) {
+          router.replace("/admin/orbiters");
+        }
+      } catch {
+        // No active admin session.
+      }
+    };
+
+    checkAdminSession();
+  }, [router]);
 
 const handleMicrosoftLogin = async () => {
   setLoading(true);
 
   try {
     const result = await signInWithPopup(auth, microsoftProvider);
-    const user = result.user;
+    const idToken = await result.user.getIdToken();
 
-    const adminSnapshot = await getDocs(collection(db, "AdminUsers"));
-    const admins = adminSnapshot.docs.map(doc => doc.data());
+    const res = await fetch("/api/admin/session/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ idToken }),
+    });
 
-    const matchedAdmin = admins.find(
-      (a) => a.email.toLowerCase() === user.email.toLowerCase()
-    );
+    const data = await res.json();
 
-    if (!matchedAdmin) {
+    if (!res.ok || !data.success) {
+      alert(data.message || "You are not an Admin");
+      setLoading(false);
+      return;
+    }
+
+
+    if (!res.ok || !data.success) {
       alert("You are not an Admin ❌");
       setLoading(false);
       return;
     }
 
     // ✅ PRIORITY: Firestore image > Microsoft image
-    const adminData = {
-      email: user.email,
-      name: matchedAdmin.name,
-      role: matchedAdmin.role,
-      designation: matchedAdmin.designation,
-      photo:
-        matchedAdmin.photo ||   // Firestore image
-        user.photoURL ||        // Microsoft image
-        null,
-    };
+    const adminData = data.admin || {};
 
-    sessionStorage.setItem("AdminData", JSON.stringify(adminData));
 
     router.replace("/admin/orbiters");
 
@@ -89,3 +97,4 @@ const handleMicrosoftLogin = async () => {
     </div>
   );
 }
+

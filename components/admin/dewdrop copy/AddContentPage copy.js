@@ -15,7 +15,7 @@ import TagsInput from "@/components/ui/TagsInput";
 import { useToast } from "@/components/ui/ToastProvider";
 import FilePreview from "@/components/ui/FilePreview";
 
-import { db, storage } from "@/firebaseConfig";
+import { db, storage } from "@/lib/firebase/firebaseClient";
 import {
   collection,
   addDoc,
@@ -415,3 +415,4 @@ export default function AddContentPage() {
     </>
   );
 }
+

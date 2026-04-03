@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect } from "react";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { doc, updateDoc, getDoc } from "firebase/firestore";
-import { storage, db } from "@/firebaseConfig";
+import { storage, db } from "@/lib/firebase/firebaseClient";
 import { COLLECTIONS } from "@/lib/utility_collection";
 
 import Card from "@/components/ui/Card";
@@ -276,3 +276,4 @@ export default function DocumentUploadSection({
     </div>
   );
 }
+

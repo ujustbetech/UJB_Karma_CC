@@ -1,34 +1,32 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import AdminLayout from "@/components/layout/AdminLayout";
+import {
+  AdminSessionProvider,
+  useAdminSession,
+} from "@/context/adminSessionContext";
 
-export default function Layout({ children }) {
-
+function AdminRouteGuard({ children }) {
   const router = useRouter();
-  const [authorized, setAuthorized] = useState(false);
+  const { admin, loading } = useAdminSession();
 
   useEffect(() => {
-
-    const admin = sessionStorage.getItem("AdminData");
-
-    // 🔴 If NOT logged in
-    if (!admin) {
+    if (!loading && !admin) {
       router.replace("/");
-      return;
     }
+  }, [admin, loading, router]);
 
-    setAuthorized(true);
+  if (loading || !admin) return null;
 
-  }, []);
+  return <AdminLayout role={admin.role}>{children}</AdminLayout>;
+}
 
-  // 🔴 Prevent UI flash
-  if (!authorized) return null;
-
+export default function Layout({ children }) {
   return (
-    <AdminLayout role="admin">
-      {children}
-    </AdminLayout>
+    <AdminSessionProvider>
+      <AdminRouteGuard>{children}</AdminRouteGuard>
+    </AdminSessionProvider>
   );
 }

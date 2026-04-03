@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
-import { db } from "@/firebaseConfig";
+import { db } from "@/lib/firebase/firebaseClient";
 import {
     collection,
     getDocs,
@@ -388,3 +388,4 @@ setEvents(sorted);
         </>
     );
 }
+

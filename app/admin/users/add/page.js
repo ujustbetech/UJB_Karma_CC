@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { db } from "@/firebaseConfig";
+import { db } from "@/lib/firebase/firebaseClient";
 import { collection, addDoc, Timestamp } from "firebase/firestore";
 
 import Text from "@/components/ui/Text";
@@ -13,6 +13,7 @@ import Select from "@/components/ui/Select";
 import FormField from "@/components/ui/FormField";
 import ConfirmModal from "@/components/ui/ConfirmModal";
 import { useToast } from "@/components/ui/ToastProvider";
+import { useAdminSession } from "@/hooks/useAdminSession";
 
 export default function AddAdminPage() {
 
@@ -31,15 +32,13 @@ export default function AddAdminPage() {
   });
 
   const [errors, setErrors] = useState({});
+  const { admin, loading: sessionLoading } = useAdminSession();
 
   // 🔴 LOGIN + ROLE CHECK
   useEffect(() => {
 
-    const admin = JSON.parse(sessionStorage.getItem("AdminData"));
-
-    if (!admin) {
+    if (!sessionLoading && !admin) {
       router.replace("/");
-      return;
     }
 
     // if (admin.role !== "Super") {
@@ -48,7 +47,7 @@ export default function AddAdminPage() {
     //   return;
     // }
 
-  }, []);
+  }, [admin, router, sessionLoading]);
 
   const validate = () => {
 
@@ -184,3 +183,4 @@ export default function AddAdminPage() {
     </>
   );
 }
+

@@ -58,42 +58,56 @@ const res = await fetch("/api/session/validate", {
   }, [countdown]);
 
   /* 📲 SEND OTP */
-  const sendOTP = async (e) => {
-    if (e) e.preventDefault();
-    setError("");
+ const sendOTP = async (e) => {
+  if (e) e.preventDefault();
+  setError("");
 
-    if (phone.length !== 10) {
-      setError("Enter valid 10 digit mobile number");
+  if (phone.length !== 10) {
+    setError("Enter valid 10 digit mobile number");
+    return;
+  }
+
+  setLoading(true);
+
+  try {
+    const res = await fetch("/api/send-otp", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ phone }),
+    });
+
+    console.log("📡 STATUS:", res.status);
+
+    let data;
+
+    try {
+      data = await res.json();
+    } catch (jsonErr) {
+      console.error("❌ JSON Parse Error:", jsonErr);
+      throw new Error("Invalid server response");
+    }
+
+    console.log("📦 RESPONSE:", data);
+
+    if (!res.ok || !data.success) {
+      setError(data.message || "Failed to send OTP");
+      setLoading(false);
       return;
     }
 
-    setLoading(true);
+    setStep(2);
+    setCountdown(30);
+    inputsRef.current[0]?.focus();
 
-    try {
-      const res = await fetch("/api/send-otp", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone }),
-      });
+  } catch (err) {
+    console.error("🔥 SEND OTP ERROR:", err);
+    setError(err.message || "Something went wrong");
+  }
 
-      const data = await res.json();
-
-      if (!data.success) {
-        setError(data.message);
-        setLoading(false);
-        return;
-      }
-
-      setStep(2);
-      setCountdown(30);
-      inputsRef.current[0]?.focus();
-    } catch (err) {
-      setError("Something went wrong");
-    }
-
-    setLoading(false);
-  };
-
+  setLoading(false);
+};
   /* 🔢 HANDLE OTP INPUT */
   const handleOtpChange = (value, index) => {
     if (!/^\d?$/.test(value)) return;

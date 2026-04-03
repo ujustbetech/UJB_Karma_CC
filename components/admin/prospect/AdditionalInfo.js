@@ -2,12 +2,12 @@
 
 import React, { useState, useEffect } from "react";
 import { doc, updateDoc } from "firebase/firestore";
-import { db } from "@/firebaseConfig";
+import { db } from "@/lib/firebase/firebaseClient";
 import { COLLECTIONS } from "@/lib/utility_collection";
 import "react-quill-new/dist/quill.snow.css";
 import emailjs from "@emailjs/browser";
-import axios from "axios";
 import dynamic from "next/dynamic";
+import { sendWhatsAppTemplateRequest } from "@/utils/whatsappClient";
 
 const ReactQuill = dynamic(() => import("react-quill-new"), {
   ssr: false,
@@ -32,12 +32,6 @@ const AditionalInfo = ({ id, data = { sections: [] } }) => {
 
   const [hasData, setHasData] = useState(false);
   const [editMode, setEditMode] = useState(false);
-
-  const WHATSAPP_API_URL =
-    "https://graph.facebook.com/v22.0/527476310441806/messages";
-
-  const WHATSAPP_API_TOKEN =
-    "Bearer EAAHwbR1fvgsBOwUInBvR1SGmVLSZCpDZAkn9aZCDJYaT0h5cwyiLyIq7BnKmXAgNs0ZCC8C33UzhGWTlwhUarfbcVoBdkc1bhuxZBXvroCHiXNwZCZBVxXlZBdinVoVnTB7IC1OYS4lhNEQprXm5l0XZAICVYISvkfwTEju6kV4Aqzt4lPpN8D3FD7eIWXDhnA4SG6QZDZD";
 
   useEffect(() => {
     setMounted(true);
@@ -123,43 +117,19 @@ Thank you!
     bodyText,
     phone
   ) => {
-
-    const payload = {
-      messaging_product: "whatsapp",
-      to: `91${phone}`,
-      type: "template",
-      template: {
-        name: "enrollment_journey",
-        language: { code: "en" },
-        components: [
-          {
-            type: "body",
-            parameters: [
-              { type: "text", text: sanitizeText(bodyText) },
-              { type: "text", text: sanitizeText(orbiterName) },
-            ],
-          },
-        ],
-      },
-    };
-
     try {
-
-      await axios.post(WHATSAPP_API_URL, payload, {
-        headers: {
-          Authorization: WHATSAPP_API_TOKEN,
-          "Content-Type": "application/json",
-        },
+      await sendWhatsAppTemplateRequest({
+        phone,
+        templateName: "enrollment_journey",
+        parameters: [
+          sanitizeText(bodyText),
+          sanitizeText(orbiterName),
+        ],
       });
-
       console.log("WhatsApp message sent");
-
     } catch (error) {
-
       console.error("WhatsApp failed", error);
-
     }
-
   };
 
   const sendAssessmentEmail = async (
@@ -305,3 +275,4 @@ Thank you!
 };
 
 export default AditionalInfo;
+

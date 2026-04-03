@@ -1,20 +1,15 @@
 import React, { useState, useEffect } from "react";
 import { doc, updateDoc, getDoc } from "firebase/firestore";
-import { db } from "@/firebaseConfig";
+import { db } from "@/lib/firebase/firebaseClient";
 import { COLLECTIONS } from "@/lib/utility_collection";
 import emailjs from "@emailjs/browser";
-import axios from "axios";
 import Swal from "sweetalert2";
+import { sendWhatsAppTextRequest } from "@/utils/whatsappClient";
 
 
 const KnowledgeSeries = ({ id, fetchData }) => {
   const [loading, setLoading] = useState(false);
   const [knowledgeSeries, setKnowledgeSeries] = useState(null);
-
-  const WHATSAPP_API_URL =
-    "https://graph.facebook.com/v22.0/527476310441806/messages";
-  const WHATSAPP_API_TOKEN =
-    "Bearer EAAHwbR1fvgsBOwUInBvR1SGmVLSZCpDZAkn9aZCDJYaT0h5cwyiLyIq7BnKmXAgNs0ZCC8C33UzhGWTlwhUarfbcVoBdkc1bhuxZBXvroCHiXNwZCZBVxXlZBdinVoVnTB7IC1OYS4lhNEQprXm5l0XZAICVYISvkfwTEju6kV4Aqzt4lPpN8D3FD7eIWXDhnA4SG6QZDZD";
 
   // 🔹 Load knowledgeSeries9 data if already sent
   useEffect(() => {
@@ -73,19 +68,10 @@ const KnowledgeSeries = ({ id, fetchData }) => {
   const sendKnowledgeSeriesMessage = async (orbiterName, prospectName, phone) => {
     const bodyText = `Hi ${prospectName},\n\n📘 Knowledge Series - Episode 5: The Nucleus Team\n\nSoumya: Is there a leadership team managing all this?\n\nAarav: Absolutely! The Nucleus Team is the core of UJustBe. They mentor other Orbiters, drive the community’s growth, and expand its reach.\n\nSoumya: That must require a lot of commitment.\n\nAarav: It does, but they’re aligned with UJustBe’s vision to live into the world of “happy faces”.\n\nRegards,\n${orbiterName}`;
 
-    const payload = {
-      messaging_product: "whatsapp",
-      to: `91${phone}`,
-      type: "text",
-      text: { body: bodyText },
-    };
-
     try {
-      await axios.post(WHATSAPP_API_URL, payload, {
-        headers: {
-          Authorization: WHATSAPP_API_TOKEN,
-          "Content-Type": "application/json",
-        },
+      await sendWhatsAppTextRequest({
+        phone,
+        text: bodyText,
       });
       console.log(`✅ WhatsApp Knowledge Series 9 sent to ${prospectName}`);
       return true;
@@ -191,3 +177,4 @@ return (
 };
 
 export default KnowledgeSeries;
+

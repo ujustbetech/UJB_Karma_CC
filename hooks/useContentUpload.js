@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 import { ref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
-import { storage } from "@/firebaseConfig";
+import { storage } from "@/lib/firebase/firebaseClient";
 
 export function useContentUpload() {
   const [progress, setProgress] = useState(0);

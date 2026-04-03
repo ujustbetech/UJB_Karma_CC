@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { db } from '@/firebaseConfig';
+import { db } from '@/lib/firebase/firebaseClient';
 import { collection, getDocs, doc, setDoc } from 'firebase/firestore';
 import { COLLECTIONS } from '@/lib/utility_collection';
 
@@ -15,6 +15,7 @@ import { useToast } from '@/components/ui/ToastProvider';
 import FormField from '@/components/ui/FormField';
 import Select from '@/components/ui/Select';
 import { User, UserPlus } from 'lucide-react';
+import { sendWhatsAppTemplateRequest } from '@/utils/whatsappClient';
 
 export default function AddUserSection({ eventId: propEventId }) {
   const router = useRouter();
@@ -101,36 +102,10 @@ export default function AddUserSection({ eventId: propEventId }) {
   };
 
   const sendWhatsAppMessage = async (userPhone, eventId) => {
-    const url = `https://graph.facebook.com/v21.0/527476310441806/messages`;
-
-    const payload = {
-      messaging_product: 'whatsapp',
-      to: `91${userPhone}`,
-      type: 'template',
-      template: {
-        name: 'register_mm',
-        language: { code: 'en' },
-        components: [
-          {
-            type: 'body',
-            parameters: [
-              {
-                type: 'text',
-                text: `https://uspacex.vercel.app/events/${eventId}`,
-              },
-            ],
-          },
-        ],
-      },
-    };
-
-    await fetch(url, {
-      method: 'POST',
-      headers: {
-        Authorization: 'YOUR_TOKEN',
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(payload),
+    await sendWhatsAppTemplateRequest({
+      phone: userPhone,
+      templateName: 'register_mm',
+      parameters: [`https://uspacex.vercel.app/events/${eventId}`],
     });
   };
 
@@ -319,3 +294,4 @@ export default function AddUserSection({ eventId: propEventId }) {
     </Card>
   );
 }
+

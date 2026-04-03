@@ -1,20 +1,15 @@
 import React, { useState, useEffect } from "react";
 import { doc, updateDoc, getDoc } from "firebase/firestore";
-import { db } from "@/firebaseConfig";
+import { db } from "@/lib/firebase/firebaseClient";
 import emailjs from "@emailjs/browser";
-import axios from "axios";
 import { COLLECTIONS } from "@/lib/utility_collection";
 import Swal from "sweetalert2";
+import { sendWhatsAppTextRequest } from "@/utils/whatsappClient";
 
 
 const NTIntro = ({ id, fetchData }) => {
   const [loading, setLoading] = useState(false);
   const [ntIntro, setNtIntro] = useState(null);
-
-  const WHATSAPP_API_URL =
-    "https://graph.facebook.com/v22.0/527476310441806/messages";
-  const WHATSAPP_API_TOKEN =
-    "Bearer EAAHwbR1fvgsBOwUInBvR1SGmVLSZCpDZAkn9aZCDJYaT0h5cwyiLyIq7BnKmXAgNs0ZCC8C33UzhGWTlwhUarfbcVoBdkc1bhuxZBXvroCHiXNwZCZBVxXlZBdinVoVnTB7IC1OYS4lhNEQprXm5l0XZAICVYISvkfwTEju6kV4Aqzt4lPpN8D3FD7eIWXDhnA4SG6QZDZD";
 
   // 🔹 Load ntIntro data if already sent
   useEffect(() => {
@@ -81,19 +76,10 @@ Brand Vision: You, as a contributor, come to be, connect and grow together to li
   const sendNTIntroMessage = async (prospectName, phone) => {
     const bodyText = `Hi ${prospectName},\n\nWelcome to the UJustBe Universe! 🎉 We’re excited to introduce you to the Nucleus Team – the core pillar that fosters growth, collaboration, and empowerment.\n\nThey play a vital role in building the UJustBe community and you, too, can aspire to be part of this prestigious team.\n\nFor support:\n📞 Level 1: 9326062258\n📞 Level 2: 8928660399\n📧 support@ujustbe.com\n\n🌟 Brand Vision: You, as a contributor, come to be, connect and grow together to live into a world of Happy faces.\n\nWarm regards,\nTeam UJustBe`;
 
-    const payload = {
-      messaging_product: "whatsapp",
-      to: `91${phone}`,
-      type: "text",
-      text: { body: bodyText },
-    };
-
     try {
-      await axios.post(WHATSAPP_API_URL, payload, {
-        headers: {
-          Authorization: WHATSAPP_API_TOKEN,
-          "Content-Type": "application/json",
-        },
+      await sendWhatsAppTextRequest({
+        phone,
+        text: bodyText,
       });
       console.log(`✅ WhatsApp NT Intro sent to ${prospectName}`);
       return true;
@@ -191,3 +177,4 @@ return (
 };
 
 export default NTIntro;
+
