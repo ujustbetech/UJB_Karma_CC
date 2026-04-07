@@ -5,14 +5,37 @@ import Image from "next/image";
 import { Pencil, MapPin, BadgeCheck } from "lucide-react";
 import EditHeroSheet from "./EditHeroSheet";
 
+function getSafeImageSrc(value) {
+  if (typeof value !== "string") return "/placeholder.jpg";
+
+  const trimmed = value.trim();
+  if (!trimmed || trimmed === "undefined" || trimmed === "null") {
+    return "/placeholder.jpg";
+  }
+
+  if (trimmed.startsWith("/")) return trimmed;
+
+  try {
+    const parsed = new URL(trimmed);
+    if (parsed.protocol === "http:" || parsed.protocol === "https:") {
+      return trimmed;
+    }
+  } catch {
+    return "/placeholder.jpg";
+  }
+
+  return "/placeholder.jpg";
+}
+
 export default function ProfileHero({ user, setUser }) {
   const [open, setOpen] = useState(false);
+  const profilePhotoSrc = getSafeImageSrc(user?.ProfilePhotoURL);
 
   return (
     <>
       <div className="relative h-[320px] overflow-hidden rounded-tl-lg rounded-tr-lg">
         <Image
-          src={user.ProfilePhotoURL || "/placeholder.jpg"}
+          src={profilePhotoSrc}
           fill
           className="object-cover"
           alt="profile"

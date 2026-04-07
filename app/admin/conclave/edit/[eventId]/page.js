@@ -1,324 +1,305 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useParams, useRouter } from "next/navigation";
 import {
-  addDoc,
-  collection,
-  getDocs,
-  getDoc,
   doc,
-  Timestamp,
-  setDoc,
+  getDoc,
+  getDocs,
+  collection,
   updateDoc,
-  query,
-  where,
+  addDoc,
+  Timestamp,
 } from "firebase/firestore";
-
 import { db } from "@/lib/firebase/firebaseClient";
 import { COLLECTIONS } from "@/lib/utility_collection";
-import ReactSelect from "react-select";
 
 import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
+import Text from "@/components/ui/Text";
 import Input from "@/components/ui/Input";
-import Textarea from "@/components/ui/Textarea";
 import FormField from "@/components/ui/FormField";
 import { useToast } from "@/components/ui/ToastProvider";
 
-export default function CreateConclavePage() {
+export default function EditConclavePage() {
+  const { eventId } = useParams();
+  const id = eventId;
+
+  const router = useRouter();
   const toast = useToast();
 
-  const [users, setUsers] = useState([]);
-  const [loading, setLoading] = useState(false);
-
-  const [form, setForm] = useState({
+  const [loading, setLoading] = useState(true);
+  const [conclave, setConclave] = useState({
     conclaveStream: "",
-    startDate: null,
-    initiationDate: null,
+    startDate: "",
+    initiationDate: "",
     leader: "",
     ntMembers: [],
     orbiters: [],
     leaderRole: "",
     ntRoles: "",
   });
+  const [meetings, setMeetings] = useState([]);
+  const [showMeetingForm, setShowMeetingForm] = useState(false);
+  const [meetingForm, setMeetingForm] = useState({
+    meetingName: "",
+    datetime: "",
+    agenda: "",
+    mode: "online",
+    link: "",
+    venue: "",
+  });
 
-  const [tempNt, setTempNt] = useState("");
-  const [tempOrbiter, setTempOrbiter] = useState("");
-  const [errors, setErrors] = useState({});
+  const convertTimestampToInput = (ts) => {
+    if (!ts?.seconds) return "";
+    const date = new Date(ts.seconds * 1000);
+    const pad = (value) => value.toString().padStart(2, "0");
 
-  useEffect(() => {
-    const fetchUsers = async () => {
-      const snap = await getDocs(collection(db, COLLECTIONS.userDetail));
-      const list = snap.docs.map((doc) => ({
-        label: doc.data()["Name"],
-        value: doc.id,
-      }));
-      setUsers(list);
-    };
-    fetchUsers();
-  }, []);
-
-  const handleChange = (name, value) => {
-    setForm((prev) => ({ ...prev, [name]: value }));
-    setErrors((prev) => ({ ...prev, [name]: "" }));
+    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(
+      date.getDate()
+    )}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
   };
 
-  const addToList = (field, value) => {
-    if (!value) return;
-    setForm((prev) => ({
+  const convertInputToTimestamp = (value) => {
+    if (!value) return null;
+    return Timestamp.fromDate(new Date(value));
+  };
+
+  const fetchData = async () => {
+    setLoading(true);
+    try {
+      const snap = await getDoc(doc(db, COLLECTIONS.conclaves, id));
+
+      if (snap.exists()) {
+        const data = snap.data();
+
+        setConclave({
+          conclaveStream: data.conclaveStream || "",
+          startDate: convertTimestampToInput(data.startDate),
+          initiationDate: convertTimestampToInput(data.initiationDate),
+          leader: data.leader || "",
+          ntMembers: data.ntMembers || [],
+          orbiters: data.orbiters || [],
+          leaderRole: data.leaderRole || "",
+          ntRoles: data.ntRoles || "",
+        });
+      }
+
+      const meetingsSnap = await getDocs(
+        collection(db, COLLECTIONS.conclaves, id, "meetings")
+      );
+
+      const list = meetingsSnap.docs.map((docSnap) => ({
+        id: docSnap.id,
+        ...docSnap.data(),
+      }));
+
+      list.sort(
+        (a, b) => (b.datetime?.seconds || 0) - (a.datetime?.seconds || 0)
+      );
+
+      setMeetings(list);
+    } catch {
+      toast.error("Failed to load data");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (id) fetchData();
+  }, [id]);
+
+  const handleChange = (name, value) => {
+    setConclave((prev) => ({
       ...prev,
-      [field]: prev[field].includes(value)
-        ? prev[field]
-        : [...prev[field], value],
+      [name]: value,
     }));
   };
 
-  const convertDatetimeLocalToTimestamp = (value) => {
-    if (!value) return null;
-    const [datePart, timePart] = value.split("T");
-    const [year, month, day] = datePart.split("-").map(Number);
-    let hours = 0;
-    let minutes = 0;
-
-    if (timePart) {
-      [hours, minutes] = timePart.split(":").map(Number);
-    }
-
-    const localDate = new Date(year, month - 1, day, hours, minutes);
-    return Timestamp.fromDate(localDate);
+  const handleMeetingChange = (event) => {
+    setMeetingForm((prev) => ({
+      ...prev,
+      [event.target.name]: event.target.value,
+    }));
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setLoading(true);
+  const handleUpdate = async (event) => {
+    event.preventDefault();
 
     try {
-      const startTS = convertDatetimeLocalToTimestamp(form.startDate);
-      const initTS = convertDatetimeLocalToTimestamp(form.initiationDate);
+      await updateDoc(doc(db, COLLECTIONS.conclaves, id), {
+        ...conclave,
+        startDate: convertInputToTimestamp(conclave.startDate),
+        initiationDate: convertInputToTimestamp(conclave.initiationDate),
+      });
 
-      if (!startTS || !initTS) {
-        toast.error("Please select valid Date & Time");
-        setLoading(false);
-        return;
-      }
+      toast.success("Updated successfully");
+    } catch {
+      toast.error("Update failed");
+    }
+  };
 
-      let finalForm = {
-        ...form,
-        startDate: startTS,
-        initiationDate: initTS,
-      };
+  const handleMeetingSubmit = async (event) => {
+    event.preventDefault();
 
-      const convertToPhones = async (ids) => {
-        const phones = [];
-        for (const id of ids) {
-          const ref = doc(db, COLLECTIONS.userDetail, id);
-          const snap = await getDoc(ref);
-          if (snap.exists()) phones.push(snap.data().MobileNo);
-        }
-        return phones;
-      };
-
-      if (form.leader) {
-        const ref = doc(db, COLLECTIONS.userDetail, form.leader);
-        const snap = await getDoc(ref);
-        if (snap.exists()) {
-          finalForm.leader = snap.data().MobileNo;
-        }
-      }
-
-      finalForm.ntMembers = await convertToPhones(form.ntMembers);
-      finalForm.orbiters = await convertToPhones(form.orbiters);
-
-      await addDoc(collection(db, COLLECTIONS.conclaves), {
-        ...finalForm,
+    try {
+      await addDoc(collection(db, COLLECTIONS.conclaves, id, "meetings"), {
+        ...meetingForm,
+        datetime: Timestamp.fromDate(new Date(meetingForm.datetime)),
         createdAt: Timestamp.now(),
       });
 
-      toast.success("Conclave created successfully");
-    } catch (err) {
-      console.log(err);
-      toast.error("Failed to create conclave");
+      toast.success("Meeting added");
+      setShowMeetingForm(false);
+      fetchData();
+    } catch {
+      toast.error("Failed to add meeting");
     }
-
-    setLoading(false);
   };
 
   return (
     <Card>
-      <form onSubmit={handleSubmit} className="space-y-6 pt-6">
-        <FormField label="Conclave Name & Stream" required>
+      <Text as="h3">Edit Conclave</Text>
+
+      <div className="my-4">
+        <Button
+          className="bg-blue-600 text-white px-4 py-2 rounded-lg"
+          onClick={() => setShowMeetingForm(true)}
+        >
+          + Add Meeting
+        </Button>
+      </div>
+
+      {showMeetingForm && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+          <div className="bg-white w-full max-w-lg rounded-2xl p-6 space-y-4">
+            <h2 className="text-xl font-semibold">Add Meeting</h2>
+
+            <form onSubmit={handleMeetingSubmit} className="space-y-3">
+              <input
+                name="meetingName"
+                placeholder="Meeting Name"
+                onChange={handleMeetingChange}
+                className="w-full border p-2 rounded"
+              />
+
+              <input
+                type="datetime-local"
+                name="datetime"
+                onChange={handleMeetingChange}
+                className="w-full border p-2 rounded"
+              />
+
+              <textarea
+                name="agenda"
+                placeholder="Agenda"
+                onChange={handleMeetingChange}
+                className="w-full border p-2 rounded"
+              />
+
+              <button className="bg-blue-600 text-white px-4 py-2 rounded">
+                Create
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      <div className="mt-6 space-y-3">
+        <h3 className="text-lg font-semibold">Meetings</h3>
+
+        {loading ? (
+          <p className="text-sm text-slate-500">Loading meetings...</p>
+        ) : (
+          meetings.map((meeting) => (
+            <div
+              key={meeting.id}
+              className="flex justify-between items-center border p-3 rounded"
+            >
+              <div>
+                <p className="font-medium">{meeting.meetingName}</p>
+                <p className="text-sm text-gray-500">{meeting.mode}</p>
+              </div>
+
+              <button
+                className="bg-orange-500 text-white px-3 py-1 rounded"
+                onClick={() =>
+                  router.push(
+                    `/admin/conclave/addmeeting/${meeting.id}?conclaveId=${id}`
+                  )
+                }
+              >
+                Edit
+              </button>
+            </div>
+          ))
+        )}
+      </div>
+
+      <form onSubmit={handleUpdate} className="space-y-6 mt-6">
+        <FormField label="Conclave Name">
           <Input
-            value={form.conclaveStream}
-            onChange={(e) =>
-              handleChange("conclaveStream", e.target.value)
+            value={conclave.conclaveStream}
+            onChange={(event) =>
+              handleChange("conclaveStream", event.target.value)
             }
           />
         </FormField>
 
-        <div>
-          <label className="block mb-1 text-sm font-medium">
-            Start Date *
-          </label>
+        <FormField label="Leader">
+          <Input value={conclave.leader} disabled />
+        </FormField>
+
+        <FormField label="NT Members">
+          <div className="flex flex-wrap gap-2">
+            {conclave.ntMembers.map((member, index) => (
+              <span
+                key={index}
+                className="bg-blue-100 px-3 py-1 rounded-full text-sm"
+              >
+                {member}
+              </span>
+            ))}
+          </div>
+        </FormField>
+
+        <FormField label="Orbiters">
+          <div className="flex flex-wrap gap-2">
+            {conclave.orbiters.map((member, index) => (
+              <span
+                key={index}
+                className="bg-green-100 px-3 py-1 rounded-full text-sm"
+              >
+                {member}
+              </span>
+            ))}
+          </div>
+        </FormField>
+
+        <FormField label="Start Date">
           <input
             type="datetime-local"
-            className="w-full border rounded p-2"
-            value={form.startDate || ""}
-            onChange={(e) =>
-              handleChange("startDate", e.target.value)
+            value={conclave.startDate}
+            onChange={(event) =>
+              handleChange("startDate", event.target.value)
             }
+            className="w-full border p-2 rounded"
           />
-        </div>
+        </FormField>
 
-        <div>
-          <label className="block mb-1 text-sm font-medium">
-            Initiation Date *
-          </label>
+        <FormField label="Initiation Date">
           <input
             type="datetime-local"
-            className="w-full border rounded p-2"
-            value={form.initiationDate || ""}
-            onChange={(e) =>
-              handleChange("initiationDate", e.target.value)
+            value={conclave.initiationDate}
+            onChange={(event) =>
+              handleChange("initiationDate", event.target.value)
             }
-          />
-        </div>
-
-        {/* Leader */}
-        <FormField label="Leader" required>
-          <ReactSelect
-            options={users}
-            value={users.find((u) => u.value === form.leader) || null}
-            onChange={(selected) =>
-              handleChange("leader", selected?.value)
-            }
+            className="w-full border p-2 rounded"
           />
         </FormField>
 
-        {/* NT MEMBERS */}
-        <FormField label="NT Members" required>
-          <>
-            <ReactSelect
-              options={users}
-              value={users.find((u) => u.value === tempNt) || null}
-              onChange={(selected) =>
-                setTempNt(selected?.value)
-              }
-            />
-
-            <Button
-              type="button"
-              onClick={() => {
-                addToList("ntMembers", tempNt);
-                setTempNt("");
-              }}
-            >
-              Add NT Member
-            </Button>
-
-            <div className="flex flex-wrap gap-2 mt-2">
-              {form.ntMembers.map((id) => {
-                const user = users.find((u) => u.value === id);
-                return (
-                  <div
-                    key={id}
-                    className="px-3 py-1 bg-blue-100 rounded-full text-sm flex items-center gap-2"
-                  >
-                    {user?.label}
-                    <span
-                      className="cursor-pointer text-red-500"
-                      onClick={() =>
-                        setForm((prev) => ({
-                          ...prev,
-                          ntMembers: prev.ntMembers.filter(
-                            (m) => m !== id
-                          ),
-                        }))
-                      }
-                    >
-                      ✕
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-          </>
-        </FormField>
-
-        {/* ORBITERS */}
-        <FormField label="Orbiters" required>
-          <>
-            <ReactSelect
-              options={users}
-              value={
-                users.find((u) => u.value === tempOrbiter) || null
-              }
-              onChange={(selected) =>
-                setTempOrbiter(selected?.value)
-              }
-            />
-
-            <Button
-              type="button"
-              onClick={() => {
-                addToList("orbiters", tempOrbiter);
-                setTempOrbiter("");
-              }}
-            >
-              Add Orbiter
-            </Button>
-
-            <div className="flex flex-wrap gap-2 mt-2">
-              {form.orbiters.map((id) => {
-                const user = users.find((u) => u.value === id);
-                return (
-                  <div
-                    key={id}
-                    className="px-3 py-1 bg-green-100 rounded-full text-sm flex items-center gap-2"
-                  >
-                    {user?.label}
-                    <span
-                      className="cursor-pointer text-red-500"
-                      onClick={() =>
-                        setForm((prev) => ({
-                          ...prev,
-                          orbiters: prev.orbiters.filter(
-                            (m) => m !== id
-                          ),
-                        }))
-                      }
-                    >
-                      ✕
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-          </>
-        </FormField>
-
-        <FormField label="Leader Role" required>
-          <Textarea
-            value={form.leaderRole}
-            onChange={(e) =>
-              handleChange("leaderRole", e.target.value)
-            }
-          />
-        </FormField>
-
-        <FormField label="NT Roles" required>
-          <Textarea
-            value={form.ntRoles}
-            onChange={(e) =>
-              handleChange("ntRoles", e.target.value)
-            }
-          />
-        </FormField>
-
-        <div className="flex justify-end pt-6 border-t">
-          <Button type="submit" disabled={loading}>
-            {loading ? "Creating..." : "Create Conclave"}
-          </Button>
-        </div>
+        <Button type="submit">Save Changes</Button>
       </form>
     </Card>
   );

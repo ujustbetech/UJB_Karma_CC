@@ -139,7 +139,7 @@ export default function CPBoardDetails() {
         {/* HEADER */}
         <div className="mb-10">
           <h2 className="text-3xl font-bold text-gray-800">
-            Contribution Point
+            Contribution Points
           </h2>
           <p className="text-gray-500 text-sm mt-1">
             Track your contribution performance

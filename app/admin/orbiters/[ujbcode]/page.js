@@ -1,9 +1,10 @@
 "use client";
-import { useEffect, useMemo, useState } from "react";
+import { use, useEffect, useMemo, useState } from "react";
 import { db } from "@/lib/firebase/firebaseClient";
 import { collection, getDocs, deleteDoc, doc } from "firebase/firestore";
 import { COLLECTIONS } from "@/lib/utility_collection";
 import * as XLSX from "xlsx";
+import OrbiterProfilePage from "@/components/admin/orbiters/OrbiterProfilePage";
 import Text from "@/components/ui/Text";
 import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
@@ -20,7 +21,12 @@ import { useToast } from "@/components/ui/ToastProvider";
 import Pagination from "@/components/table/Pagination";
 import { Trash2, Pencil, Download, Plus, Users, UserCheck, UserCog, AlertCircle } from "lucide-react";
 
-export default function OrbitersListingPage() {
+export default function OrbitersListingPage({ params }) {
+    const resolvedParams = use(params);
+    const ujbcode = resolvedParams.ujbcode;
+
+    return <OrbiterProfilePage ujbcode={ujbcode} />;
+
     const toast = useToast();
     const [users, setUsers] = useState([]);
     const [loading, setLoading] = useState(true);

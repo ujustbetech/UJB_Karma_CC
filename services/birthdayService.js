@@ -101,11 +101,26 @@ export async function fetchBirthdayUsersForAdmin() {
 }
 
 export async function sendBirthdayMessage(user) {
-  await fetch("/api/send-birthday", {
+  const response = await fetch("/api/send-birthday", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ user }),
   });
+
+  if (!response.ok) {
+    let message = "Failed to send birthday message";
+
+    try {
+      const data = await response.json();
+      if (typeof data?.message === "string" && data.message.trim()) {
+        message = data.message.trim();
+      }
+    } catch {
+      // Fall back to the default message when the response isn't JSON.
+    }
+
+    throw new Error(message);
+  }
 }
 
 export async function markBirthdayMessageSent(userId, sentDate) {

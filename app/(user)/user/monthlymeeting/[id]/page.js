@@ -1,174 +1,219 @@
-"use client";
+﻿"use client";
 
-import { useEffect, useState } from "react";
+import { use, useEffect, useState } from "react";
 import {
+  getFirestore,
+  doc,
+  getDoc,
   collection,
   getDocs,
-  orderBy,
-  query,
 } from "firebase/firestore";
-import { db } from "@/lib/firebase/firebaseClient";
+import { app } from "@/lib/firebase/firebaseClient";
 import {
-  Eye,
-  Heart,
-  Music,
-  Video,
   FileText,
-  Tag,
+  Users,
+  CalendarDays,
+  BookOpen,
+  Briefcase,
+  UserCheck,
+  Target,
+  Link,
+  Handshake,
 } from "lucide-react";
-import Link from "next/link";
 
-export default function ContentPage() {
-  const [contents, setContents] = useState([]);
-  const [loading, setLoading] = useState(true);
+const db = getFirestore(app);
 
-  /* ================= FETCH CONTENT ================= */
+export default function EventDetailsPage({ params }) {
+  const { id } = use(params);
+
+  const [eventInfo, setEventInfo] = useState(null);
+  const [users, setUsers] = useState([]);
+  const [activeTab, setActiveTab] = useState("agenda");
+  const [timeLeft, setTimeLeft] = useState(null);
+
   useEffect(() => {
-    const fetchContent = async () => {
-      try {
-        const q = query(
-          collection(db, "ContentData"),
-          orderBy("AdminCreatedby", "desc")
-        );
+    if (!id) return;
 
-        const snap = await getDocs(q);
+    const fetchEventData = async () => {
+      const eventSnap = await getDoc(doc(db, "MonthlyMeeting", id));
+      if (eventSnap.exists()) setEventInfo(eventSnap.data());
 
-        setContents(
-          snap.docs.map((doc) => ({
-            id: doc.id,
-            ...doc.data(),
-          }))
-        );
-      } catch (error) {
-        console.error("Error fetching content:", error);
-      } finally {
-        setLoading(false);
-      }
+      const regSnap = await getDocs(
+        collection(db, "MonthlyMeeting", id, "registeredUsers")
+      );
+
+      const userDetails = await Promise.all(
+        regSnap.docs.map(async (docSnap) => {
+          const phone = docSnap.id;
+          const regUserData = docSnap.data();
+
+          const userDoc = await getDoc(doc(db, "userdetails", phone));
+          const name = userDoc.exists() ? userDoc.data()[" Name"] : "Unknown";
+
+          return {
+            phone,
+            name,
+            attendance: regUserData.attendanceStatus === true ? "Yes" : "No",
+          };
+        })
+      );
+
+      setUsers(userDetails);
     };
 
-    fetchContent();
-  }, []);
+    fetchEventData();
+  }, [id]);
 
-  const getFormatIcon = (format) => {
-    if (format === "Audio") return <Music size={16} />;
-    if (format === "Video") return <Video size={16} />;
-    return <FileText size={16} />;
-  };
+  useEffect(() => {
+    if (!eventInfo?.time) return;
 
-  if (loading) {
+    const targetTime = eventInfo.time.toDate().getTime();
+
+    const interval = setInterval(() => {
+      const diff = targetTime - Date.now();
+      if (diff <= 0) {
+        setTimeLeft(null);
+        clearInterval(interval);
+        return;
+      }
+
+      setTimeLeft({
+        days: Math.floor(diff / (1000 * 60 * 60 * 24)),
+        hours: Math.floor((diff / (1000 * 60 * 60)) % 24),
+        minutes: Math.floor((diff / (1000 * 60)) % 60),
+        seconds: Math.floor((diff / 1000) % 60),
+      });
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [eventInfo]);
+
+  if (!eventInfo) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="h-10 w-10 border-4 border-gray-400 border-t-transparent rounded-full animate-spin"></div>
+      <div className="min-h-screen flex items-center justify-center bg-black">
+        <div className="animate-spin w-10 h-10 border-4 border-orange-500 border-t-transparent rounded-full"></div>
       </div>
     );
   }
 
-  return (
-    <main className="min-h-screen">
-      <div className="max-w-7xl mx-auto px-6">
+  const tabs = [
+    { key: "agenda", label: "Agenda", icon: CalendarDays },
+    { key: "documents", label: "Docs", icon: FileText },
+    { key: "facilitators", label: "Facilitators", icon: UserCheck },
+    { key: "knowledge", label: "Knowledge", icon: BookOpen },
+    { key: "prospects", label: "Prospects", icon: Target },
+    { key: "referrals", label: "Referrals", icon: Link },
+    { key: "requirements", label: "Req.", icon: Briefcase },
+    { key: "e2a", label: "E2A", icon: Handshake },
+    { key: "121", label: "1-2-1", icon: Users },
+    { key: "users", label: "Users", icon: Users },
+  ];
 
-        {/* HEADER */}
-        <div className="mb-12">
-          <h1 className="text-3xl font-bold text-gray-800">
-            Content Library
-          </h1>
-          <p className="text-gray-500 text-sm mt-2">
-            Explore audio, video and curated partner content
-          </p>
+  return (
+    <div className="min-h-screen bg-gradient-to-b from-[#0b1120] via-[#0f172a] to-black flex justify-center">
+      <div className="w-full max-w-md pb-12">
+        <div className="relative h-80 overflow-hidden rounded-3xl shadow-2xl mx-4 mt-6">
+          <img
+            src={eventInfo.imageUploads?.[0]?.image?.url || "/space.jpeg"}
+            alt={eventInfo.Eventname || "Monthly meeting"}
+            className="absolute inset-0 w-full h-full object-cover"
+          />
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
+
+          <div className="relative z-10 flex flex-col items-center justify-center h-full text-white text-center px-6">
+            <h1 className="text-xl font-bold">{eventInfo.Eventname}</h1>
+
+            <p className="text-xs opacity-80 mt-2">
+              {eventInfo.time?.toDate().toLocaleString()}
+            </p>
+
+            {timeLeft && (
+              <div className="mt-4 bg-green-500 text-white text-xs px-4 py-2 rounded-full">
+                In Progress
+              </div>
+            )}
+          </div>
         </div>
 
-        {/* GRID */}
-        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-10">
+        <div className="px-4 -mt-6 relative z-20">
+          <div className="bg-white rounded-2xl shadow-xl p-2">
+            <div className="flex overflow-x-auto">
+              {tabs.map((tab) => {
+                const Icon = tab.icon;
+                return (
+                  <button
+                    key={tab.key}
+                    onClick={() => setActiveTab(tab.key)}
+                    className={`flex flex-col items-center justify-center px-4 py-2 min-w-[70px] transition ${
+                      activeTab === tab.key
+                        ? "text-orange-500"
+                        : "text-gray-500 hover:text-gray-700"
+                    }`}
+                  >
+                    <Icon size={18} />
+                    <span className="text-[11px] mt-1">{tab.label}</span>
 
-          {contents.map((content) => (
-            <Link
-              href={`/user/dewdrop/content/${content.id}`}
-              key={content.id}
-              className="block bg-white rounded-3xl shadow-md border overflow-hidden hover:shadow-xl hover:-translate-y-1 transition duration-300"
-            >
-              {/* THUMBNAIL */}
-              <div className="relative h-48 bg-gray-100">
-                <img
-                  src={content.Thumbnail?.[0] || "/placeholder.jpg"}
-                  alt="Thumbnail"
-                  className="w-full h-full object-cover"
-                />
+                    {activeTab === tab.key && (
+                      <div className="h-[2px] w-6 bg-orange-500 mt-1 rounded-full" />
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
 
-                {/* FORMAT BADGE */}
-                <div className="absolute top-4 left-4 bg-white/90 backdrop-blur px-3 py-1 rounded-full text-xs flex items-center gap-1 font-medium shadow">
-                  {getFormatIcon(content.contentFormat)}
-                  {content.contentFormat}
-                </div>
-              </div>
-
-              {/* CONTENT BODY */}
-              <div className="p-6">
-
-                {/* TITLE */}
-                <h3 className="text-lg font-semibold text-gray-800 mb-2">
-                  {content.contentName}
-                </h3>
-
-                {/* DESCRIPTION */}
-                <p className="text-sm text-gray-500 line-clamp-2 mb-4">
-                  {content.contDiscription}
-                </p>
-
-                {/* TAGS */}
-                <div className="flex flex-wrap gap-2 mb-4">
-                  {content.inputTag?.map((tag, index) => (
-                    <span
-                      key={index}
-                      className="bg-indigo-100 text-indigo-600 text-xs px-2 py-1 rounded-full flex items-center gap-1"
+        <div className="px-4 mt-6 space-y-6">
+          <div className="bg-white rounded-3xl shadow-lg p-6">
+            {activeTab === "agenda" && (
+              <>
+                <h3 className="text-sm font-semibold mb-4">Agenda</h3>
+                <ul className="space-y-3">
+                  {eventInfo.agenda?.map((item, idx) => (
+                    <li
+                      key={idx}
+                      className="flex items-start gap-3 text-sm text-gray-700"
                     >
-                      <Tag size={12} />
-                      {tag}
-                    </span>
+                      <span className="w-6 h-6 bg-orange-100 text-orange-500 rounded-full flex items-center justify-center text-[10px] font-semibold">
+                        {idx + 1}
+                      </span>
+                      {item}
+                    </li>
+                  ))}
+                </ul>
+              </>
+            )}
+
+            {activeTab === "users" && (
+              <>
+                <h3 className="text-sm font-semibold mb-4">Registered Users</h3>
+
+                <div className="space-y-3">
+                  {users.map((u) => (
+                    <div
+                      key={u.phone}
+                      className="flex justify-between items-center bg-gray-50 rounded-xl p-3"
+                    >
+                      <span className="text-sm font-medium text-gray-700">
+                        {u.name}
+                      </span>
+                      <span
+                        className={`text-xs font-semibold ${
+                          u.attendance === "Yes"
+                            ? "text-green-600"
+                            : "text-gray-400"
+                        }`}
+                      >
+                        {u.attendance}
+                      </span>
+                    </div>
                   ))}
                 </div>
-
-                {/* PARTNER INFO */}
-                <div className="flex items-center gap-3 mb-4">
-                  <img
-                    src={content.lpProfile?.[0] || "/avatar.png"}
-                    alt="Partner"
-                    className="w-10 h-10 rounded-full object-cover"
-                  />
-                  <div>
-                    <p className="text-sm font-medium text-gray-700">
-                      {content.partnerNamelp}
-                    </p>
-                    <p className="text-xs text-gray-400">
-                      {content.partnerDesig}
-                    </p>
-                  </div>
-                </div>
-
-                {/* STATS */}
-                <div className="flex justify-between items-center text-xs text-gray-500 border-t pt-4">
-                  <div className="flex items-center gap-4">
-                    <span className="flex items-center gap-1">
-                      <Eye size={14} />
-                      {content.totalViews || 0}
-                    </span>
-
-                    <span className="flex items-center gap-1">
-                      <Heart size={14} />
-                      {content.totallike || 0}
-                    </span>
-                  </div>
-
-                  <span className="font-medium text-indigo-600">
-                    CP {content.totalCp || 0}
-                  </span>
-                </div>
-
-              </div>
-            </Link>
-          ))}
-
+              </>
+            )}
+          </div>
         </div>
       </div>
-    </main>
+    </div>
   );
 }

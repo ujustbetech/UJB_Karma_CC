@@ -13,6 +13,28 @@ import {
   CheckCircle,
 } from "lucide-react";
 
+function getSafeImageSrc(value) {
+  if (typeof value !== "string") return "/placeholder.jpg";
+
+  const trimmed = value.trim();
+  if (!trimmed || trimmed === "undefined" || trimmed === "null") {
+    return "/placeholder.jpg";
+  }
+
+  if (trimmed.startsWith("/")) return trimmed;
+
+  try {
+    const parsed = new URL(trimmed);
+    if (parsed.protocol === "http:" || parsed.protocol === "https:") {
+      return trimmed;
+    }
+  } catch {
+    return "/placeholder.jpg";
+  }
+
+  return "/placeholder.jpg";
+}
+
 export default function ModernProfilePage() {
   const [user, setUser] = useState(null);
   const [activeTab, setActiveTab] = useState("about");
@@ -57,6 +79,8 @@ export default function ModernProfilePage() {
     );
   }
 
+  const profilePhotoSrc = getSafeImageSrc(user?.ProfilePhotoURL);
+
   return (
     <div className="bg-gray-50 min-h-screen pb-20">
 
@@ -64,7 +88,7 @@ export default function ModernProfilePage() {
       <div className="relative h-[340px]">
 
         <Image
-          src={user.ProfilePhotoURL || "/placeholder.jpg"}
+          src={profilePhotoSrc}
           fill
           priority
           className="object-cover"
@@ -77,7 +101,7 @@ export default function ModernProfilePage() {
         <div className="absolute -bottom-14 left-1/2 -translate-x-1/2">
           <div className="relative w-28 h-28 rounded-full border-4 border-white overflow-hidden shadow-lg">
             <Image
-              src={user.ProfilePhotoURL || "/placeholder.jpg"}
+              src={profilePhotoSrc}
               fill
               className="object-cover"
               alt="avatar"

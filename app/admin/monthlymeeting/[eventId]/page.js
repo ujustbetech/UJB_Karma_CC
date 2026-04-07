@@ -1,391 +1,273 @@
 "use client";
-import { useEffect, useMemo, useState } from "react";
+
+import { useParams } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
+import { doc, getDoc, collection, onSnapshot } from "firebase/firestore";
 import { db } from "@/lib/firebase/firebaseClient";
-import {
-    collection,
-    getDocs,
-    deleteDoc,
-    doc
-} from "firebase/firestore";
 import { COLLECTIONS } from "@/lib/utility_collection";
 
-import Text from "@/components/ui/Text";
+import TopicSection from "@/components/admin/monthlymeeting/sections/TopicSection";
+import ParticipantSection from "@/components/admin/monthlymeeting/sections/ParticipantSection";
+import E2ASection from "@/components/admin/monthlymeeting/sections/E2ASection";
+import ProspectSection from "@/components/admin/monthlymeeting/sections/ProspectSection";
+import KnowledgeSharingSection from "@/components/admin/monthlymeeting/sections/KnowledgeSharingSection";
+import RequirementSection from "@/components/admin/monthlymeeting/sections/RequirementSection";
+import DocumentUploadSection from "@/components/admin/monthlymeeting/sections/DocumentUploadSection";
+import ImageUploadSection from "@/components/admin/monthlymeeting/sections/ImageUploadSection";
+import RegisteredUsersSection from "@/components/admin/monthlymeeting/sections/RegisteredUsersSection";
+import AddUserSection from "@/components/admin/monthlymeeting/sections/AddUserSection";
+import ConclaveSection from "@/components/admin/monthlymeeting/sections/ConclaveSection";
+import EventInfoSection from "@/components/admin/monthlymeeting/sections/EventInfoSection";
+
 import Card from "@/components/ui/Card";
-import Button from "@/components/ui/Button";
-import ActionButton from "@/components/ui/ActionButton";
-import Tooltip from "@/components/ui/Tooltip";
-import StatusBadge from "@/components/ui/StatusBadge";
-import Input from "@/components/ui/Input";
-import ConfirmModal from "@/components/ui/ConfirmModal";
-import Table from "@/components/table/Table";
-import TableHeader from "@/components/table/TableHeader";
-import TableRow from "@/components/table/TableRow";
-import Pagination from "@/components/table/Pagination";
-import { useToast } from "@/components/ui/ToastProvider";
+import Text from "@/components/ui/Text";
 
 import {
-    Pencil,
-    Trash2,
-    Users,
-    UserPlus,
-    Copy
+  Info,
+  BookOpen,
+  Users,
+  Brain,
+  Target,
+  ClipboardList,
+  FileText,
+  Image,
+  UserPlus,
+  Network,
 } from "lucide-react";
 
-export default function EventsListingPage() {
-    const toast = useToast();
+export default function MonthlyMeetingDetailsPage() {
+  const { eventId } = useParams();
 
-    const [events, setEvents] = useState([]);
-    const [loading, setLoading] = useState(true);
-    const [nameFilter, setNameFilter] = useState("");
-    const [page, setPage] = useState(1);
-    const perPage = 10;
+  const [data, setData] = useState(null);
+  const [active, setActive] = useState("basic");
+  const [loading, setLoading] = useState(true);
+  const [savingAll, setSavingAll] = useState(false);
 
-    const [deleteOpen, setDeleteOpen] = useState(false);
-    const [eventToDelete, setEventToDelete] = useState(null);
+  const basicRef = useRef();
+  const topicRef = useRef();
+  const participantRef = useRef();
+  const e2aRef = useRef();
+  const prospectRef = useRef();
+  const knowledgeRef = useRef();
+  const requirementRef = useRef();
 
-    const columns = [
-        { key: "sr", label: "Sr no" },
-        { key: "name", label: "Event Name" },
-        { key: "time", label: "Time" },
-        { key: "status", label: "Status" },
-        { key: "registered", label: "Registered" },
-        { key: "zoom", label: "Zoom Link" },
-        { key: "copy", label: "Copy Event Link" },
-        { key: "actions", label: "Actions" },
+  const [registeredCount, setRegisteredCount] = useState(0);
+  const [presentCount, setPresentCount] = useState(0);
+
+  const fetchData = async () => {
+    if (!eventId) return;
+    setLoading(true);
+    const ref = doc(db, COLLECTIONS.monthlyMeeting, eventId);
+    const snap = await getDoc(ref);
+    setData(snap.exists() ? snap.data() : {});
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    fetchData();
+  }, [eventId]);
+
+  useEffect(() => {
+    if (!eventId) return;
+
+    const unsub = onSnapshot(
+      collection(db, COLLECTIONS.monthlyMeeting, eventId, "registeredUsers"),
+      (snapshot) => {
+        let present = 0;
+        snapshot.forEach((docSnap) => {
+          if (docSnap.data().attendanceStatus === true) present++;
+        });
+
+        setRegisteredCount(snapshot.size);
+        setPresentCount(present);
+      }
+    );
+
+    return () => unsub();
+  }, [eventId]);
+
+  const handleSaveAll = async () => {
+    setSavingAll(true);
+
+    const refs = [
+      basicRef,
+      topicRef,
+      participantRef,
+      e2aRef,
+      prospectRef,
+      knowledgeRef,
+      requirementRef,
     ];
 
+    let savedAny = false;
 
-    const fetchEvents = async () => {
-        setLoading(true);
+    for (const ref of refs) {
+      if (ref.current?.isDirty?.()) {
+        const ok = await ref.current.save();
+        if (ok) savedAny = true;
+      }
+    }
 
-        try {
-            const snap = await getDocs(
-                collection(db, COLLECTIONS.monthlyMeeting)
-            );
+    if (savedAny) await fetchData();
+    setSavingAll(false);
+  };
 
-            const list = await Promise.all(
-                snap.docs.map(async (d) => {
-                    const data = d.data();
-                    const rawTime = data.time;
+  const groupedSections = [
+    {
+      title: "Meeting",
+      items: [
+        { id: "basic", label: "Basic", icon: Info },
+        { id: "topic", label: "Topic", icon: BookOpen },
+        { id: "participants", label: "121", icon: Users },
+        { id: "knowledge", label: "Knowledge", icon: Brain },
+      ],
+    },
+    {
+      title: "Business",
+      items: [
+        { id: "e2a", label: "E2A", icon: Network },
+        { id: "prospects", label: "Prospects", icon: Target },
+        { id: "requirements", label: "Requirements", icon: ClipboardList },
+      ],
+    },
+    {
+      title: "Media",
+      items: [
+        { id: "documents", label: "Documents", icon: FileText },
+        { id: "images", label: "Images", icon: Image },
+      ],
+    },
+    {
+      title: "Users",
+      items: [
+        { id: "registered", label: "Users", icon: Users },
+        { id: "adduser", label: "Add User", icon: UserPlus },
+        { id: "conclave", label: "Conclave", icon: Network },
+      ],
+    },
+  ];
 
-                    let registeredCount = 0;
+  const renderSection = () => {
+    switch (active) {
+      case "basic":
+        return <EventInfoSection ref={basicRef} eventId={eventId} data={data} />;
+      case "topic":
+        return <TopicSection ref={topicRef} eventID={eventId} data={data} />;
+      case "participants":
+        return <ParticipantSection ref={participantRef} eventID={eventId} data={data} />;
+      case "knowledge":
+        return <KnowledgeSharingSection ref={knowledgeRef} eventId={eventId} data={data} />;
+      case "e2a":
+        return <E2ASection ref={e2aRef} eventId={eventId} data={data} />;
+      case "prospects":
+        return <ProspectSection ref={prospectRef} eventId={eventId} data={data} />;
+      case "requirements":
+        return <RequirementSection ref={requirementRef} eventId={eventId} data={data} />;
+      case "documents":
+        return <DocumentUploadSection eventID={eventId} data={data} />;
+      case "images":
+        return <ImageUploadSection eventID={eventId} data={data} />;
+      case "registered":
+        return <RegisteredUsersSection eventId={eventId} data={data} />;
+      case "adduser":
+        return <AddUserSection eventId={eventId} data={data} />;
+      case "conclave":
+        return <ConclaveSection eventId={eventId} data={data} />;
+      default:
+        return null;
+    }
+  };
 
-                    try {
-                        const regSnap = await getDocs(
-                            collection(
-                                db,
-                                COLLECTIONS.monthlyMeeting,
-                                d.id,
-                                "registeredUsers"
-                            )
-                        );
-                        registeredCount = regSnap.size;
-                    } catch (e) {
-                        console.warn("Subcollection read failed:", d.id);
-                    }
+  return (
+    <div className="grid grid-cols-12 gap-6 pb-28 bg-slate-50 min-h-screen p-6">
+      <div className="col-span-2">
+        <Card className="sticky top-6 p-3">
+          <Text variant="h3">Meeting</Text>
 
-                    return {
-                        id: d.id,
-                        name: data.Eventname || data.eventName || "Untitled",
-                        time: rawTime || "",
-                        zoom: data.zoomLink || "",
-                        registeredCount,
-                        status: data.status || getEventStatus(rawTime),
-                    };
-                })
-            );
-
-      // sort latest first (newest date on top)
-const sorted = list.sort((a, b) => {
-    const getTime = (t) => {
-        if (!t) return 0;
-
-        if (t?.seconds) return t.seconds * 1000;
-        if (typeof t === "string" || typeof t === "number") return new Date(t).getTime();
-        if (t instanceof Date) return t.getTime();
-
-        return 0;
-    };
-
-    return getTime(b.time) - getTime(a.time); // DESC (latest first)
-});
-
-setEvents(sorted);
-        } catch (err) {
-            console.error("Fetch events error:", err);
-            toast.error("Failed to fetch events");
-        } finally {
-            setLoading(false);
-        }
-    };
-
-
-    useEffect(() => {
-        fetchEvents();
-    }, []);
-
-    const filtered = useMemo(() => {
-        const search = nameFilter.toLowerCase();
-        return events.filter((e) =>
-            (e.name || "").toLowerCase().includes(search)
-        );
-    }, [events, nameFilter]);
-
-    const totalPages = Math.max(1, Math.ceil(filtered.length / perPage));
-    const paginated = filtered.slice(
-        (page - 1) * perPage,
-        page * perPage
-    );
-
-    useEffect(() => {
-        setPage(1);
-    }, [nameFilter]);
-
-    const copyEventLink = (id) => {
-        const link = `${window.location.origin}/user/monthlymeeting/${id}`;
-        navigator.clipboard.writeText(link);
-        toast.success("Event link copied");
-    };
-
-    const openRegistrations = (id) =>
-        (window.location.href = `/admin/monthlymeeting/${id}?tab=registered`);
-
-    const openAddUser = (id) =>
-        (window.location.href = `/admin/monthlymeeting/${id}?tab=add-users`);
-
-    const openDelete = (e) => {
-        setEventToDelete(e);
-        setDeleteOpen(true);
-    };
-
-    const confirmDelete = async () => {
-        if (!eventToDelete) return;
-
-        try {
-            await deleteDoc(
-                doc(db, COLLECTIONS.monthlyMeeting, eventToDelete.id)
-            );
-            toast.success("Event deleted");
-            setDeleteOpen(false);
-            fetchEvents();
-        } catch {
-            toast.error("Delete failed");
-        }
-    };
-
-    const formatEventTime = (time) => {
-        if (!time) return "—";
-
-        let dateObj = null;
-
-        // Firestore Timestamp
-        if (time?.seconds) {
-            dateObj = new Date(time.seconds * 1000);
-        }
-        // ISO string / normal string
-        else if (typeof time === "string" || typeof time === "number") {
-            dateObj = new Date(time);
-        }
-        // Already Date object
-        else if (time instanceof Date) {
-            dateObj = time;
-        }
-
-        if (!dateObj || isNaN(dateObj.getTime())) return "—";
-
-        return dateObj.toLocaleString("en-IN", {
-            day: "2-digit",
-            month: "short",
-            year: "numeric",
-            hour: "2-digit",
-            minute: "2-digit",
-        });
-    };
-
-
-    const getEventStatus = (time) => {
-        if (!time) return "draft";
-
-        let eventDate;
-
-        if (time?.seconds) {
-            eventDate = new Date(time.seconds * 1000);
-        } else if (typeof time === "string" || typeof time === "number") {
-            eventDate = new Date(time);
-        } else if (time instanceof Date) {
-            eventDate = time;
-        }
-
-        if (!eventDate || isNaN(eventDate.getTime())) return "draft";
-
-        const now = new Date();
-        const diff = eventDate - now;
-
-        if (Math.abs(diff) < 3 * 60 * 60 * 1000) return "live";
-        if (diff > 0) return "upcoming";
-        return "completed";
-    };
-
-
-
-    return (
-        <>
-            {/* <Text variant="h1">Events</Text> */}
-
-            {/* Sticky Filter Bar */}
-            <div className="sticky top-0 z-30 bg-white mb-4">
-                <Card>
-                    <div className="flex items-center justify-between gap-4">
-                        <div className="flex items-center gap-2">
-                            <Button
-                                onClick={() =>
-                                    (window.location.href = "/admin/monthlymeeting/add")
-                                }
-                            >
-                                Add Event
-                            </Button>
-                        </div>
-
-                        <div className="w-64">
-                            <Input
-                                placeholder="Search Event"
-                                value={nameFilter}
-                                onChange={(e) => setNameFilter(e.target.value)}
-                            />
-                        </div>
-                    </div>
-                </Card>
-            </div>
-
-            {/* Table */}
-            <Card>
-                {loading ? (
-                    <div className="space-y-3 p-4">
-                        {Array.from({ length: 8 }).map((_, i) => (
-                            <div
-                                key={i}
-                                className="grid grid-cols-8 gap-4 h-12 items-center"
-                            >
-                                {Array.from({ length: 8 }).map((__, j) => (
-                                    <div
-                                        key={j}
-                                        className="h-8 rounded-md bg-slate-100 animate-pulse"
-                                    />
-                                ))}
-                            </div>
-                        ))}
-                    </div>
-                ) : (
-                    <Table>
-                        <TableHeader columns={columns} />
-                        <tbody>
-                            {paginated.map((e, i) => (
-                                <TableRow key={e.id}>
-                                    <td className="px-4 py-3">
-                                        {(page - 1) * perPage + i + 1}
-                                    </td>
-
-                                    <td className="px-4 py-3 font-medium">
-                                        {e.name}
-                                    </td>
-
-                                    <td className="px-4 py-3">
-                                        {formatEventTime(e.time)}
-                                    </td>
-                                    <td className="px-4 py-3">
-                                        <StatusBadge status={e.status} />
-                                    </td>
-
-                                    <td className="px-4 py-3 font-semibold">
-                                        {e.registeredCount}
-                                    </td>
-
-                                    <td className="px-4 py-3">
-                                        {e.zoom ? (
-                                            <a
-                                                href={e.zoom}
-                                                target="_blank"
-                                                className="text-blue-600 underline"
-                                            >
-                                                Open
-                                            </a>
-                                        ) : (
-                                            "—"
-                                        )}
-                                    </td>
-
-                                    <td className="px-4 py-3">
-                                        <Button
-                                            size="sm"
-                                            variant="secondary"
-                                            onClick={() => copyEventLink(e.id)}
-                                        >
-                                            <Copy size={14} />
-                                        </Button>
-                                    </td>
-
-                                    <td className="px-4 py-3">
-                                        <div className="flex items-center gap-2">
-                                            <Tooltip content="Open Event">
-                                                <ActionButton
-                                                    icon={Pencil}
-                                                    onClick={() =>
-                                                        (window.location.href = `/admin/monthlymeeting/${e.id}`)
-                                                    }
-                                                />
-                                            </Tooltip>
-
-                                            <Tooltip content="Registered Users">
-                                                <ActionButton
-                                                    icon={Users}
-                                                    onClick={() =>
-                                                        openRegistrations(e.id)
-                                                    }
-                                                />
-                                            </Tooltip>
-
-                                            <Tooltip content="Add User">
-                                                <ActionButton
-                                                    icon={UserPlus}
-                                                    onClick={() =>
-                                                        openAddUser(e.id)
-                                                    }
-                                                />
-                                            </Tooltip>
-
-                                            <Tooltip content="Delete">
-                                                <ActionButton
-                                                    icon={Trash2}
-                                                    variant="danger"
-                                                    onClick={() => openDelete(e)}
-                                                />
-                                            </Tooltip>
-                                        </div>
-                                    </td>
-                                </TableRow>
-                            ))}
-                        </tbody>
-                    </Table>
-                )}
-
-                <div className="mt-4 flex justify-end">
-                    <Pagination
-                        page={page}
-                        pageSize={perPage}
-                        total={filtered.length}
-                        onPageChange={setPage}
-                    />
+          <div className="mt-4 space-y-5">
+            {groupedSections.map((group) => (
+              <div key={group.title}>
+                <div className="text-xs font-semibold text-slate-400 uppercase mb-2 px-2">
+                  {group.title}
                 </div>
-            </Card>
 
-            <ConfirmModal
-                open={deleteOpen}
-                title="Delete Event"
-                description={`Delete ${eventToDelete?.name}?`}
-                onConfirm={confirmDelete}
-                onClose={() => setDeleteOpen(false)}
-            />
-        </>
-    );
+                <div className="space-y-1">
+                  {group.items.map((section) => {
+                    const Icon = section.icon;
+                    const isActive = active === section.id;
+
+                    return (
+                      <button
+                        key={section.id}
+                        onClick={() => setActive(section.id)}
+                        className={`relative w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition ${
+                          isActive
+                            ? "bg-blue-100 text-blue-700 font-medium"
+                            : "hover:bg-slate-50 text-slate-700"
+                        }`}
+                      >
+                        {isActive && (
+                          <span className="absolute left-0 top-1 bottom-1 w-1 bg-blue-600 rounded" />
+                        )}
+
+                        <Icon size={17} />
+                        {section.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+        </Card>
+      </div>
+
+      <div className="col-span-8 space-y-6">
+        <Card className="p-4">
+          <h1 className="text-xl font-semibold text-slate-800">
+            {data?.Eventname || "Monthly Meeting"}
+          </h1>
+          <p className="text-sm text-slate-500 mt-1">
+            {data?.time
+              ? new Date(data.time.seconds * 1000).toLocaleString()
+              : "Event Date"}
+          </p>
+        </Card>
+
+        <Card className="p-6 min-h-[400px]">
+          {loading ? "Loading..." : renderSection()}
+        </Card>
+      </div>
+
+      <div className="col-span-2">
+        <div className="sticky top-6 space-y-4">
+          <Card className="p-4">
+            <Text variant="h4">Stats</Text>
+            <p className="text-sm mt-2">{registeredCount} Registered</p>
+            <p className="text-xs text-slate-500">Present: {presentCount}</p>
+          </Card>
+
+          <Card className="p-4">
+            <Text variant="h4">Tips</Text>
+            <ul className="mt-2 text-xs text-slate-600 space-y-1">
+              <li>Add participants</li>
+              <li>Upload docs</li>
+              <li>Track attendance</li>
+            </ul>
+          </Card>
+        </div>
+      </div>
+
+      <div className="fixed bottom-0 left-0 right-0 bg-white p-4 flex justify-end gap-3 shadow-md">
+        <button className="border px-4 py-2 rounded-lg">Cancel</button>
+
+        <button
+          onClick={handleSaveAll}
+          className="bg-blue-600 text-white px-6 py-2 rounded-lg"
+        >
+          {savingAll ? "Saving..." : "Save Changes"}
+        </button>
+      </div>
+    </div>
+  );
 }
-
