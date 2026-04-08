@@ -201,9 +201,9 @@ function TagDisplay({ items = [], emptyText, color = "orange" }) {
 
   return (
     <div className="flex flex-wrap gap-2">
-      {safeItems.map((item) => (
+      {safeItems.map((item, index) => (
         <span
-          key={item}
+          key={`${String(item)}-${index}`}
           className={`px-3 py-1 text-xs rounded-full ${base}`}
         >
           {item}

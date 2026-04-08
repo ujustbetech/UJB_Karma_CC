@@ -644,12 +644,14 @@ export default function ReferralDetails() {
         />
       )}
 
-      <button
-        onClick={() => setModalOpen(true)}
-        className="fixed bottom-20 left-6 right-6 bg-gradient-to-r from-orange-500 to-orange-600 text-white py-4 rounded-2xl shadow-xl font-semibold active:scale-95 transition-all duration-200 hover:shadow-2xl"
-      >
-        Pass Referral
-      </button>
+      <div className="fixed bottom-20 left-1/2 z-40 w-full max-w-md -translate-x-1/2 px-4">
+        <button
+          onClick={() => setModalOpen(true)}
+          className="w-full bg-gradient-to-r from-orange-500 to-orange-600 text-white py-4 rounded-2xl shadow-xl font-semibold active:scale-95 transition-all duration-200 hover:shadow-2xl"
+        >
+          Pass Referral
+        </button>
+      </div>
     </main>
   );
 }

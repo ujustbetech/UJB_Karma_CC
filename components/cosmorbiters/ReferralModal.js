@@ -51,8 +51,8 @@ export default function ReferralModal({
   };
 
   return (
-    <div className="fixed inset-0 z-99 flex items-end bg-black/40 backdrop-blur-sm">
-      <div className="bg-white w-full rounded-t-3xl p-6 max-h-[90vh] overflow-y-auto">
+    <div className="fixed inset-0 z-[99] flex items-end justify-center bg-black/40 backdrop-blur-sm">
+      <div className="bg-white w-full max-w-md rounded-t-3xl p-6 max-h-[90vh] overflow-y-auto">
 
         {/* HEADER */}
         <div className="flex justify-between items-center mb-4">
