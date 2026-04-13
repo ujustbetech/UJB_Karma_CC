@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { doc, getDoc, updateDoc, increment } from "firebase/firestore";
 import { db } from "@/lib/firebase/firebaseClient";
-import { Eye, Heart, Music, Video, FileText, Tag } from "lucide-react";
+import { Eye, Heart, Music, Video, FileText, Tag, ImageOff, User } from "lucide-react";
 
 export default function ContentDetails() {
   const { id } = useParams();
@@ -70,16 +70,31 @@ export default function ContentDetails() {
     <div className="min-h-screen bg-[#0b1120] flex justify-center pb-24">
       <div className="w-full max-w-md bg-white rounded-3xl shadow-2xl overflow-hidden mt-6">
         <div className="flex items-center gap-3 p-4 border-b">
-          <img
-            src={content.lpProfile?.[0] || "/avatar.png"}
-            alt="Partner"
-            className="w-10 h-10 rounded-full object-cover"
-          />
+          {content.lpProfile?.[0] ? (
+            <img
+              src={content.lpProfile[0]}
+              alt={content.partnerNamelp || "Partner"}
+              className="w-10 h-10 rounded-full object-cover"
+              onError={(event) => {
+                event.currentTarget.style.display = "none";
+                event.currentTarget.nextElementSibling?.classList.remove("hidden");
+              }}
+            />
+          ) : null}
+          <div
+            className={`${
+              content.lpProfile?.[0] ? "hidden" : "flex"
+            } h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-slate-500`}
+          >
+            <User size={18} />
+          </div>
           <div>
             <p className="text-sm font-semibold text-gray-800">
-              {content.partnerNamelp}
+              {content.partnerNamelp || "Partner"}
             </p>
-            <p className="text-xs text-gray-400">{content.partnerDesig}</p>
+            <p className="text-xs text-gray-400">
+              {content.partnerDesig || "Profile unavailable"}
+            </p>
           </div>
         </div>
 
@@ -91,11 +106,29 @@ export default function ContentDetails() {
               src={content.contentFile?.[0]}
             />
           ) : (
-            <img
-              src={content.Thumbnail?.[0] || "/placeholder.jpg"}
-              alt={content.contentName || "Content thumbnail"}
-              className="w-full max-h-[500px] object-cover"
-            />
+            <div className="relative min-h-[280px] bg-slate-100">
+              {content.Thumbnail?.[0] ? (
+                <img
+                  src={content.Thumbnail[0]}
+                  alt={content.contentName || "Content thumbnail"}
+                  className="w-full max-h-[500px] object-cover"
+                  onError={(event) => {
+                    event.currentTarget.style.display = "none";
+                    event.currentTarget.nextElementSibling?.classList.remove("hidden");
+                  }}
+                />
+              ) : null}
+              <div
+                className={`${
+                  content.Thumbnail?.[0] ? "hidden" : "flex"
+                } absolute inset-0 items-center justify-center bg-gradient-to-br from-slate-100 to-slate-200 text-slate-500`}
+              >
+                <div className="flex flex-col items-center gap-3">
+                  <ImageOff size={36} />
+                  <span className="text-sm font-medium">No image available</span>
+                </div>
+              </div>
+            </div>
           )}
 
           {animateLike && (

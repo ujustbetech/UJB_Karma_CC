@@ -93,7 +93,13 @@ export default function ContributionPointPage() {
           action={
             ujbCode ? (
               <Link href={`/user/contribuitionpoint/${ujbCode}`}>
-                <Button variant="outline" size="sm">Activity Log</Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="border-orange-300/50 bg-white/10 text-slate-100 hover:bg-white/15 hover:text-white"
+                >
+                  Activity Log
+                </Button>
               </Link>
             ) : null
           }

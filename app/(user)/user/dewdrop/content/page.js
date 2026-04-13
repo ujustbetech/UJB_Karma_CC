@@ -15,6 +15,8 @@ import {
   Video,
   FileText,
   Tag,
+  ImageOff,
+  User,
 } from "lucide-react";
 import Link from "next/link";
 import UserPageHeader from "@/components/user/UserPageHeader";
@@ -86,11 +88,27 @@ export default function ContentPage() {
             >
               {/* THUMBNAIL */}
               <div className="relative h-48 bg-gray-100">
-                <img
-                  src={content.Thumbnail?.[0] || "/placeholder.jpg"}
-                  alt="Thumbnail"
-                  className="w-full h-full object-cover"
-                />
+                {content.Thumbnail?.[0] ? (
+                  <img
+                    src={content.Thumbnail[0]}
+                    alt={content.contentName || "Content thumbnail"}
+                    className="w-full h-full object-cover"
+                    onError={(event) => {
+                      event.currentTarget.style.display = "none";
+                      event.currentTarget.nextElementSibling?.classList.remove("hidden");
+                    }}
+                  />
+                ) : null}
+                <div
+                  className={`absolute inset-0 ${
+                    content.Thumbnail?.[0] ? "hidden" : "flex"
+                  } items-center justify-center bg-gradient-to-br from-slate-100 to-slate-200 text-slate-500`}
+                >
+                  <div className="flex flex-col items-center gap-2">
+                    <ImageOff size={28} />
+                    <span className="text-sm font-medium">No image available</span>
+                  </div>
+                </div>
 
                 {/* FORMAT BADGE */}
                 <div className="absolute top-4 left-4 bg-white/90 backdrop-blur px-3 py-1 rounded-full text-xs flex items-center gap-1 font-medium shadow">
@@ -127,17 +145,30 @@ export default function ContentPage() {
 
                 {/* PARTNER INFO */}
                 <div className="flex items-center gap-3 mb-4">
-                  <img
-                    src={content.lpProfile?.[0] || "/avatar.png"}
-                    alt="Partner"
-                    className="w-10 h-10 rounded-full object-cover"
-                  />
+                  {content.lpProfile?.[0] ? (
+                    <img
+                      src={content.lpProfile[0]}
+                      alt={content.partnerNamelp || "Partner"}
+                      className="w-10 h-10 rounded-full object-cover"
+                      onError={(event) => {
+                        event.currentTarget.style.display = "none";
+                        event.currentTarget.nextElementSibling?.classList.remove("hidden");
+                      }}
+                    />
+                  ) : null}
+                  <div
+                    className={`${
+                      content.lpProfile?.[0] ? "hidden" : "flex"
+                    } h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-slate-500`}
+                  >
+                    <User size={18} />
+                  </div>
                   <div>
                     <p className="text-sm font-medium text-gray-700">
-                      {content.partnerNamelp}
+                      {content.partnerNamelp || "Partner"}
                     </p>
                     <p className="text-xs text-gray-400">
-                      {content.partnerDesig}
+                      {content.partnerDesig || "Profile unavailable"}
                     </p>
                   </div>
                 </div>
