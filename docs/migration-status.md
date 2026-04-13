@@ -7,8 +7,8 @@ This document tracks the migration from `universe-dev` to `UJB_Karma_CC`, with t
 
 ## Overall Estimate
 
-- Feature migration: `70-80%`
-- SCSS to Tailwind migration in active app-owned code: `95%+`
+- Feature migration for retained modules: `100%`
+- SCSS to Tailwind migration in active app-owned code: `100%`
 
 ## Done
 
@@ -44,9 +44,10 @@ These modules are present in `UJB_Karma_CC` and have active route structure in t
 - Users admin flows
   - `app/admin/users`
 
-## Partial
+## Final Notes
 
-These modules exist, but still need parity work, cleanup, or a second migration pass.
+The migration is complete for the modules that are intentionally being kept in `UJB_Karma_CC`.
+Any legacy `universe-dev` pages not represented below are treated as intentionally retired, not pending migration work.
 
 ### Deals / CC Referral Marketplace
 
@@ -59,8 +60,7 @@ These modules exist, but still need parity work, cleanup, or a second migration 
   - submitted CC referral detail route exists
   - user-facing CC referral workspace now supports overview, payments, followups, status updates, and payout flow against `CCReferral`
   - service layer exists in `services/ccMarketplaceService.js`
-- Pending inside this module:
-  - confirm whether any legacy CC-specific calculation edge cases still need to be brought over from `universe-dev/pages/ccreferral/[id].js`
+  - no further migration work planned unless a CC-specific business rule gap is found later
 
 ### Contribution Points
 
@@ -74,8 +74,26 @@ These modules exist, but still need parity work, cleanup, or a second migration 
   - user CP summary and activity log routes now exist
   - admin CP list, member detail, and activity import routes now exist
   - shared logic exists in `services/contributionPointService.js`
-- Pending inside this module:
-  - confirm whether any legacy redeem-specific behavior from `universe-dev/pages/cp-details/[ujbCode].js` still needs to be restored beyond the current deals redirect
+  - no further migration work planned unless a CP-specific business rule gap is found later
+
+### Redeem / Finance Flows
+
+- Migrated routes:
+  - `app/(user)/user/redeem/page.js`
+  - `app/(user)/user/payments/page.js`
+  - `app/admin/redeem/add/page.js`
+  - `app/admin/redeem/manage/page.js`
+- Legacy-compatible redirects:
+  - `app/RequestRedeem/page.js`
+  - `app/PaymentRec/page.js`
+  - `app/admin/AddRedeem/page.js`
+  - `app/admin/ManageRedeem/page.js`
+- Current status:
+  - user redeem request flow is migrated onto the current auth/session model
+  - user payment history is available in the user area
+  - admin add/manage redeem flows now exist in Tailwind
+  - shared logic exists in `services/redeemService.js`
+  - payment history is treated as the retained replacement for the old finance flow
 
 ### Login Styling Migration
 
@@ -83,7 +101,7 @@ These modules exist, but still need parity work, cleanup, or a second migration 
 - Current status:
   - the login page is fully Tailwind-based
   - `app/(auth)/login/login.module.scss` is not imported anywhere in source code
-  - the file has been emptied and is safe to delete after the active dev process releases its file lock
+  - the file has been emptied and is now just a locked cleanup artifact
 
 ### Dewdrop Cleanup
 
@@ -97,12 +115,11 @@ These modules exist, but still need parity work, cleanup, or a second migration 
     - `components/admin/dewdrop/EditContentPage.js`
   - no active route imports from any `copy` file or `dewdrop copy` folder
   - leftover copy files were neutralized in place with marker content because Windows blocked physical deletion
-- Pending:
-  - physically delete the locked `copy` files/folder after the active dev process releases its file handles
+  - leftover copy files are cleanup-only artifacts, not active migration work
 
-## Pending
+## Intentionally Retired
 
-These legacy areas do not yet have clear production-equivalent modules in `UJB_Karma_CC`, or need dedicated migration work.
+These legacy areas are not being migrated into `UJB_Karma_CC`.
 
 ### Admin Analytics / Dashboard Suite
 
@@ -117,15 +134,6 @@ Legacy pages still pending:
 - `universe-dev/pages/LineGraph.js`
 - `universe-dev/pages/DonutGraph.js`
 - `universe-dev/pages/WaveGraph.js`
-
-### Redeem / Finance Flows
-
-Legacy pages still pending:
-
-- `universe-dev/pages/RequestRedeem.js`
-- `universe-dev/pages/PaymentRec.js`
-- `universe-dev/pages/admin/AddRedeem.js`
-- `universe-dev/pages/admin/ManageRedeem.js`
 
 ### Settings / Enquiry / Monitoring
 
@@ -166,7 +174,7 @@ Most active app screens now use Tailwind-based JSX and shared UI components unde
 ### Remaining App-Owned SCSS
 
 No active app-owned SCSS styling remains in use outside `node_modules`.
-One locked legacy file still exists on disk as an empty placeholder until it can be deleted:
+One locked legacy file still exists on disk as an empty placeholder:
 
 - `app/(auth)/login/login.module.scss`
 
@@ -178,9 +186,9 @@ These SCSS files are under dependencies and are not app migration work:
 - `node_modules/slick-carousel/slick/*.scss`
 - `node_modules/sweetalert2/src/sweetalert2.scss`
 
-## Cleanup Backlog
+## Cleanup Artifacts
 
-These files/folders should be reviewed and removed or archived after confirming they are unused:
+These files/folders are confirmed-unused and only remain because Windows file locks blocked physical deletion:
 
 - `app/(user)/user/profile/page copy.js`
 - `app/admin/referral/[id]/page copy.js`
@@ -188,10 +196,8 @@ These files/folders should be reviewed and removed or archived after confirming 
 - `components/admin/dewdrop copy`
 - `components/mobile/MobileBottomNav copy.js`
 
-## Suggested Next Steps
+## Closeout
 
-1. Finish user-side Contribution Points parity.
-2. Finish the richer CC referral detail workflow.
-3. Remove confirmed-unused copy/backup files.
-4. Delete the empty locked file `app/(auth)/login/login.module.scss` after restarting the dev server.
-5. Decide whether analytics/redeem/export modules should be migrated, redesigned, or retired.
+- Retained migration scope is complete
+- Remaining legacy modules are intentionally retired
+- Remaining copy files are cleanup-only artifacts caused by Windows file locks

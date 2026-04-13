@@ -5,7 +5,8 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/authContext";
 import { collection, getDocs, doc, getDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase/firebaseClient";
-import { Coins, Bell, User, LogOut } from "lucide-react";
+import { Coins, Bell, User, LogOut, Receipt } from "lucide-react";
+import useUserNotifications from "@/hooks/useUserNotifications";
 
 export default function MobileHeader() {
   const { user, logout } = useAuth();
@@ -15,6 +16,7 @@ export default function MobileHeader() {
   const [userCategory, setUserCategory] = useState("");
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [profileImage, setProfileImage] = useState("");
+  const { unreadCount } = useUserNotifications(user);
 
   useEffect(() => {
     if (!user?.profile?.ujbCode) return;
@@ -95,7 +97,11 @@ export default function MobileHeader() {
             className="relative cursor-pointer transition hover:scale-110"
           >
             <Bell size={20} className="text-slate-300" />
-            <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-orange-500 rounded-full border border-black" />
+            {unreadCount > 0 ? (
+              <span className="absolute -top-2 -right-2 min-w-[18px] rounded-full border border-black bg-orange-500 px-1.5 py-0.5 text-[10px] font-semibold leading-none text-white">
+                {unreadCount > 9 ? "9+" : unreadCount}
+              </span>
+            ) : null}
           </div>
 
           <button
@@ -173,6 +179,28 @@ export default function MobileHeader() {
               >
                 <Coins size={18} />
                 CP Details
+              </button>
+
+              <button
+                onClick={() => {
+                  router.push("/user/redeem");
+                  setShowProfileMenu(false);
+                }}
+                className="flex items-center gap-3 w-full py-2 text-left text-gray-700 hover:text-orange-500 transition"
+              >
+                <Coins size={18} />
+                Redeem Request
+              </button>
+
+              <button
+                onClick={() => {
+                  router.push("/user/payments");
+                  setShowProfileMenu(false);
+                }}
+                className="flex items-center gap-3 w-full py-2 text-left text-gray-700 hover:text-orange-500 transition"
+              >
+                <Receipt size={18} />
+                My Payments
               </button>
 
               <button

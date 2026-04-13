@@ -15,6 +15,8 @@ import { COLLECTIONS } from "@/lib/utility_collection";
 import MentorInfo from "@/components/prospect/MentorInfo";
 import ProspectForm from "@/components/prospect/ProspectForm";
 import SuccessModal from "@/components/prospect/SuccessModal";
+import UserPageHeader from "@/components/user/UserPageHeader";
+import { UserPlus } from "lucide-react";
 
 export default function UserAddProspect() {
   const { user, loading } = useAuth();
@@ -134,14 +136,11 @@ export default function UserAddProspect() {
         <div className="max-w-4xl mx-auto space-y-6">
 
           {/* Header */}
-          <div>
-            <h1 className="text-2xl font-bold text-slate-800">
-              Add Prospect
-            </h1>
-            <p className="text-sm text-slate-500 mt-1">
-              Register a new lead under your network.
-            </p>
-          </div>
+          <UserPageHeader
+            title="Add Prospect"
+            description="Register a new lead under your network and keep your prospect pipeline fresh and organized."
+            icon={UserPlus}
+          />
 
           {/* Mentor Section */}
           <div className="bg-white border border-slate-200 rounded-2xl shadow-sm">

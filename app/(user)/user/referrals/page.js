@@ -39,6 +39,7 @@ import {
 
 import { SlidersHorizontal } from "lucide-react";
 import { sendWhatsAppTemplateRequest } from "@/utils/whatsappClient";
+import UserPageHeader from "@/components/user/UserPageHeader";
 
 const db = getFirestore(app);
 
@@ -522,12 +523,16 @@ const UserReferrals = () => {
             <section className="max-w-7xl mx-auto pb-13">
 
                 {/* Page Heading */}
-                <div className="flex items-center justify-between mb-6">
-                    <h2 className="text-2xl font-bold text-gray-800">
-                        {activeTab === "my"
-                            ? `My Referrals (${ntMeetCount})`
-                            : `Passed Referrals (${monthlyMetCount})`}
-                    </h2>
+                <div className="mb-6">
+                    <UserPageHeader
+                        title={
+                            activeTab === "my"
+                                ? `My Referrals (${ntMeetCount})`
+                                : `Passed Referrals (${monthlyMetCount})`
+                        }
+                        description="Track the referrals you own, the ones you passed forward, and how each opportunity is progressing."
+                        icon={Share2}
+                    />
                 </div>
 
                 <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">

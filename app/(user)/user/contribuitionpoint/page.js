@@ -13,6 +13,7 @@ import {
   filterCpActivities,
   getCpCategoryLabel,
 } from "@/services/contributionPointService";
+import UserPageHeader from "@/components/user/UserPageHeader";
 
 export default function ContributionPointPage() {
   const router = useRouter();
@@ -85,18 +86,18 @@ export default function ContributionPointPage() {
   return (
     <main className="min-h-screen py-6">
       <section className="space-y-5">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <Text as="h1" variant="h1">Contribution Points</Text>
-            <Text variant="muted">Track your contribution performance</Text>
-          </div>
-
-          {ujbCode ? (
-            <Link href={`/user/contribuitionpoint/${ujbCode}`}>
-              <Button variant="outline" size="sm">Activity Log</Button>
-            </Link>
-          ) : null}
-        </div>
+        <UserPageHeader
+          title="Contribution Points"
+          description="Track your contribution performance, category mix, and redemption readiness from one dashboard."
+          icon={Trophy}
+          action={
+            ujbCode ? (
+              <Link href={`/user/contribuitionpoint/${ujbCode}`}>
+                <Button variant="outline" size="sm">Activity Log</Button>
+              </Link>
+            ) : null
+          }
+        />
 
         <Card className="space-y-4 shadow-lg">
           <div className="flex items-center justify-between">

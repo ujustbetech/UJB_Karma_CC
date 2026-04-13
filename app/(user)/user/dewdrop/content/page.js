@@ -17,6 +17,7 @@ import {
   Tag,
 } from "lucide-react";
 import Link from "next/link";
+import UserPageHeader from "@/components/user/UserPageHeader";
 
 export default function ContentPage() {
   const [contents, setContents] = useState([]);
@@ -64,21 +65,18 @@ export default function ContentPage() {
   }
 
   return (
-    <main className="min-h-screen">
-      <div className="max-w-7xl mx-auto px-6">
+    <main className="min-h-screen py-6">
+      <div className="space-y-5">
 
         {/* HEADER */}
-        <div className="mb-12">
-          <h1 className="text-3xl font-bold text-gray-800">
-            Content Library
-          </h1>
-          <p className="text-gray-500 text-sm mt-2">
-            Explore audio, video and curated partner content
-          </p>
-        </div>
+        <UserPageHeader
+          title="Content Library"
+          description="Explore audio, video, and curated partner content designed to keep your learning momentum strong."
+          icon={FileText}
+        />
 
         {/* GRID */}
-        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-10">
+        <div className="grid grid-cols-1 gap-6">
 
           {contents.map((content) => (
             <Link

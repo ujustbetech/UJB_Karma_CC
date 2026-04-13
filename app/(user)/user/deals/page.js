@@ -2,8 +2,9 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { Search } from "lucide-react";
+import { Search, Store } from "lucide-react";
 import { fetchApprovedCcDeals } from "@/services/ccMarketplaceService";
+import UserPageHeader from "@/components/user/UserPageHeader";
 
 const DealsForYou = () => {
   const [deals, setDeals] = useState([]);
@@ -68,10 +69,13 @@ const DealsForYou = () => {
     <main className="min-h-screen ">
 
       {/* PAGE HEADER */}
-      <div className="max-w-7xl mx-auto mb-12 text-center">
-        <h1 className="text-4xl font-bold text-gray-800 mb-4">
-          CC Referral Marketplace
-        </h1>
+      <div className="max-w-7xl mx-auto mb-12 space-y-5">
+        <UserPageHeader
+          title="CC Referral Marketplace"
+          description="Browse approved marketplace offers and open any deal to submit a lead requirement."
+          icon={Store}
+          align="center"
+        />
 
         <div className="relative max-w-md mx-auto">
           <Search

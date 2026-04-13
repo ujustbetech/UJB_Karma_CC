@@ -21,6 +21,7 @@ import {
     Plus
 } from "lucide-react";
 import Link from "next/link";
+import UserPageHeader from "@/components/user/UserPageHeader";
 
 function toDateValue(value) {
     if (!value) return null;
@@ -155,17 +156,14 @@ export default function ProspectListPage() {
             <div className="max-w-5xl mx-auto space-y-6">
 
                 {/* Header */}
-                <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-                    <div>
-                        <h1 className="text-2xl font-bold text-slate-200">
-                            My Prospects
-                        </h1>
-                        <p className="text-sm text-slate-300 mt-1">
-                            Manage your registered leads.
-                        </p>
-                    </div>
+                <div className="flex flex-col gap-4">
+                    <UserPageHeader
+                        title="My Prospects"
+                        description="Manage your registered leads, search quickly, and open prospect details without losing context."
+                        icon={User}
+                    />
 
-                    <div className="relative w-full md:w-72 bg-white rounded-2xl ">
+                    <div className="relative w-full rounded-2xl bg-white md:ml-auto md:w-72">
                         <Search className="absolute left-3 top-3 h-4 w-4 text-slate-400" />
                         <input
                             type="text"

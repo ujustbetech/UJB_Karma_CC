@@ -12,6 +12,7 @@ import { app } from "@/lib/firebase/firebaseClient";
 import Link from "next/link";
 import { Calendar, Users, Crown } from "lucide-react";
 import { COLLECTIONS } from "@/lib/utility_collection";
+import UserPageHeader from "@/components/user/UserPageHeader";
 
 const db = getFirestore(app);
 
@@ -69,10 +70,18 @@ export default function AllConclaves() {
   });
 
   return (
-    <div className="min-h-screen bg-[#0b1120] pb-20">
+    <main className="min-h-screen py-6">
+      <div className="space-y-5">
 
       {/* ================= HERO ================= */}
-      <div className="relative h-[240px] w-full">
+      <div>
+        <UserPageHeader
+          title="Conclave Meetings"
+          description="Stay close to collaboration, leadership conversations, and growth-focused conclave sessions."
+          icon={Crown}
+        />
+      </div>
+      <div className="hidden relative h-[240px] w-full">
         <img
           src="/space.jpeg"
           className="absolute inset-0 w-full h-full object-cover opacity-70"
@@ -88,7 +97,7 @@ export default function AllConclaves() {
       </div>
 
       {/* ================= LIST ================= */}
-      <div className="max-w-4xl mx-auto px-5 -mt-8 space-y-6">
+      <div className="space-y-6">
 
         {sortedEvents.map((conclave) => {
 
@@ -171,6 +180,7 @@ export default function AllConclaves() {
         )}
 
       </div>
-    </div>
+      </div>
+    </main>
   );
 }

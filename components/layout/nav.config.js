@@ -101,6 +101,14 @@ export const NAV_ITEMS = [
     ],
   },
   {
+    label: "Redeem",
+    icon: CreditCard,
+    children: [
+      { label: "Add Redeem Deal", href: "/admin/redeem/add" },
+      { label: "Manage Redeem", href: "/admin/redeem/manage" },
+    ],
+  },
+  {
     label: "Accounts",
     icon: CreditCard,
     children: [

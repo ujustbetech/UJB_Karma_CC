@@ -11,6 +11,7 @@ import {
 import { app } from "@/lib/firebase/firebaseClient";
 import Link from "next/link";
 import { CalendarDays, Video } from "lucide-react";
+import UserPageHeader from "@/components/user/UserPageHeader";
 
 const db = getFirestore(app);
 
@@ -69,21 +70,18 @@ export default function AllEvents() {
   });
 
   return (
-    <main className="min-h-screen px-6">
-      <div className="max-w-7xl mx-auto">
+    <main className="min-h-screen py-6">
+      <div className="space-y-5">
 
         {/* HEADER */}
-        <div className="mb-14">
-          <h2 className="text-4xl font-bold text-gray-800">
-            Monthly Meetings
-          </h2>
-          <p className="text-gray-500 mt-2">
-            Discover referrals, growth insights and community impact.
-          </p>
-        </div>
+        <UserPageHeader
+          title="Monthly Meetings"
+          description="Discover referrals, growth insights, shared learning, and community impact from every meeting."
+          icon={CalendarDays}
+        />
 
         {/* EVENTS GRID */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
+        <div className="grid grid-cols-1 gap-6">
 
           {sortedEvents.map((event) => {
 
