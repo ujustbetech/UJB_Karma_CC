@@ -8,7 +8,8 @@ import {
   CalendarDays,
   Share2,
   Droplets,
-  UserSearch
+  UserSearch,
+  Coins,
 } from "lucide-react";
 
 export const NAV_ITEMS = [
@@ -17,7 +18,6 @@ export const NAV_ITEMS = [
     href: "/admin",
     icon: LayoutGrid,
   },
-
   {
     label: "Users",
     icon: Users,
@@ -26,7 +26,6 @@ export const NAV_ITEMS = [
       { label: "Roles", href: "/admin/users/manage" },
     ],
   },
-
   {
     label: "Orbiters",
     icon: Orbit,
@@ -36,7 +35,6 @@ export const NAV_ITEMS = [
       { label: "Add Orbiter", href: "/admin/orbiters/add" },
     ],
   },
-
   {
     label: "Referral",
     icon: Share2,
@@ -46,16 +44,15 @@ export const NAV_ITEMS = [
       { label: "Add Referral", href: "/admin/referral/add" },
     ],
   },
-{
-  label: "Prospect",
-  icon: UserSearch,
-  children: [
-    { label: "Prospect Dashboard", href: "/admin/prospect" },
-    { label: "Manage Prospect", href: "/admin/prospect/manage" },
-    { label: "Add Prospect", href: "/admin/prospect/add" },
-  ],
-},
-  // ⭐ Monthly Meeting Section
+  {
+    label: "Prospect",
+    icon: UserSearch,
+    children: [
+      { label: "Prospect Dashboard", href: "/admin/prospect" },
+      { label: "Manage Prospect", href: "/admin/prospect/manage" },
+      { label: "Add Prospect", href: "/admin/prospect/add" },
+    ],
+  },
   {
     label: "Monthly Meeting",
     icon: CalendarDays,
@@ -65,7 +62,7 @@ export const NAV_ITEMS = [
       { label: "Add Meeting", href: "/admin/monthlymeeting/add" },
     ],
   },
-{
+  {
     label: "Conclave Meeting",
     icon: CalendarDays,
     children: [
@@ -93,7 +90,16 @@ export const NAV_ITEMS = [
       { label: "Categories", href: "/admin/dewdrop/category" },
     ],
   },
-
+  {
+    label: "Contribution Points",
+    icon: Coins,
+    children: [
+      { label: "CP Members", href: "/admin/contribution-points" },
+      { label: "Add Activity Entry", href: "/admin/contribution-points/add" },
+      { label: "Import Activity", href: "/admin/contribution-points/activity" },
+      { label: "Manage Activity", href: "/admin/contribution-points/manage" },
+    ],
+  },
   {
     label: "Accounts",
     icon: CreditCard,
@@ -102,7 +108,6 @@ export const NAV_ITEMS = [
       { label: "Payments", href: "/admin/accounts/payments" },
     ],
   },
-
   {
     label: "Reports",
     href: "/admin/reports",

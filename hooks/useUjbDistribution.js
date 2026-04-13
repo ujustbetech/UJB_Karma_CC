@@ -16,6 +16,7 @@ export function useUjbDistribution({
   onPaymentsUpdate,
   orbiter,
   cosmoOrbiter,
+  collectionName = COLLECTIONS.referral,
 }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState(null);
@@ -104,7 +105,7 @@ export function useUjbDistribution({
         (k) => entry[k] === undefined && delete entry[k]
       );
 
-      await updateDoc(doc(db, COLLECTIONS.referral, referralId), {
+      await updateDoc(doc(db, collectionName, referralId), {
         ujbBalance: increment(-netAmount),              // NET only
         payments: arrayUnion(entry),
         [fieldMap[recipient]]: increment(grossAmount), // ✅ GROSS credited

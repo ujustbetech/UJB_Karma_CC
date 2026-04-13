@@ -12,7 +12,10 @@ import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { db, storage } from "@/lib/firebase/firebaseClient";
 import { COLLECTIONS } from "@/lib/utility_collection";
 
-export default function useReferralDetails(id) {
+export default function useReferralDetails(
+  id,
+  { collectionName = COLLECTIONS.referral } = {}
+) {
   const [loading, setLoading] = useState(true);
 
   const [referralData, setReferralData] = useState(null);
@@ -39,7 +42,7 @@ export default function useReferralDetails(id) {
   useEffect(() => {
     if (!id) return;
 
-    const refDoc = doc(db, COLLECTIONS.referral, id);
+    const refDoc = doc(db, collectionName, id);
 
     const unsub = onSnapshot(
       refDoc,
@@ -138,7 +141,7 @@ export default function useReferralDetails(id) {
     );
 
     return () => unsub();
-  }, [id]);
+  }, [id, collectionName]);
 
   /* ------------------------------------------------------
      STATUS UPDATE
@@ -173,7 +176,7 @@ const handleStatusUpdate = async (newStatus) => {
     });
 
     // Firestore update
-    await updateDoc(doc(db, COLLECTIONS.referral, id), payload);
+    await updateDoc(doc(db, collectionName, id), payload);
 
     // Detect statuses that make dealEverWon = true
     const eligible = [
@@ -217,7 +220,7 @@ const handleSaveDealLog = async (distribution) => {
       lastDealCalculatedAt: Timestamp.now(),
     };
 
-    await updateDoc(doc(db, COLLECTIONS.referral, id), {
+    await updateDoc(doc(db, collectionName, id), {
       dealLogs: arrayUnion(newDealLog), // ✅ KEEP PREVIOUS LOGS
       lastDealCalculatedAt: Timestamp.now(),
       agreedTotal: distribution.agreedAmount,
@@ -248,7 +251,7 @@ const handleSaveDealLog = async (distribution) => {
     const updated = [...(followups || []), entry];
 
     try {
-      await updateDoc(doc(db, COLLECTIONS.referral, id), {
+      await updateDoc(doc(db, collectionName, id), {
         followups: updated,
       });
       setFollowups(updated);
@@ -262,7 +265,7 @@ const handleSaveDealLog = async (distribution) => {
     const arr = [...followups];
     arr[index] = updatedItem;
     try {
-      await updateDoc(doc(db, COLLECTIONS.referral, id), {
+      await updateDoc(doc(db, collectionName, id), {
         followups: arr,
       });
       setFollowups(arr);
@@ -277,7 +280,7 @@ const handleSaveDealLog = async (distribution) => {
     arr.splice(index, 1);
 
     try {
-      await updateDoc(doc(db, COLLECTIONS.referral, id), {
+      await updateDoc(doc(db, collectionName, id), {
         followups: arr,
       });
       setFollowups(arr);
@@ -300,7 +303,7 @@ const handleSaveDealLog = async (distribution) => {
 
       const url = await getDownloadURL(storageRef);
 
-      const refDoc = doc(db, COLLECTIONS.referral, id);
+      const refDoc = doc(db, collectionName, id);
 
       if (type === "invoice") {
         await updateDoc(refDoc, {

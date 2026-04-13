@@ -1,37 +1,33 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
-import {
-  collection,
-  query,
-  orderBy,
-  getDocs,
-} from "firebase/firestore";
-
-import { db } from "@/lib/firebase/firebaseClient";
-import {
-  Trophy,
-  Heart,
-  Users,
-  Wallet,
-  LayoutGrid,
-} from "lucide-react";
+import Link from "next/link";
+import { useEffect, useMemo, useState } from "react";
+import { Trophy, Heart, Users, Wallet, LayoutGrid } from "lucide-react";
 import { useAuth } from "@/context/authContext";
 import { useRouter } from "next/navigation";
+import Card from "@/components/ui/Card";
+import Text from "@/components/ui/Text";
+import Button from "@/components/ui/Button";
+import {
+  fetchCpBoardSummary,
+  filterCpActivities,
+  getCpCategoryLabel,
+} from "@/services/contributionPointService";
 
-export default function CPBoardDetails() {
+export default function ContributionPointPage() {
   const router = useRouter();
   const { user: sessionUser, loading: authLoading } = useAuth();
   const ujbCode = sessionUser?.profile?.ujbCode;
-
-  const [activities, setActivities] = useState([]);
+  const [summary, setSummary] = useState({
+    user: null,
+    activities: [],
+    totals: { total: 0, relation: 0, health: 0, wealth: 0 },
+  });
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("All");
   const [searchTerm, setSearchTerm] = useState("");
-
   const minimumRequired = 250;
 
-  /* ================= FETCH ================= */
   useEffect(() => {
     if (authLoading) return;
 
@@ -40,80 +36,36 @@ export default function CPBoardDetails() {
       return;
     }
 
-    const fetchActivities = async () => {
+    let active = true;
+
+    const loadSummary = async () => {
       try {
-        const q = query(
-          collection(db, "CPBoard", ujbCode, "activities"),
-          orderBy("addedAt", "desc")
-        );
-
-        const snap = await getDocs(q);
-
-        setActivities(
-          snap.docs.map((doc) => ({
-            id: doc.id,
-            ...doc.data(),
-          }))
-        );
-      } catch (err) {
-        console.error(err);
+        const nextSummary = await fetchCpBoardSummary(ujbCode);
+        if (active) {
+          setSummary(nextSummary);
+        }
+      } catch (error) {
+        console.error("Failed to load contribution points", error);
       } finally {
-        setLoading(false);
+        if (active) {
+          setLoading(false);
+        }
       }
     };
 
-    fetchActivities();
+    loadSummary();
+
+    return () => {
+      active = false;
+    };
   }, [ujbCode, authLoading]);
 
-  /* ================= POINT CALCULATIONS ================= */
-
-  const totalPoints = useMemo(
-    () => activities.reduce((sum, a) => sum + Number(a.points || 0), 0),
-    [activities]
+  const filteredActivities = useMemo(
+    () => filterCpActivities(summary.activities, activeTab, searchTerm),
+    [summary.activities, activeTab, searchTerm]
   );
 
-  const relationPoints = useMemo(
-    () =>
-      activities
-        .filter((a) => a.categories?.includes("R"))
-        .reduce((sum, a) => sum + Number(a.points || 0), 0),
-    [activities]
-  );
-
-  const healthPoints = useMemo(
-    () =>
-      activities
-        .filter((a) => a.categories?.includes("H"))
-        .reduce((sum, a) => sum + Number(a.points || 0), 0),
-    [activities]
-  );
-
-  const wealthPoints = useMemo(
-    () =>
-      activities
-        .filter((a) => a.categories?.includes("W"))
-        .reduce((sum, a) => sum + Number(a.points || 0), 0),
-    [activities]
-  );
-
-  const canRedeem = totalPoints >= minimumRequired;
-
-  /* ================= FILTER ================= */
-
-  const filteredActivities = useMemo(() => {
-    return activities.filter((a) => {
-      const matchesTab =
-        activeTab === "All" || a.categories?.includes(activeTab);
-
-      const matchesSearch =
-        a.activityName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        a.purpose?.toLowerCase().includes(searchTerm.toLowerCase());
-
-      return matchesTab && matchesSearch;
-    });
-  }, [activities, activeTab, searchTerm]);
-
-  /* ================= TABS CONFIG ================= */
+  const canRedeem = summary.totals.total >= minimumRequired;
 
   const tabs = [
     { key: "All", label: "All", icon: LayoutGrid },
@@ -122,84 +74,83 @@ export default function CPBoardDetails() {
     { key: "W", label: "Wealth", icon: Wallet },
   ];
 
-  /* ================= LOADER ================= */
-
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <div className="h-10 w-10 border-4 border-gray-400 border-t-transparent rounded-full animate-spin"></div>
+        <div className="h-10 w-10 border-4 border-gray-400 border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }
 
   return (
-    <main className="min-h-screen py-10 ">
-      <section className="max-w-5xl mx-auto px-4">
+    <main className="min-h-screen py-6">
+      <section className="space-y-5">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <Text as="h1" variant="h1">Contribution Points</Text>
+            <Text variant="muted">Track your contribution performance</Text>
+          </div>
 
-        {/* HEADER */}
-        <div className="mb-10">
-          <h2 className="text-3xl font-bold text-gray-800">
-            Contribution Points
-          </h2>
-          <p className="text-gray-500 text-sm mt-1">
-            Track your contribution performance
-          </p>
+          {ujbCode ? (
+            <Link href={`/user/contribuitionpoint/${ujbCode}`}>
+              <Button variant="outline" size="sm">Activity Log</Button>
+            </Link>
+          ) : null}
         </div>
 
-        {/* TOTAL CARD */}
-        <div className="bg-white rounded-3xl p-8 shadow-lg border mb-10">
-          <div className="flex justify-between items-center mb-4">
+        <Card className="space-y-4 shadow-lg">
+          <div className="flex items-center justify-between">
             <div>
-              <p className="text-xs tracking-wider text-gray-500 uppercase">
+              <Text variant="caption" className="uppercase tracking-wider">
                 Total Points
-              </p>
-              <h3 className="text-4xl font-bold text-green-600 mt-2">
-                {totalPoints}
-              </h3>
+              </Text>
+              <Text as="p" variant="h1" className="mt-2 text-green-600">
+                {summary.totals.total}
+              </Text>
             </div>
 
-            <div className="bg-green-100 p-4 rounded-2xl">
+            <div className="rounded-2xl bg-green-100 p-4">
               <Trophy className="text-green-600" size={30} />
             </div>
           </div>
 
-          <button
+          <Button
+            className="w-full"
             disabled={!canRedeem}
             onClick={() => router.push("/user/deals")}
-            className={`w-full py-3 rounded-xl text-sm font-medium transition ${
-              canRedeem
-                ? "bg-orange-600 text-white hover:bg-orange-700"
-                : "bg-gray-200 text-gray-400 cursor-not-allowed"
-            }`}
           >
             Redeem Now
-          </button>
+          </Button>
 
-          {!canRedeem && (
-            <p className="text-xs text-red-500 mt-3">
-              Need {minimumRequired - totalPoints} more points to redeem
-            </p>
-          )}
+          {!canRedeem ? (
+            <Text variant="caption" className="text-red-500">
+              Need {minimumRequired - summary.totals.total} more points to redeem
+            </Text>
+          ) : null}
+        </Card>
+
+        <div className="grid grid-cols-3 gap-3 text-center">
+          <Card className="shadow-sm">
+            <Text variant="muted">Relation</Text>
+            <Text as="p" variant="h2" className="text-blue-600">
+              {summary.totals.relation}
+            </Text>
+          </Card>
+          <Card className="shadow-sm">
+            <Text variant="muted">Health</Text>
+            <Text as="p" variant="h2" className="text-green-600">
+              {summary.totals.health}
+            </Text>
+          </Card>
+          <Card className="shadow-sm">
+            <Text variant="muted">Wealth</Text>
+            <Text as="p" variant="h2" className="text-purple-600">
+              {summary.totals.wealth}
+            </Text>
+          </Card>
         </div>
 
-        {/* CATEGORY SUMMARY */}
-        <div className="grid grid-cols-3 gap-6 mb-10 text-center">
-          <div className="bg-white rounded-2xl p-4 shadow border">
-            <p className="text-sm text-gray-500">Relation</p>
-            <p className="text-xl font-bold text-blue-600">{relationPoints}</p>
-          </div>
-          <div className="bg-white rounded-2xl p-4 shadow border">
-            <p className="text-sm text-gray-500">Health</p>
-            <p className="text-xl font-bold text-green-600">{healthPoints}</p>
-          </div>
-          <div className="bg-white rounded-2xl p-4 shadow border">
-            <p className="text-sm text-gray-500">Wealth</p>
-            <p className="text-xl font-bold text-purple-600">{wealthPoints}</p>
-          </div>
-        </div>
-
-        {/* TABS WITH ICONS */}
-        <div className="flex overflow-x-auto no-scrollbar bg-white rounded-2xl shadow mb-8">
+        <div className="flex overflow-x-auto rounded-2xl bg-white shadow-sm">
           {tabs.map((tab) => {
             const Icon = tab.icon;
             const isActive = activeTab === tab.key;
@@ -208,86 +159,66 @@ export default function CPBoardDetails() {
               <button
                 key={tab.key}
                 onClick={() => setActiveTab(tab.key)}
-                className={`flex flex-col items-center justify-center min-w-[100px] px-6 py-4 transition-all duration-200 relative ${
+                className={`relative flex min-w-[100px] flex-col items-center justify-center px-6 py-4 transition ${
                   isActive
                     ? "text-orange-600"
                     : "text-slate-400 hover:text-slate-600"
                 }`}
               >
                 <Icon size={20} strokeWidth={isActive ? 2.5 : 2} />
-                <span className="text-xs mt-1">
-                  {tab.label}
-                </span>
-
-                {isActive && (
-                  <div className="absolute bottom-0 h-[3px] w-10 bg-orange-500 rounded-full" />
-                )}
+                <span className="mt-1 text-xs">{tab.label}</span>
+                {isActive ? (
+                  <div className="absolute bottom-0 h-[3px] w-10 rounded-full bg-orange-500" />
+                ) : null}
               </button>
             );
           })}
         </div>
 
-        {/* SEARCH */}
-        <div className="mb-8">
-          <input
-            type="text"
-            placeholder="Search activity..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full px-4 py-3 rounded-xl border bg-white shadow-sm"
-          />
-        </div>
+        <input
+          type="text"
+          placeholder="Search activity..."
+          value={searchTerm}
+          onChange={(event) => setSearchTerm(event.target.value)}
+          className="w-full rounded-xl border bg-white px-4 py-3 shadow-sm outline-none"
+        />
 
-        {/* ACTIVITY CARDS */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-8">
-          {filteredActivities.map((a) => {
-            const category = a.categories?.[0] || "W";
-
-            const categoryLabel =
-              category === "R"
-                ? "Relation"
-                : category === "H"
-                ? "Health"
-                : "Wealth";
+        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+          {filteredActivities.map((activity) => {
+            const category = activity.categories?.[0] || "W";
 
             return (
-              <div
-                key={a.id}
-                className="bg-white rounded-3xl p-7 shadow-md border hover:shadow-xl transition"
-              >
-                <p className="text-xs text-gray-400 mb-3">
-                  {a.addedAt?.seconds
-                    ? new Date(a.addedAt.seconds * 1000).toLocaleDateString()
-                    : "—"}
-                </p>
+              <Card key={activity.id} className="space-y-4 border shadow-md transition hover:shadow-xl">
+                <Text variant="caption">
+                  {activity.addedAt?.seconds
+                    ? new Date(activity.addedAt.seconds * 1000).toLocaleDateString()
+                    : activity.month || "-"}
+                </Text>
 
-                <h3 className="text-lg font-semibold text-gray-800 mb-4">
-                  {a.activityName}
-                </h3>
+                <Text as="h3" variant="h3">{activity.activityName}</Text>
 
-                <div className="flex items-center justify-between mb-5">
-                  <span className="px-4 py-1 text-xs rounded-full border border-indigo-400 text-indigo-600">
-                    {categoryLabel}
+                <div className="flex items-center justify-between">
+                  <span className="rounded-full border border-indigo-400 px-4 py-1 text-xs text-indigo-600">
+                    {getCpCategoryLabel(category)}
                   </span>
 
-                  <p className="text-lg font-bold text-indigo-600">
-                    +{a.points}
-                  </p>
+                  <Text as="p" variant="h3" className="text-indigo-600">
+                    +{activity.points || 0}
+                  </Text>
                 </div>
 
-                {a.purpose && (
-                  <div className="text-sm text-gray-500 border-t pt-4">
+                {activity.purpose ? (
+                  <div className="border-t pt-4 text-sm text-gray-500">
                     Redeemed for{" "}
                     <span className="font-medium text-gray-700">
-                      {a.purpose}
+                      {activity.purpose}
                     </span>
                   </div>
-                )}
-              </div>
+                ) : null}
+              </Card>
             );
           })}
         </div>
-
       </section>
     </main>
   );

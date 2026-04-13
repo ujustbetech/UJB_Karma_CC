@@ -22,7 +22,11 @@ import sanitizeForFirestore from "@/utils/sanitizeForFirestore";
  *
  * COLLECTION.referral → VIEW ONLY
  */
-export const useReferralAdjustment = (referralId, orbiterUjbCode) => {
+export const useReferralAdjustment = (
+  referralId,
+  orbiterUjbCode,
+  { collectionName = COLLECTIONS.referral } = {}
+) => {
   const [loading, setLoading] = useState(false);
   const [loadingInit, setLoadingInit] = useState(false);
   const [error, setError] = useState(null);
@@ -185,7 +189,7 @@ export const useReferralAdjustment = (referralId, orbiterUjbCode) => {
 
       if (referral?.id) {
         await updateDoc(
-          doc(db, COLLECTIONS.referral, referral.id),
+          doc(db, collectionName, referral.id),
           {
             adjustmentLogs: arrayUnion({
               type: safeLog.type,
@@ -207,7 +211,7 @@ export const useReferralAdjustment = (referralId, orbiterUjbCode) => {
         logEntry: safeLog,
       };
     },
-    [orbiterUjbCode]
+    [orbiterUjbCode, collectionName]
   );
 
 

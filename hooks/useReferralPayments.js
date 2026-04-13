@@ -42,6 +42,7 @@ export default function useReferralPayments({
   payments,
   setPayments,
   dealLogs,
+  collectionName = COLLECTIONS.referral,
 }) {
   const [showAddPaymentForm, setShowAddPaymentForm] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -168,7 +169,7 @@ export default function useReferralPayments({
         },
       };
 
-      await updateDoc(doc(db, COLLECTIONS.referral, id), {
+      await updateDoc(doc(db, collectionName, id), {
         payments: arrayUnion(entry),
         ujbBalance: increment(netAmount),   // NET credited
         tdsReceivable: increment(tdsAmount),
@@ -229,7 +230,7 @@ export default function useReferralPayments({
       },
     };
 
-    await updateDoc(doc(db, COLLECTIONS.referral, id), {
+    await updateDoc(doc(db, collectionName, id), {
       payments: arrayUnion(payoutEntry),
       ujbBalance: increment(-net), // NET only
       tdsPayable: increment(tds),

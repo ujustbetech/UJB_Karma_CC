@@ -22,6 +22,47 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 
+function toDateValue(value) {
+    if (!value) return null;
+
+    if (value instanceof Date) {
+        return value;
+    }
+
+    if (typeof value?.toDate === "function") {
+        return value.toDate();
+    }
+
+    if (typeof value?.seconds === "number") {
+        return new Date(value.seconds * 1000);
+    }
+
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function formatProspectDate(value) {
+    if (!value) return "";
+
+    if (typeof value === "string") {
+        return value;
+    }
+
+    const date = toDateValue(value);
+
+    if (!date) {
+        return "";
+    }
+
+    return date.toLocaleString("en-IN", {
+        day: "2-digit",
+        month: "long",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+    });
+}
+
 export default function ProspectListPage() {
     const { user, loading } = useAuth();
     const [isClosing, setIsClosing] = useState(false);
@@ -52,10 +93,16 @@ export default function ProspectListPage() {
                         where("mentorUjbCode", "==", ujbCode)
                     );
                     const snap1 = await getDocs(q1);
-                    results = snap1.docs.map((doc) => ({
-                        id: doc.id,
-                        ...doc.data(),
-                    }));
+                    results = snap1.docs.map((doc) => {
+                        const data = doc.data();
+
+                        return {
+                            id: doc.id,
+                            ...data,
+                            date: formatProspectDate(data.date || data.registeredAt),
+                            registeredAt: toDateValue(data.registeredAt || data.date),
+                        };
+                    });
                 }
 
                 if (phone) {
@@ -67,14 +114,21 @@ export default function ProspectListPage() {
 
                     snap2.docs.forEach((doc) => {
                         if (!results.find((p) => p.id === doc.id)) {
-                            results.push({ id: doc.id, ...doc.data() });
+                            const data = doc.data();
+
+                            results.push({
+                                id: doc.id,
+                                ...data,
+                                date: formatProspectDate(data.date || data.registeredAt),
+                                registeredAt: toDateValue(data.registeredAt || data.date),
+                            });
                         }
                     });
                 }
 
                 results.sort((a, b) => {
                     if (!a.registeredAt || !b.registeredAt) return 0;
-                    return b.registeredAt.seconds - a.registeredAt.seconds;
+                    return b.registeredAt.getTime() - a.registeredAt.getTime();
                 });
 
                 setProspects(results);
