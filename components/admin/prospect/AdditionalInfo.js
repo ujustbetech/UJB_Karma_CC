@@ -1,9 +1,6 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { doc, updateDoc } from "firebase/firestore";
-import { db } from "@/lib/firebase/firebaseClient";
-import { COLLECTIONS } from "@/lib/utility_collection";
 import "react-quill-new/dist/quill.snow.css";
 import emailjs from "@emailjs/browser";
 import dynamic from "next/dynamic";
@@ -13,6 +10,13 @@ const ReactQuill = dynamic(() => import("react-quill-new"), {
   ssr: false,
   loading: () => <p>Loading editor...</p>,
 });
+
+const requiredHeading = (label) => (
+  <>
+    {label}
+    <span className="text-red-600"> *</span>
+  </>
+);
 
 const AditionalInfo = ({ id, data = { sections: [] } }) => {
 
@@ -49,22 +53,78 @@ const AditionalInfo = ({ id, data = { sections: [] } }) => {
     setSection((prev) => ({ ...prev, [field]: value }));
   };
 
+  const getPlainText = (value) =>
+    String(value || "")
+      .replace(/<[^>]*>/g, " ")
+      .replace(/&nbsp;/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+
+  const validateSection = () => {
+    const requiredFields = [
+      { key: "lived", label: "As lived Experience" },
+      { key: "overviewOfUJB", label: "Overview of UJustBe" },
+      { key: "whyUJB", label: "Why UJustBe" },
+      { key: "selectionRational", label: "Selection Rationale" },
+      { key: "tangible", label: "Tangible Aspects" },
+      { key: "intangible", label: "Intangible Aspects" },
+      { key: "vision", label: "Vision Statement" },
+      { key: "happyFace", label: "Happy Face" },
+    ];
+
+    const missingFields = requiredFields.filter(
+      ({ key }) => !getPlainText(section[key])
+    );
+
+    if (missingFields.length > 0) {
+      alert(
+        `Please complete all required fields before saving. Missing: ${missingFields
+          .map(({ label }) => label)
+          .join(", ")}`
+      );
+      return false;
+    }
+
+    return true;
+  };
+
   const handleSave = async () => {
+    if (!validateSection()) {
+      return;
+    }
 
     setLoading(true);
 
     try {
+      const res = await fetch(
+        `/api/admin/prospects?id=${id}&section=additionalinfo`,
+        {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          credentials: "include",
+          body: JSON.stringify({
+            update: {
+              sections: [section],
+            },
+          }),
+        }
+      );
+      const responseData = await res.json().catch(() => ({}));
 
-      const existingDocRef = doc(db, COLLECTIONS.prospect, id);
-
-      await updateDoc(existingDocRef, {
-        sections: [section],
-      });
+      if (!res.ok) {
+        throw new Error(responseData.message || "Failed to save pre-enrollment form");
+      }
 
       setHasData(true);
       setEditMode(false);
 
-      const formLink = `https://otc-app.vercel.app/prospectfeedbackform/${id}`;
+      const origin =
+        typeof window !== "undefined"
+          ? window.location.origin
+          : "https://ujustbe.vercel.app";
+      const formLink = `${origin}/user/prospects/${id}`;
 
       const orbiterName = data.orbiterName || "Orbiter";
       const prospectEmail = data.email || "orbiter@example.com";
@@ -76,7 +136,7 @@ Dear ${prospectName},
 
 It was a pleasure connecting with you and introducing UJustBe!
 
-Please take a few minutes to fill out this form: ${formLink}
+Please take a few minutes to fill out this assessment form: ${formLink}
 
 Thank you!
 `;
@@ -194,42 +254,42 @@ Thank you!
         <div className="space-y-8">
 
           <div>
-            <h4 className="text-lg font-medium mb-2">As lived Experience</h4>
+            <h4 className="text-lg font-medium mb-2">{requiredHeading("As lived Experience")}</h4>
             {renderEditor("lived", "Lived")}
           </div>
 
           <div>
-            <h4 className="text-lg font-medium mb-2">Overview of UJustBe</h4>
+            <h4 className="text-lg font-medium mb-2">{requiredHeading("Overview of UJustBe")}</h4>
             {renderEditor("overviewOfUJB", "")}
           </div>
 
           <div>
-            <h4 className="text-lg font-medium mb-2">Why UJustBe</h4>
+            <h4 className="text-lg font-medium mb-2">{requiredHeading("Why UJustBe")}</h4>
             {renderEditor("whyUJB", "")}
           </div>
 
           <div>
-            <h4 className="text-lg font-medium mb-2">Selection Rationale</h4>
+            <h4 className="text-lg font-medium mb-2">{requiredHeading("Selection Rationale")}</h4>
             {renderEditor("selectionRational", "")}
           </div>
 
           <div>
-            <h4 className="text-lg font-medium mb-2">Tangible Aspects</h4>
+            <h4 className="text-lg font-medium mb-2">{requiredHeading("Tangible Aspects")}</h4>
             {renderEditor("tangible", "Tangible")}
           </div>
 
           <div>
-            <h4 className="text-lg font-medium mb-2">Intangible Aspects</h4>
+            <h4 className="text-lg font-medium mb-2">{requiredHeading("Intangible Aspects")}</h4>
             {renderEditor("intangible", "Intangible")}
           </div>
 
           <div>
-            <h4 className="text-lg font-medium mb-2">Vision Statement</h4>
+            <h4 className="text-lg font-medium mb-2">{requiredHeading("Vision Statement")}</h4>
             {renderEditor("vision", "Vision")}
           </div>
 
           <div>
-            <h4 className="text-lg font-medium mb-2">Happy Face</h4>
+            <h4 className="text-lg font-medium mb-2">{requiredHeading("Happy Face")}</h4>
             {renderEditor("happyFace", "Happy Face")}
           </div>
 

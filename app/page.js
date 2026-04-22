@@ -30,6 +30,7 @@ export default function LoginPage() {
   }, [router]);
 
   const handleMicrosoftLogin = async () => {
+    if (loading) return;
     setLoading(true);
 
     try {
@@ -62,6 +63,22 @@ export default function LoginPage() {
 
       router.replace("/admin/orbiters");
     } catch (error) {
+      const errorCode = error?.code || "";
+
+      if (
+        errorCode === "auth/cancelled-popup-request" ||
+        errorCode === "auth/popup-closed-by-user"
+      ) {
+        return;
+      }
+
+      if (errorCode === "auth/configuration-not-found") {
+        alert(
+          "Microsoft sign-in is not configured for the current Firebase project. Enable the Microsoft provider in Firebase Authentication for the ujustbedev project to use admin login."
+        );
+        return;
+      }
+
       console.error(error);
       alert("Login failed");
     } finally {
@@ -79,8 +96,10 @@ export default function LoginPage() {
         <Button
           className="flex w-full items-center justify-center gap-2"
           onClick={handleMicrosoftLogin}
+          disabled={loading}
+          loading={loading}
         >
-          {loading ? "Signing In..." : "Sign in with Microsoft"}
+          Sign in with Microsoft
         </Button>
       </Card>
     </div>

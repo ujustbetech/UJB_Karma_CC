@@ -4,6 +4,12 @@ import { createContext, useContext, useState, useCallback } from "react";
 import Toast from "./Toast";
 
 const ToastContext = createContext(null);
+let toastCounter = 0;
+
+function createToastId() {
+  toastCounter += 1;
+  return `toast-${Date.now()}-${toastCounter}`;
+}
 
 export function ToastProvider({ children }) {
   const [toasts, setToasts] = useState([]);
@@ -13,7 +19,7 @@ export function ToastProvider({ children }) {
   }, []);
 
   const showToast = useCallback((toast) => {
-    const id = Date.now();
+    const id = toast.id ?? createToastId();
 
     setToasts((prev) => [
       ...prev,

@@ -6,8 +6,10 @@ import {
 } from "@/lib/firebase/firebaseAdmin";
 import { hasAdminAccess } from "@/lib/auth/accessControl";
 import {
+  buildBootstrapAdminRecord,
   buildAdminSessionPayload,
   findAuthorizedAdmin,
+  shouldBootstrapAdmin,
 } from "@/lib/auth/adminAccessWorkflow.mjs";
 import {
   createAdminSessionToken,
@@ -39,7 +41,33 @@ export async function POST(req) {
     }
 
     const decoded = await adminAuth.verifyIdToken(idToken);
-    const adminSnapshot = await adminDb.collection("AdminUsers").get();
+    const adminUsersCollection = adminDb.collection("AdminUsers");
+    const adminSnapshot = await adminUsersCollection.get();
+
+    if (shouldBootstrapAdmin(adminSnapshot.docs)) {
+      const bootstrapAdmin = buildBootstrapAdminRecord(decoded);
+
+      if (!bootstrapAdmin.email) {
+        return NextResponse.json(
+          { success: false, message: "Missing admin email" },
+          { status: 401 }
+        );
+      }
+
+      await adminUsersCollection.doc(bootstrapAdmin.email).set(bootstrapAdmin);
+
+      const sessionPayload = buildAdminSessionPayload(bootstrapAdmin, decoded);
+      const response = NextResponse.json({
+        success: true,
+        admin: sessionPayload,
+        bootstrap: true,
+      });
+
+      setAdminSessionCookie(response, createAdminSessionToken(sessionPayload));
+
+      return response;
+    }
+
     const adminMatch = findAuthorizedAdmin(
       adminSnapshot.docs,
       decoded.email,

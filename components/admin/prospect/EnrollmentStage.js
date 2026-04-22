@@ -1,811 +1,443 @@
-import React, { useState, useEffect } from 'react';
-import {  doc,
-  updateDoc,
-  getDoc,
-  setDoc,
-  getDocs,
-  collection,
-  query,
-  where,
-  addDoc,
-  serverTimestamp,} from 'firebase/firestore';
-import { db } from '@/lib/firebase/firebaseClient';
-import { COLLECTIONS } from "@/lib/utility_collection";
-import emailjs from '@emailjs/browser';
-import Swal from 'sweetalert2';
-import { sendWhatsAppTemplateRequest } from '@/utils/whatsappClient';
+import React, { useEffect, useMemo, useState } from "react";
+import emailjs from "@emailjs/browser";
+import Swal from "sweetalert2";
 
-const dropdownOptions = {
-  'Enrollment Initiation': ['In Progress', 'Completed', 'Not Started'],
-  'Enrollment documents mail': ['Sent', 'Pending', 'Need Revision'],
-  'Enrollment Fees Mail Status': ['Sent', 'Follow-up Required'],
-  'Enrollment fees Option Opted for': ['Upfront', 'Adjustment', 'No Response Adjustment' , 'Upfront Enrollment fees Confirmation'],
-  'Enrollments Completion Status': ['Completed', 'Pending', 'Withdrawn']
+import { sendWhatsAppTemplateRequest } from "@/utils/whatsappClient";
+
+const STAGE_OPTIONS = [
+  {
+    label: "Enrollment Initiation",
+    statuses: [
+      "Initiation not started",
+      "Initiation in progress",
+      "Initiation completed",
+    ],
+  },
+  {
+    label: "Enrollment documents mail",
+    statuses: ["Documents pending", "Documents sent", "Documents need revision"],
+  },
+  {
+    label: "Enrollment Fees Mail Status",
+    statuses: ["Fee mail pending", "Fee mail sent", "Fee follow-up required"],
+  },
+  {
+    label: "Enrollment fees Option Opted for",
+    statuses: [
+      "Option pending",
+      "Upfront payment selected",
+      "Adjustment selected",
+      "No response - adjustment applied",
+      "Upfront payment confirmed",
+    ],
+  },
+  {
+    label: "Enrollments Completion Status",
+    statuses: ["Completion pending", "Enrollment completed", "Enrollment withdrawn"],
+  },
+];
+
+const sanitizeText = (text) =>
+  String(text || "")
+    .replace(/[\n\t]/g, " ")
+    .replace(/ {5,}/g, "    ")
+    .trim();
+
+const formatLogDate = (value) => {
+  if (!value) return "";
+
+  if (typeof value === "string") {
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime())
+      ? value
+      : parsed.toLocaleString("en-IN");
+  }
+
+  if (value?.seconds) {
+    return new Date(value.seconds * 1000).toLocaleString("en-IN");
+  }
+
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime())
+    ? ""
+    : parsed.toLocaleString("en-IN");
 };
+
+const stringifyValue = (value) => {
+  if (value == null) return "";
+  if (typeof value === "string") return value;
+  if (typeof value === "number" || typeof value === "boolean") {
+    return String(value);
+  }
+
+  if (value?.seconds) {
+    return `${value.seconds}-${value.nanoseconds || 0}`;
+  }
+
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return String(value);
+  }
+};
+
+const formatStageDate = (value) => {
+  if (!value) return "";
+
+  if (typeof value === "string") {
+    if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+      const parsed = new Date(`${value}T00:00:00`);
+      return Number.isNaN(parsed.getTime())
+        ? value
+        : parsed.toLocaleDateString("en-IN");
+    }
+
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime())
+      ? value
+      : parsed.toLocaleDateString("en-IN");
+  }
+
+  if (value?.seconds) {
+    return new Date(value.seconds * 1000).toLocaleDateString("en-IN");
+  }
+
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime())
+    ? ""
+    : parsed.toLocaleDateString("en-IN");
+};
+
+const normalizeDateValue = (value) => {
+  if (!value) return "";
+
+  if (typeof value === "string") {
+    if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+      return value;
+    }
+
+    if (/^\d{2}\/\d{2}\/\d{4}$/.test(value)) {
+      const [month, day, year] = value.split("/");
+      return `${year}-${month}-${day}`;
+    }
+
+    const parsed = new Date(value);
+    if (!Number.isNaN(parsed.getTime())) {
+      return parsed.toISOString().split("T")[0];
+    }
+  }
+
+  if (value?.seconds) {
+    return new Date(value.seconds * 1000).toISOString().split("T")[0];
+  }
+
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? "" : parsed.toISOString().split("T")[0];
+};
+
+const getLogKey = (log, index) => {
+  if (log?.id) {
+    return String(log.id);
+  }
+
+  const clickedAt =
+    log?.clickedAt && typeof log.clickedAt === "object"
+      ? `${log.clickedAt.seconds || 0}-${log.clickedAt.nanoseconds || 0}`
+      : stringifyValue(log?.clickedAt || "no-date");
+
+  const action = stringifyValue(log?.action || "no-action");
+  const targetLabel = stringifyValue(
+    log?.targetLabel || log?.label || "no-target"
+  );
+  const clickedBy = stringifyValue(log?.clickedBy || "no-user");
+
+  return `${clickedAt}-${action}-${targetLabel}-${clickedBy}-${index}`;
+};
+
+const getLogTitle = (log) => {
+  const actionLabel =
+    log.action === "send_email"
+      ? "Notification sent"
+      : log.action === "save"
+        ? "Enrollment stages saved"
+        : "Enrollment update";
+  const label = log.targetLabel || log.label || "";
+
+  return label ? `${actionLabel} - ${label}` : actionLabel;
+};
+
+const normalizeRows = (savedRows) =>
+  STAGE_OPTIONS.map((stage) => {
+    const match = savedRows.find((item) => item.label === stage.label);
+
+    return (
+      match || {
+        label: stage.label,
+        checked: false,
+        date: "",
+        status: "",
+        sent: false,
+      }
+    );
+  }).map((row) => ({
+    ...row,
+    date: normalizeDateValue(row.date),
+  }));
+
 const EnrollmentStage = ({ id, fetchData }) => {
   const [rows, setRows] = useState([]);
+  const [logs, setLogs] = useState([]);
   const [loading, setLoading] = useState(false);
-
-  const options = Object.keys(dropdownOptions); // <-- this line is important
-const addCpForEnrollmentFeeUpfront = async (
-  db,
-  orbiter,
-  prospectPhone,
-  prospectName
-) => {
-  if (!orbiter?.ujbcode) return;
-
-  await ensureCpBoardUser(db, orbiter);
-
-  // 🚫 Prevent duplicate CP
-  const q = query(
-    collection(db, "CPBoard", orbiter.ujbcode, "activities"),
-    where("activityNo", "==", "013"),
-    where("prospectPhone", "==", prospectPhone)
-  );
-
-  const snap = await getDocs(q);
-  if (!snap.empty) return;
-
-  await addDoc(
-    collection(db, "CPBoard", orbiter.ujbcode, "activities"),
-    {
-      activityNo: "013",
-      activityName: "One-time Enrollment Fees (Upfront)",
-      points: 150,
-    categories: ["W"],
-
-      purpose:
-        "Incentivizes financial commitment and direct contribution to the ecosystem.",
-      prospectName,
-      prospectPhone,
-      source: "EnrollmentFeesUpfront",
-      month: new Date().toLocaleString("default", {
-        month: "short",
-        year: "numeric",
-      }),
-      addedAt: serverTimestamp(),
-    }
-  );
-  await updateCategoryTotals(orbiter, ["W"], 150);
-
-};
+  const [prospectMeta, setProspectMeta] = useState({
+    prospectName: "",
+    email: "",
+    prospectPhone: "",
+    orbiterName: "Orbiter",
+  });
 
   useEffect(() => {
     const loadData = async () => {
       try {
-        const docRef = doc(db, 'Prospects', id);
-        const snap = await getDoc(docRef);
+        const res = await fetch(
+          `/api/admin/prospects?id=${id}&section=enrollmentstages`,
+          {
+            credentials: "include",
+          }
+        );
+        const responseData = await res.json().catch(() => ({}));
 
-        if (snap.exists()) {
-          const data = snap.data();
-          console.log('Firestore data:', data);
-
-          const savedStages = data?.enrollmentStages || [];
-
-         const merged = options.map((label) => {
-  const match = savedStages.find((item) => item.label === label);
-  return match || {
-    label,
-    checked: false,
-    date: '',
-    status: '',
-    sent: false,
-    mailStatus: 'Pending'
-  };
-});
-
-
-          setRows(merged);
-        } else {
-          console.log('No document found. Initializing empty state.');
-          setRows(options.map((label) => ({
-            label,
-            checked: false,
-            date: '',
-            status: '',
-          })));
+        if (!res.ok) {
+          throw new Error(responseData.message || "Failed to load enrollment stages");
         }
+
+        const prospect = responseData.prospect || {};
+
+        setRows(
+          normalizeRows(
+            Array.isArray(responseData.enrollmentStages)
+              ? responseData.enrollmentStages
+              : []
+          )
+        );
+        setLogs(
+          Array.isArray(responseData.enrollmentStageLogs)
+            ? responseData.enrollmentStageLogs
+            : []
+        );
+        setProspectMeta({
+          prospectName: prospect.prospectName || "",
+          email: prospect.email || "",
+          prospectPhone: prospect.prospectPhone || "",
+          orbiterName: prospect.orbiterName || "Orbiter",
+        });
       } catch (err) {
-        console.error('Error loading enrollment data:', err);
+        console.error("Error loading enrollment data:", err);
       }
     };
 
-    loadData();
+    if (id) {
+      loadData();
+    }
   }, [id]);
-  const sanitizeText = (text) => {
-    return text
-      .replace(/[\n\t]/g, ' ')          // Replace newlines and tabs with spaces
-      .replace(/ {5,}/g, '    ')        // Reduce any 5+ spaces to 4 spaces
-      .trim();
+
+  const stagedRows = useMemo(() => rows, [rows]);
+
+  const isRowUnlocked = (index) => {
+    if (index === 0) return true;
+
+    const previousRow = stagedRows[index - 1];
+    return Boolean(previousRow?.checked && previousRow?.status);
   };
-  
-  const sendAssesmentMessage = async (orbiterName, prospectName, bodyText, phone) => {
-    try {
-      await sendWhatsAppTemplateRequest({
-        phone,
-        templateName: 'enrollment_journey',
-        parameters: [
-          sanitizeText(bodyText),
-          sanitizeText(orbiterName),
-        ],
-      });
-      console.log(`✅ WhatsApp message sent to ${prospectName}`);
-    } catch (error) {
-      console.error(`❌ Failed to send WhatsApp to ${prospectName}`, error.response?.data || error.message);
+
+  const canSend = (row, index) =>
+    isRowUnlocked(index) && Boolean(row.checked && row.date && row.status);
+
+  const getSendLabel = (row) => {
+    if (row.sent) return "Sent";
+
+    switch (row.label) {
+      case "Enrollment Initiation":
+        return "Send initiation";
+      case "Enrollment documents mail":
+        return "Send document mail";
+      case "Enrollment Fees Mail Status":
+        return "Send fee mail";
+      case "Enrollment fees Option Opted for":
+        return "Send fee option";
+      case "Enrollments Completion Status":
+        return "Send completion";
+      default:
+        return "Send";
     }
   };
-  
-  
-  
+
   const handleChange = (index, field, value) => {
-    const updated = [...rows];
-    updated[index][field] = value;
-    setRows(updated);
+    setRows((prev) =>
+      prev.map((row, rowIndex) => {
+        if (rowIndex !== index) return row;
+
+        const nextRow = {
+          ...row,
+          [field]: value,
+        };
+
+        if (field !== "sent") {
+          nextRow.sent = false;
+        }
+
+        return nextRow;
+      })
+    );
   };
-const generateNextUJBCode = async () => {
-  const snapshot = await getDocs(collection(db, COLLECTIONS.userDetail));
 
-  let maxNumber = 0;
-  snapshot.forEach(doc => {
-    const code = doc.data().UJBCode || doc.id;
-    const match = code.match(/\d+/);
-    if (match) maxNumber = Math.max(maxNumber, parseInt(match[0]));
-  });
-
-  return `UJB${String(maxNumber + 1).padStart(4, "0")}`;
-}
-const updateCategoryTotals = async (orbiter, categories, points) => {
-  if (!orbiter?.ujbcode || !Array.isArray(categories) || categories.length === 0) {
-    console.warn("❌ Invalid category update payload", orbiter, categories);
-    return;
-  }
-
-  const ref = doc(db, "CPBoard", orbiter.ujbcode);
-  const snap = await getDoc(ref);
-
-  if (!snap.exists()) {
-    console.warn("❌ CPBoard user missing for", orbiter.ujbcode);
-    return;
-  }
-
-  const data = snap.data();
-
-  // ✅ ENSURE TOTALS EXIST
-  let totals = data.totals;
-  if (!totals) {
-    totals = { R: 0, H: 0, W: 0 };
-    await updateDoc(ref, { totals });
-  }
-
-  const split = Math.floor(points / categories.length);
-  const updatedTotals = { ...totals };
-
-  categories.forEach((c) => {
-    updatedTotals[c] = (updatedTotals[c] || 0) + split;
-  });
-
-  console.log("✅ Updating CP totals:", orbiter.ujbcode, updatedTotals);
-
-  await updateDoc(ref, {
-    totals: updatedTotals,
-    lastUpdatedAt: serverTimestamp(),
-  });
-};
-
-// ================= CP HELPERS =================
-const addCpForEnrollmentInitiation = async (
-  db,
-  orbiter,
-  prospectPhone,
-  prospectName
-) => {
-  if (!orbiter?.ujbcode) return;
-
-  await ensureCpBoardUser(db, orbiter);
-
-  // 🚫 Prevent duplicate CP
-  const q = query(
-    collection(db, "CPBoard", orbiter.ujbcode, "activities"),
-    where("activityNo", "==", "011"),
-    where("prospectPhone", "==", prospectPhone)
-  );
-
-  const snap = await getDocs(q);
-  if (!snap.empty) return;
-
-  await addDoc(
-    collection(db, "CPBoard", orbiter.ujbcode, "activities"),
-    {
-      activityNo: "011",
-      activityName: "Initiating Enrollment (Tool)",
-      points: 100,
-        categories: ["R"],
-      purpose:
-        "Marks transition from prospecting to formal enrollment; key conversion milestone.",
-      prospectName,
-      prospectPhone,
-      source: "EnrollmentInitiation",
-      month: new Date().toLocaleString("default", {
-        month: "short",
-        year: "numeric",
-      }),
-      addedAt: serverTimestamp(),
-    }
-  );
-  await updateCategoryTotals(orbiter, ["R"], 100);
-};
-
-const ensureCpBoardUser = async (db, orbiter) => {
-  if (!orbiter?.ujbcode) return;
-
-  const ref = doc(db, "CPBoard", orbiter.ujbcode);
-  const snap = await getDoc(ref);
-
-  if (!snap.exists()) {
-    await setDoc(ref, {
-      id: orbiter.ujbcode,
-      name: orbiter.name,
-      phoneNumber: orbiter.phone,
-      role: orbiter.category || "MentOrbiter",
-      totals: { R: 0, H: 0, W: 0 }, // ✅ REQUIRED
-      createdAt: serverTimestamp(),
-    });
-  }
-};
-
-
-const addCpForEnrollmentCompletion = async (
-  db,
-  orbiter,
-  prospectPhone,
-  prospectName
-) => {
-  if (!orbiter?.ujbcode) return;
-
-  await ensureCpBoardUser(db, orbiter);
-
-  const q = query(
-    collection(db, "CPBoard", orbiter.ujbcode, "activities"),
-    where("activityNo", "==", "015"),
-    where("prospectPhone", "==", prospectPhone)
-  );
-
-  const snap = await getDocs(q);
-  if (!snap.empty) return;
-
-  await addDoc(
-    collection(db, "CPBoard", orbiter.ujbcode, "activities"),
-    {
-      activityNo: "015",
-      activityName: "Enrollment Completion",
-      points: 50,
-      purpose:
-        "Marks completion of a key process milestone ensuring the new Orbiter joins the Universe.",
-      prospectName,
-      prospectPhone,
-      source: "EnrollmentCompletion",
-      month: new Date().toLocaleString("default", {
-        month: "short",
-        year: "numeric",
-      }),
-      addedAt: serverTimestamp(),
-    }
-  );
-  
-await updateCategoryTotals(orbiter, ["R"], 50);
-};
-
-const handleSave = async () => {
-  try {
-    setLoading(true);
-
-    const docRef = doc(db, "Prospects", id);
-    await updateDoc(docRef, { enrollmentStages: rows });
-    /* ⭐ ADD CP FOR ENROLLMENT INITIATION – 011 */
-/* ⭐ ADD CP FOR ENROLLMENT INITIATION – 011 */
-const initiationStage = rows.find(
-  (r) =>
-    r.label === "Enrollment Initiation" ||
-    r.label === "Initiating Enrollment" ||
-    r.label === "Initiating Enrollment (Tool)"
-);
-
-console.log("Enrollment Initiation Stage:", initiationStage);
-
-if (initiationStage?.status === "Completed") {
-  const prospectSnap = await getDoc(doc(db, "Prospects", id));
-  const p = prospectSnap.data();
-
-  const qMentor = query(
-    collection(db, COLLECTIONS.userDetail),
-    where("MobileNo", "==", p.orbiterContact)
-  );
-
-  const mentorSnap = await getDocs(qMentor);
-
-  if (!mentorSnap.empty) {
-    const d = mentorSnap.docs[0].data();
-
-    if (d.UJBCode) {
-      const orbiter = {
-        ujbcode: d.UJBCode,
-        name: d.Name,
-        phone: d.MobileNo,
-        category: d.Category,
-      };
-
-      await addCpForEnrollmentInitiation(
-        db,
-        orbiter,
-        p.prospectPhone,
-        p.prospectName
-      );
-    }
-  }
-}
-
-
-
-/* ⭐ ADD CP FOR ENROLLMENT FEES – UPFRONT (013) */
-const feeStage = rows.find(
-  (r) => r.label === "Enrollment fees Option Opted for"
-);
-
-if (feeStage?.status?.includes("Upfront")) {
-  const prospectSnap = await getDoc(doc(db, "Prospects", id));
-  const p = prospectSnap.data();
-
-  const qMentor = query(
-    collection(db, COLLECTIONS.userDetail),
-    where("MobileNo", "==", p.orbiterContact)
-  );
-
-  const mentorSnap = await getDocs(qMentor);
-
-  if (!mentorSnap.empty) {
-    const d = mentorSnap.docs[0].data();
-
-    if (d.UJBCode) {
-      const orbiter = {
-        ujbcode: d.UJBCode,
-        name: d.Name,
-        phone: d.MobileNo,
-        category: d.Category,
-      };
-
-      await addCpForEnrollmentFeeUpfront(
-        db,
-        orbiter,
-        p.prospectPhone,
-        p.prospectName
-      );
-    }
-  }
-}
-
-    // ✅ FIND COMPLETION STAGE
-    const completionStage = rows.find(
-      (r) => r.label === "Enrollments Completion Status"
+  const persistRows = async (nextRows, action, targetLabel = "", logMeta = {}) => {
+    const res = await fetch(
+      `/api/admin/prospects?id=${id}&section=enrollmentstages`,
+      {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        credentials: "include",
+        body: JSON.stringify({
+          rows: nextRows,
+          action,
+          targetLabel,
+          previousLogs: logs,
+          logMeta,
+        }),
+      }
     );
 
-    if (completionStage?.status === "Completed") {
+    const responseData = await res.json().catch(() => ({}));
 
-      const prospectSnap = await getDoc(doc(db, "Prospects", id));
-      const p = prospectSnap.data();
-
-      const prospectName = p.prospectName;
-      const prospectPhone = p.prospectPhone;
-      const orbiterPhone = p.orbiterContact;
-
-      // 🔍 FIND MENTOR ORBITER
-      const q = query(
-        collection(db, COLLECTIONS.userDetail),
-        where("MobileNo", "==", orbiterPhone)
-      );
-
-      const snap = await getDocs(q);
-
-      if (!snap.empty) {
-        const d = snap.docs[0].data();
-
-        if (d.UJBCode) {
-          const orbiter = {
-            ujbcode: d.UJBCode,
-            name: d.Name,
-            phone: d.MobileNo,
-            category: d.Category,
-          };
-
-          // ⭐ ADD CP 015
-          await addCpForEnrollmentCompletion(
-            db,
-            orbiter,
-            prospectPhone,
-            prospectName
-          );
-        }
-      }
+    if (!res.ok) {
+      throw new Error(responseData.message || "Failed to save enrollment stages");
     }
 
-    Swal.fire("Saved!", "Changes have been saved.", "success");
-  } catch (err) {
-    console.error("❌ Error saving:", err);
-    Swal.fire("Error", "Failed to save changes.", "error");
-  } finally {
-    setLoading(false);
-  }
-};
+    const prospect = responseData.prospect || {};
 
- 
-  const handleSendEmail = async (index) => {
-    try {
-      const { label, date, status } = rows[index];
-      const docRef = doc(db, 'Prospects', id);
-      const snap = await getDoc(docRef);
-      if (!snap.exists()) return;
-  
-      const { email, prospectName, prospectPhone,orbiterName } = snap.data();
-const phone = prospectPhone; // 👈 Now phone is defined
+    setRows(
+      normalizeRows(
+        Array.isArray(prospect.enrollmentStages)
+          ? prospect.enrollmentStages
+          : nextRows
+      )
+    );
+    setLogs(
+      Array.isArray(prospect.enrollmentStageLogs)
+        ? prospect.enrollmentStageLogs
+        : logs
+    );
+  };
 
-
-
-  
-let body = '';
-
-switch (label) {
-  case 'Enrollment':
-    body = `Hi ${prospectName},\n\nYou're successfully enrolled in our program as of ${date}. Stay tuned for the next steps.`;
-    break;
-
-  case 'Enrollment documents mail':
-    switch (status) {
-      case 'Sent':
-        body = `Hello ${prospectName},\n\nIt was a pleasure connecting with you. Following our discussion, we are delighted to invite you to join UJustBe as an Orbiter.
-
-As we discussed, we would like this enrollment to be an authentic choice you make to become a part of the UJustBe Universe.  
-
-To proceed, we kindly request you to reply to this email with your approval along with the following documents:
-
-1) Professional Photo (For KYC purposes)
-2) PAN Card (For KYC purposes)
-3) Aadhar Card (For KYC purposes)
-4) Cancelled Cheque Copy (For KYC purposes and to facilitate transfer of UJustBe referral rewards)
-
-Upon receiving the required documents, the UJustBe team will guide you through the next steps of the process.`;
-        break;
-      case 'Pending':
-        body = `Hi ${prospectName},\n\nYou are just one step away from fully stepping into the UJustBe Universe and unlocking a world of possibilities, collaborations, and meaningful connections!
- 
-We noticed your enrollment documents are yet to be completed. To move forward and activate your journey, we invite you to connect with your MentOrbiter or speak with our UJustBe Support Team—they're here to walk with you and support you every step of the way.
-We are excited to witness the contribution and value you’ll bring to the community. Let’s get you fully onboarded! 
-
- .`;
-        break;
-      case 'Need Revision':
-        body = `Hi ${prospectName},\n\nYou are just one step away from completing your enrolment in UJustBe Universe and exploring a space filled with possibilities, collaboration, and contribution!
- 
-We have noticed that your enrollment documents require a few revisions. To move forward and complete your onboarding, we invite you to connect with your MentOrbiter or the UJustBe Support Team. They are here to guide you and ensure you have everything you need to take this next step confidently.
- 
-We are excited for the unique value you’ll bring into the community. Let’s get your journey officially started! `;
-        break;
-   
+  const buildEmailBody = (label, date, status) => {
+    switch (label) {
+      case "Enrollment Initiation":
+        return `Hi ${prospectMeta.prospectName},\n\nYour enrollment initiation status is "${status}" as of ${date}.`;
+      case "Enrollment documents mail":
+        return `Hi ${prospectMeta.prospectName},\n\nYour enrollment documents status is "${status}". Please review the next steps shared by the team.`;
+      case "Enrollment Fees Mail Status":
+        return `Hi ${prospectMeta.prospectName},\n\nYour enrollment fee communication status is "${status}". Please review the instructions and respond accordingly.`;
+      case "Enrollment fees Option Opted for":
+        return `Hi ${prospectMeta.prospectName},\n\nYour selected enrollment fee option is "${status}".`;
+      case "Enrollments Completion Status":
+        return `Hi ${prospectMeta.prospectName},\n\nYour enrollment completion status is "${status}".`;
       default:
-        body = `Hi ${prospectName},\n\nYou've opted for ${status} as your payment method. If any change is needed, please let us know.`;
-    }
-   
-    break;
-
-  case 'Enrollment Fees Mail Status':
-    switch (status) {
-      case 'Sent':
-        body = `Hi ${prospectName},\n\nThank you for making an authentic choice in becoming an Orbiter in the UJustBe Universe.
-
-        Below are the details regarding the one-time Orbiter Enrollment Fee:
-        
-        Orbiter Enrollment Fee
-        Amount: Rs. 1,000 (Lifetime)
-        
-        You are invited to choose one of the following payment methods:
-        
-        Direct Payment to UJustBe's Account:
-        You can directly transfer the enrollment fee to UJustBe’s account. Once your referral is closed, the reciprocation amount will be credited directly to your account registered with UJustBe.
-        
-        Adjustment from Referral Reciprocation:
-        The enrollment fee will be adjusted against your referral reciprocation. Once the adjustment is completed, subsequent referral reciprocation fees will be transferred to your account.
-        
-        Next Steps:
-        Please confirm your choice by replying to this email with one of the options below:
-        
-        Option 1: I would like to pay the Orbiter Registration Fee of Rs. 1000/- directly to UJustBe.
-        Option 2: Kindly adjust the Orbiter Registration Fee from the referral reciprocation.
-        
-        Once we receive your confirmation, we will send you an invoice and guide you through the next steps to complete the process.
-        
-        If you have any questions or need further assistance, please feel free to reach out. We look forward to your confirmation.`;
-        break;
-   
-      case 'Follow-up Required':
-        body = `Hi ${prospectName},\n\nJust following up to check in on your decision regarding the enrollment fees for joining the UJustBe Universe. This step will help activate your onboarding and open the door to powerful connections, collaborations, and opportunities aligned with your growth journey.
-If you have any questions or need clarity, please feel free to speak with your MentOrbiter or connect with our UJustBe Support Team. 
- 
-We are here to support you in making an empowered decision.
- 
-Looking forward to welcoming you fully into the Universe! `;
-        break;
-   
-  
-    }
-  
-   
-    break;
-
-  case 'Enrollment fees Option Opted for':
-    switch (status) {
-      case 'Upfront':
-        body = `Hi ${prospectName},\n\nThank you for confirming your choice to pay the Orbiter Registration Fee of Rs. 1,000/- directly to UJustBe. 
-
-We kindly request you to complete the payment and submit the payment screenshot to us within 2 working days. Please ensure the screenshot clearly mentions the transaction ID and amount for reference. You may reply to this email with the attachment or send it to support@ujustbe.com. 
-
-Payment Details for Direct Transfer 
-Account Name: UJustBe Enterprise  
-Account Number: [Insert Account Number] 
-Bank Name: [Insert Bank Name] 
-IFSC Code: [Insert IFSC Code] 
-
-If we do not receive the payment details within the stipulated time, we will automatically proceed with Option 2 (adjustment from referral reciprocation) and initiate your Orbiter journey accordingly. 
-
-A separate email will be sent to confirm the adjustment and the next steps. 
-
-We look forward to your prompt response. Should you have any questions or need assistance, please do not hesitate to reach out to us. `;
-        break;
-      case 'Adjustment':
-        body = `Hi ${prospectName},\n\nThank you for confirming your choice to adjust the Orbiter Registration Fee of Rs. 1,000/- from your referral reciprocation. 
-
- 
-
-We have noted your preference and will proceed accordingly. The enrollment fee will be deducted from the referral reciprocation, and the remaining balance will be transferred to your registered account as per the standard timelines. 
-
- 
-
-Your Orbiter journey in the UJustBe Universe has now officially begun. We are happy to have you as part of UJustBe Universe and look forward to your active participation. 
-
- 
-
-Should you have any questions or need further assistance, please feel free to reach out to us. We are here to support you in every step of your journey. 
-
- .`;
-        break;
-      case 'No Response Adjustment':
-        body = `Hi ${prospectName},\n\nWe hope this email finds you well. 
-
-Since we have not received the payment screenshot for the Orbiter Registration Fee of Rs. 1,000/- within the stipulated 2 working days, we have proceeded with Option 2: adjustment of the enrollment fee from your referral reciprocation. 
-
-Your Orbiter journey in the UJustBe Universe has now been initiated. The enrollment fee will be deducted from your referral reciprocation, and any subsequent referral reciprocation amounts will be credited directly to your registered account as per standard timelines. 
-
-If you have any questions or require further assistance, please feel free to reach out to us. We are excited to have you as part of the UJustBe Universe and look forward to your active participation in our community. `;
-        break;
-      case 'Confirmation recieved':
-        body = `Hi ${prospectName},\n\nWe are pleased to confirm that we have received your payment of Rs. 1,000/- towards the Orbiter Enrollment Fee. Thank you for completing this step to officially begin your journey in the UJustBe Universe. 
-
-Your payment has been successfully processed, and we are excited to have you as an active Orbiter in our community. You will soon receive further communication regarding the next steps and how you can start contributing, connecting, and growing with the UJustBe Universe. 
-
-Should you have any questions or need assistance, please feel free to reach out to us. Once again, welcome aboard! `;
-        break;
-      default:
-        body = `Hi ${prospectName},\n\nYou've opted for ${status} as your payment method. If any change is needed, please let us know.`;
-    }
-    break;
-
-  case 'Enrollments Completion Status':
-    switch (status) {
-      case 'Completed':
-        body = `Dear ${prospectName},\n\nWelcome to the UJustBe Universe!
-
-        Thank you for making the authentic choice to become an Orbiter in this thriving community. We are delighted to have you join us on this exciting journey. Below is an overview of your journey path within the UJustBe Universe:
-        
-        - Orbiter – Your initiation into the UJustBe Universe, where meaningful relationships begin to form, holistic health is nurtured, and the foundation of wealth is laid through connections and growth.
-
-        - Monthly Meeting Journey – Participate in interactive monthly meetings designed to strengthen relationships, enhance emotional and mental well-being, and provide insights for personal and professional wealth-building.
-
-        - Referral Journey – Share genuine referrals with CosmOrbiters to expand opportunities, build trust within the Universe, and cultivate mutual growth.
-
-        - Active Orbiter – Take an active role in the Universe through consistent engagement, nurturing deeper relationships, maintaining personal well-being, and creating pathways for sustainable wealth.
-
-        - CosmOrbiter – Elevate your journey by listing your business or profession, leveraging the UJustBe network to expand opportunities and build professional relationships.
-
-        - Accelerated Orbiter – Blend the power of authentic referrals and active participation in UJustBe events to accelerate your journey, unlock new opportunities, and strengthen community bonds.
-
-        - CCAO (Consistent Contributing Active Orbiter) – Achieve this status through regular contributions that enrich relationships, foster a balanced lifestyle, and drive meaningful impact.
-
-        - MentOrbiter – Lead by inviting and enrolling your network. Empower them to build fulfilling relationships, nurture well-being, and create wealth through the UJustBe Universe.
-        
-        This journey invites you to embrace a balanced approach to life, uniting Relationship, Health, and Wealth to create a fulfilling experience within the UJustBe Universe.
-        
-        To support you, our dedicated Support Team, Nucleus Team, and your MentOrbiter ([Name of MentOrbiter]) will guide and assist you every step of the way.
-        
-        We are excited to see your growth and contributions. Let’s create meaningful connections and experiences together!
-        
-        If you have any questions or need assistance, please feel free to reach out to us.`;
-        break;
-   
-      case 'Withdrawn':
-        body = `Hi ${prospectName},\n\nWe wanted to let you know that we have received your decision to withdraw from the UJustBe enrollment process at this time.
- 
-While we understand and respect your decision, please know that we are always here for you. If you ever choose to reconsider or would like to explore the benefits of rejoining, feel free to reach out. Your journey with us is important, and we’re always ready to support your growth when the time is right.
- 
-Thank you for considering UJustBe, and we hope to have the opportunity to welcome you back in the future. `;
-        break;
-   
-  
-    }
-  
-    break;
-
-  default:
-    body = `Hello ${prospectName},\n\nUpdate regarding: ${label} on ${date}. Status: ${status}`;
-}
-
-      let bodytext = '';
-
-      switch (label) {
-        case 'Enrollment':
-          bodytext = `Hi ${prospectName},\n\nYou're successfully enrolled in our program as of ${date}. Stay tuned for the next steps.`;
-          break;
-      
-        case 'Enrollment documents mail':
-          switch (status) {
-            case 'Sent':
-              bodytext = `Hello ${prospectName},\n\nIt was a pleasure connecting with you! 
-      
-      As discussed, we are happy to invite you to join UJustBe as an Orbiter.
-      
-      We have shared an email with the details and next steps. Kindly check it and share requested documents at your earliest convenience.
-      
-      Looking forward to welcoming you into the UJustBe Universe! `;
-              break;
-            case 'Pending':
-              bodytext = `Hi ${prospectName},\n\nYou are just one step away from becoming an Orbiter in the UJustBe Universe!
-
-Some enrollment documents are still pending—feel free to reach out to your MentOrbiter or connect with the UJustBe Support Team to complete the process.
-
-We are here to support you and can’t wait to see your journey unfold! `;
-              break;
-            case 'Need Revision':
-              bodytext = `Hi ${prospectName},\n\nAs there is no response from your end we are going ahead with default option as adjustment of Enrollment fees against the referral reciprocation. 
-
-We’ve shared an email with the details with the process.`;
-              break;
-           
-            default:
-              bodytext = `Hi ${prospectName},\n\nYou've opted for ${status} as your payment method. If any change is needed, please let us know.`;
-          }
-         
-          break;
-      
-        case 'Enrollment Fees Mail Status':
-          switch (status) {
-            case 'Sent':
-              bodytext = `Hi ${prospectName},\n\nThank you for making an authentic choice to become an Orbiter in the UJustBe Universe 🌟
-      
-      We have shared an email with the details of the one-time Orbiter Enrollment Fee (Rs. 1,000) and the available payment options.
-      
-      Kindly check your email and confirm your preferred option by replying there. Once we receive your confirmation, we will guide you through the next steps.`;
-              break;
-       
-            case 'Follow-up Required':
-              bodytext = `Hi ${prospectName},\n\nJust checking in to follow up on your decision regarding the enrollment fees for joining the UJustBe Universe.
-
-If you have any questions or need support, please connect with your MentOrbiter or our UJustBe Support Team.
-We are here to walk this journey with you! `;
-              break;
-           
-           
-          }
-      
-          break;
-      
-        case 'Enrollment fees Option Opted for':
-          switch (status) {
-            case 'Upfront':
-              bodytext = `Hi ${prospectName},\n\nThank you for confirming with your option of paying Enrollment fees upfront. 
-
-We’ve shared an email with the details for the payment. 
-
-Kindly check your email and confirm once you make the payment. Once we receive your confirmation, we’ll share the invoice and guide you through the next steps. 
-
-Let us know if you need any help! !`;
-              break;
-            case 'Adjustment':
-              bodytext = `Hi ${prospectName},\n\nThank you for confirming with your option of Adjustment of your one time enrolment fees against the referral reciprocation. 
-
-Kindly check your email and allow us to guide you through the next steps. 
-
-Let us know if you need any help!  `;
-              break;
-            case 'No Response Adjustment':
-              bodytext = `Hi ${prospectName},\n\nAs there is no response from your end we are going ahead with default option as adjustment of Enrollment fees against the referral reciprocation. 
-
-We’ve shared an email with the details with the process.`;
-              break;
-            case 'Confirmation recieved':
-              bodytext = `Hi ${prospectName},\n\nThank you for making the payment towards the One time Enrollment fees - Upfront 
-
-We’ve shared an email with the details with the process. `;
-              break;
-            default:
-              bodytext = `Hi ${prospectName},\n\nYou've opted for ${status} as your payment method. If any change is needed, please let us know.`;
-          }
-          break;
-      
-        case 'Enrollments Completion Status':
-          switch (status) {
-            case 'Completed':
-              bodytext = `Dear ${prospectName},\n\n Welcome to the UJustBe Universe! 
-      
-              We are happy to welcome you as an Orbiter in the UJustBe Universe! 
-              
-              Your journey here is about building meaningful relationships, nurturing holistic health, and creating wealth through shared growth.
-              
-              Start with: 
-            Monthly Meetings 
-              Identifying authentic referrals 
-              Engaging actively in the community 
-              Growing into roles like CosmOrbiter, Accelerated Orbiter, MentOrbiter & more!
-              
-              You’ll be supported by your MentOrbiter and our Support & Nucleus Team throughout the way. 
-              
-              Please check your mail for more details.`;
-              break;
-       
-            case 'Withdrawn':
-              bodytext = `Hi ${prospectName},\n\nWe have noted that you have decided to withdraw from the enrollment process for now.
-
-If you ever choose to reconsider or need more details, we’re here to support you whenever you’re ready.
-
-Thank you for considering UJustBe, and we hope to reconnect in the future! `;
-              break;
-           
-            default:
-              bodytext = `Hi ${prospectName},\n\nYour Status is ${status}. If any change is needed, please let us know.`;
-          }
-         
-       
-          break;
-      
-        default:
-          bodytext = `Hello ${prospectName},\n\nUpdate regarding: ${label} on ${date}. Status: ${status}`;
-      }
-      
-      const templateParams = {
-        to_email: email,
-        prospect_name: prospectName || 'Prospect',
-        body,
-      };
-  
-      await emailjs.send(
-        'service_acyimrs',
-        'template_cdm3n5x',
-        templateParams,
-        'w7YI9DEqR9sdiWX9h'
-      );
-  
-      alert(`Email sent for "${label}"`);
-      await sendAssesmentMessage(orbiterName, prospectName, bodytext, phone);
-    } catch (err) {
-      console.error('Error sending email:', err);
+        return `Hi ${prospectMeta.prospectName},\n\nUpdate regarding "${label}" on ${date}: ${status}.`;
     }
   };
-  
+
+  const handleSave = async () => {
+    try {
+      setLoading(true);
+
+      for (let index = 0; index < rows.length; index += 1) {
+        const row = rows[index];
+        const unlocked = isRowUnlocked(index);
+
+        if (!unlocked && (row.checked || row.date || row.status || row.sent)) {
+          throw new Error(`Complete the previous step before updating "${row.label}".`);
+        }
+
+        if (row.checked && (!row.date || !row.status)) {
+          throw new Error(`Complete date and status for "${row.label}".`);
+        }
+      }
+
+      await persistRows(rows, "save");
+      Swal.fire("Saved!", "Enrollment stages have been saved.", "success");
+      fetchData?.();
+    } catch (err) {
+      console.error("Error saving enrollment stages:", err);
+      Swal.fire("Error", err.message || "Failed to save changes.", "error");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSendEmail = async (index) => {
+    const row = rows[index];
+
+    if (!canSend(row, index)) {
+      Swal.fire("Incomplete step", "Please complete and save this step first.", "warning");
+      return;
+    }
+
+    try {
+      setLoading(true);
+
+      const body = buildEmailBody(row.label, row.date, row.status);
+
+      if (prospectMeta.email) {
+        await emailjs.send(
+          "service_acyimrs",
+          "template_cdm3n5x",
+          {
+            to_email: prospectMeta.email,
+            prospect_name: prospectMeta.prospectName || "Prospect",
+            body,
+          },
+          "w7YI9DEqR9sdiWX9h"
+        );
+      }
+
+      if (prospectMeta.prospectPhone) {
+        await sendWhatsAppTemplateRequest({
+          phone: prospectMeta.prospectPhone,
+          templateName: "enrollment_journey",
+          parameters: [sanitizeText(body), sanitizeText(prospectMeta.orbiterName)],
+        });
+      }
+
+      const nextRows = rows.map((currentRow, rowIndex) =>
+        rowIndex === index ? { ...currentRow, sent: true } : currentRow
+      );
+
+      await persistRows(nextRows, "send_email", row.label, {
+        status: row.status,
+        date: row.date,
+        label: row.label,
+      });
+
+      Swal.fire("Sent!", `Notification sent for "${row.label}".`, "success");
+    } catch (err) {
+      console.error("Error sending enrollment update:", err);
+      Swal.fire("Error", "Failed to send update.", "error");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const confirmAndSendEmail = (index) => {
     Swal.fire({
-      title: 'Are you sure?',
-      text: "Do you want to send the email?",
-      icon: 'warning',
+      title: "Are you sure?",
+      text: "Do you want to send the email and WhatsApp update?",
+      icon: "warning",
       showCancelButton: true,
-      confirmButtonColor: '#3085d6',
-      cancelButtonColor: '#d33',
-      confirmButtonText: 'Yes, send it!',
+      confirmButtonColor: "#3085d6",
+      cancelButtonColor: "#d33",
+      confirmButtonText: "Yes, send it!",
     }).then((result) => {
       if (result.isConfirmed) {
         handleSendEmail(index);
@@ -815,13 +447,13 @@ Thank you for considering UJustBe, and we hope to reconnect in the future! `;
 
   const confirmAndSave = () => {
     Swal.fire({
-      title: 'Are you sure?',
+      title: "Are you sure?",
       text: "Do you want to save the changes?",
-      icon: 'warning',
+      icon: "warning",
       showCancelButton: true,
-      confirmButtonColor: '#3085d6',
-      cancelButtonColor: '#d33',
-      confirmButtonText: 'Yes, save it!',
+      confirmButtonColor: "#3085d6",
+      cancelButtonColor: "#d33",
+      confirmButtonText: "Yes, save it!",
     }).then((result) => {
       if (result.isConfirmed) {
         handleSave();
@@ -830,113 +462,141 @@ Thank you for considering UJustBe, and we hope to reconnect in the future! `;
   };
 
   return (
-  <div className="max-w-6xl mx-auto p-6">
+    <div className="max-w-6xl mx-auto p-6">
+      <div className="bg-white border rounded-xl shadow-sm p-6">
+        <h2 className="text-xl font-semibold mb-6">Enrollment Status Updates</h2>
 
-    <div className="bg-white border rounded-xl shadow-sm p-6">
-
-      <h2 className="text-xl font-semibold mb-6">
-        Enrollment Status Updates
-      </h2>
-
-      <div className="overflow-x-auto">
-
-        <table className="min-w-full border border-gray-200 rounded-lg overflow-hidden">
-
-          <thead className="bg-gray-100 text-gray-700 text-sm">
-            <tr>
-              <th className="px-4 py-3 text-left border-b">Check</th>
-              <th className="px-4 py-3 text-left border-b">Stage</th>
-              <th className="px-4 py-3 text-left border-b">Date</th>
-              <th className="px-4 py-3 text-left border-b">Status</th>
-              <th className="px-4 py-3 text-left border-b">Send Email</th>
-            </tr>
-          </thead>
-
-          <tbody className="text-sm">
-
-            {rows.map((row, index) => (
-              <tr key={row.label} className="border-b hover:bg-gray-50">
-
-                <td className="px-4 py-3">
-                  <input
-                    type="checkbox"
-                    checked={row.checked}
-                    onChange={(e) =>
-                      handleChange(index, "checked", e.target.checked)
-                    }
-                    className="w-4 h-4"
-                  />
-                </td>
-
-                <td className="px-4 py-3 font-medium text-gray-800">
-                  {row.label}
-                </td>
-
-                <td className="px-4 py-3">
-                  <input
-                    type="date"
-                    value={row.date}
-                    onChange={(e) =>
-                      handleChange(index, "date", e.target.value)
-                    }
-                    className="border rounded-md px-3 py-1 focus:outline-none focus:ring-2 focus:ring-black"
-                  />
-                </td>
-
-                <td className="px-4 py-3">
-                  <select
-                    value={row.status}
-                    onChange={(e) =>
-                      handleChange(index, "status", e.target.value)
-                    }
-                    className="border rounded-md px-3 py-1 focus:outline-none focus:ring-2 focus:ring-black"
-                  >
-                    <option value="">Select</option>
-                    {(dropdownOptions[row.label] || []).map((opt) => (
-                      <option key={opt} value={opt}>
-                        {opt}
-                      </option>
-                    ))}
-                  </select>
-                </td>
-
-                <td className="px-4 py-3">
-                  <button
-                    onClick={() => confirmAndSendEmail(index)}
-                    className="bg-black text-white px-4 py-1 rounded-lg hover:bg-gray-800 transition"
-                  >
-                    Send
-                  </button>
-                </td>
-
+        <div className="overflow-x-auto">
+          <table className="min-w-full border border-gray-200 rounded-lg overflow-hidden">
+            <thead className="bg-gray-100 text-gray-700 text-sm">
+              <tr>
+                <th className="px-4 py-3 text-left border-b">Check</th>
+                <th className="px-4 py-3 text-left border-b">Stage</th>
+                <th className="px-4 py-3 text-left border-b">Date</th>
+                <th className="px-4 py-3 text-left border-b">Status</th>
+                <th className="px-4 py-3 text-left border-b">Send Email</th>
               </tr>
-            ))}
+            </thead>
 
-          </tbody>
+            <tbody className="text-sm">
+              {rows.map((row, index) => {
+                const unlocked = isRowUnlocked(index);
 
-        </table>
+                return (
+                  <tr
+                    key={row.label}
+                    className={`border-b ${
+                      unlocked ? "hover:bg-gray-50" : "bg-slate-50 text-slate-400"
+                    }`}
+                  >
+                    <td className="px-4 py-3">
+                      <input
+                        type="checkbox"
+                        checked={row.checked}
+                        disabled={!unlocked || loading}
+                        onChange={(e) =>
+                          handleChange(index, "checked", e.target.checked)
+                        }
+                        className="w-4 h-4"
+                      />
+                    </td>
 
+                    <td className="px-4 py-3 font-medium">{row.label}</td>
+
+                    <td className="px-4 py-3">
+                      <input
+                        type="date"
+                        value={row.date}
+                        disabled={!unlocked || !row.checked || loading}
+                        onChange={(e) => handleChange(index, "date", e.target.value)}
+                        className="border rounded-md px-3 py-1 focus:outline-none focus:ring-2 focus:ring-black disabled:bg-slate-100"
+                      />
+                    </td>
+
+                    <td className="px-4 py-3">
+                      <select
+                        value={row.status}
+                        disabled={!unlocked || !row.checked || loading}
+                        onChange={(e) => handleChange(index, "status", e.target.value)}
+                        className="border rounded-md px-3 py-1 focus:outline-none focus:ring-2 focus:ring-black disabled:bg-slate-100"
+                      >
+                        <option value="">Select</option>
+                        {(STAGE_OPTIONS.find((stage) => stage.label === row.label)?.statuses || []).map((opt) => (
+                          <option key={opt} value={opt}>
+                            {opt}
+                          </option>
+                        ))}
+                      </select>
+                    </td>
+
+                    <td className="px-4 py-3">
+                      <button
+                        onClick={() => confirmAndSendEmail(index)}
+                        disabled={!canSend(row, index) || loading}
+                        className="bg-black text-white px-4 py-1 rounded-lg hover:bg-gray-800 transition disabled:bg-gray-400"
+                      >
+                        {getSendLabel(row)}
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+
+        <div className="mt-6 flex justify-end">
+          <button
+            onClick={confirmAndSave}
+            disabled={loading}
+            className={`px-5 py-2 rounded-lg text-white transition ${
+              loading ? "bg-gray-400 cursor-not-allowed" : "bg-black hover:bg-gray-800"
+            }`}
+          >
+            {loading ? "Saving..." : "Save"}
+          </button>
+        </div>
+
+        <div className="mt-8">
+          <h3 className="text-lg font-semibold mb-3">Action Log</h3>
+
+          {logs.length === 0 ? (
+            <p className="text-gray-500">No actions logged yet.</p>
+          ) : (
+            <div className="space-y-3">
+              {[...logs].reverse().map((log, index) => (
+                <div
+                  key={getLogKey(log, index)}
+                  className="rounded-lg border border-slate-200 bg-slate-50 p-3"
+                >
+                  <p className="font-medium">{getLogTitle(log)}</p>
+
+                  <p className="text-sm text-slate-600">
+                    <span className="font-medium">By:</span> {log.clickedBy || "Admin"}
+                    {" · "}
+                    <span className="font-medium">At:</span>{" "}
+                    {formatLogDate(log.clickedAt)}
+                  </p>
+
+                  {log.status && (
+                    <p className="text-sm text-slate-600">
+                      <span className="font-medium">Selected status:</span> {log.status}
+                    </p>
+                  )}
+
+                  {log.date && (
+                    <p className="text-sm text-slate-600">
+                      <span className="font-medium">Date:</span> {formatStageDate(log.date)}
+                    </p>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
-
-      <div className="mt-6 flex justify-end">
-        <button
-          onClick={confirmAndSave}
-          disabled={loading}
-          className={`px-5 py-2 rounded-lg text-white transition ${
-            loading
-              ? "bg-gray-400 cursor-not-allowed"
-              : "bg-black hover:bg-gray-800"
-          }`}
-        >
-          {loading ? "Saving..." : "Save"}
-        </button>
-      </div>
-
     </div>
-
-  </div>
-);
+  );
 };
 
 export default EnrollmentStage;
-

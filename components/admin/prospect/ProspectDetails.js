@@ -1,18 +1,8 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import {
-  collection,
-  getDocs,
-  doc,
-  updateDoc,
-  addDoc,
-  getDoc,
-} from "firebase/firestore";
 
 import Swal from "sweetalert2";
-import { db } from "@/lib/firebase/firebaseClient";
-import { COLLECTIONS } from "@/lib/utility_collection";
 
 import Text from "@/components/ui/Text";
 import Card from "@/components/ui/Card";
@@ -22,32 +12,54 @@ import Select from "@/components/ui/Select";
 import DateInput from "@/components/ui/DateInput";
 import FormField from "@/components/ui/FormField";
 
+const withRequirement = (label, required = false) => (
+  <>
+    {label}
+    {required ? <span className="text-red-600"> *</span> : null}
+  </>
+);
+
+const interestOptions = [
+  "Skill Sharing & Collaboration",
+  "Business Growth & Referrals",
+  "Learning & Personal Development",
+  "Community Engagement",
+  "Others (please specify)",
+];
+
+const contributionOptions = [
+  "Sharing knowledge and expertise",
+  "Providing business or services",
+  "Connecting with fellow Orbiters",
+  "Active participation in events/meetings",
+  "Other (please specify)",
+];
+
 const ProspectFormDetails = ({ id }) => {
   const [forms, setForms] = useState([]);
   const [originalForms, setOriginalForms] = useState([]);
   const [loading, setLoading] = useState(true);
   const [editMode, setEditMode] = useState(false);
 
-  const todayISO = new Date().toISOString().split("T")[0];
-
   useEffect(() => {
     const fetchForms = async () => {
       try {
-        const subcollectionRef = collection(
-          db,
-          COLLECTIONS.prospect,
-          id,
-          "prospectform"
+        const res = await fetch(
+          `/api/admin/prospects?id=${id}&section=prospectform`,
+          {
+            credentials: "include",
+          }
         );
+        const responseData = await res.json().catch(() => ({}));
 
-        const snapshot = await getDocs(subcollectionRef);
+        if (!res.ok) {
+          throw new Error(responseData.message || "Failed to fetch prospect forms");
+        }
 
-        const prospectDocRef = doc(db, COLLECTIONS.prospect, id);
-        const prospectSnap = await getDoc(prospectDocRef);
-
-        const prospectData = prospectSnap.exists()
-          ? prospectSnap.data()
-          : {};
+        const prospectData = responseData.prospect || {};
+        const fetchedForms = Array.isArray(responseData.forms)
+          ? responseData.forms
+          : [];
 
         const defaultMentor = {
           mentorName: prospectData.orbiterName || "",
@@ -61,13 +73,13 @@ const ProspectFormDetails = ({ id }) => {
           phoneNumber: prospectData.prospectPhone || "",
         };
 
-        if (snapshot.empty) {
+        if (fetchedForms.length === 0) {
           const defaultForm = [
             {
               id: null,
               ...defaultMentor,
               ...defaultProspect,
-              assessmentDate: todayISO,
+              assessmentDate: "",
               country: "",
               city: "",
               profession: prospectData.occupation || "",
@@ -92,19 +104,14 @@ const ProspectFormDetails = ({ id }) => {
           setOriginalForms(defaultForm);
           setEditMode(true);
         } else {
-          const data = snapshot.docs.map((doc) => ({
-            id: doc.id,
-            ...doc.data(),
-          }));
-
-          setForms(data);
-          setOriginalForms(data);
+          setForms(fetchedForms);
+          setOriginalForms(fetchedForms);
           setEditMode(false);
         }
-
-        setLoading(false);
       } catch (error) {
-        console.error("Error fetching prospect forms:", error);
+        Swal.fire("Error", "Unable to load assessment form", "error");
+      } finally {
+        setLoading(false);
       }
     };
 
@@ -117,6 +124,19 @@ const ProspectFormDetails = ({ id }) => {
     setForms(updated);
   };
 
+  const handleCheckboxChange = (index, field, value, checked) => {
+    const updated = [...forms];
+    const currentValues = Array.isArray(updated[index][field])
+      ? updated[index][field]
+      : [];
+
+    updated[index][field] = checked
+      ? [...currentValues, value]
+      : currentValues.filter((item) => item !== value);
+
+    setForms(updated);
+  };
+
   const handleCancel = () => {
     setForms(originalForms);
     setEditMode(false);
@@ -124,40 +144,44 @@ const ProspectFormDetails = ({ id }) => {
 
   const handleSave = async () => {
     try {
-      for (const form of forms) {
-        const formCopy = { ...form };
+      const sanitizedForms = forms.map((form) => {
+        const nextForm = { ...form };
 
-        if (form.id) {
-          const docRef = doc(
-            db,
-            COLLECTIONS.prospect,
-            id,
-            "prospectform",
-            form.id
-          );
-
-          delete formCopy.id;
-          await updateDoc(docRef, formCopy);
-        } else {
-          await addDoc(
-            collection(db, COLLECTIONS.prospect, id, "prospectform"),
-            formCopy
-          );
+        if (!nextForm.id) {
+          delete nextForm.id;
         }
+
+        return nextForm;
+      });
+
+      const res = await fetch(
+        `/api/admin/prospects?id=${id}&section=prospectform`,
+        {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          credentials: "include",
+          body: JSON.stringify({ forms: sanitizedForms }),
+        }
+      );
+      const responseData = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        throw new Error(responseData.message || "Failed to save assessment form");
       }
 
       Swal.fire("Success", "Saved Successfully", "success");
 
-      setOriginalForms(forms);
+      setOriginalForms(forms.map((form) => ({ ...form })));
       setEditMode(false);
     } catch (err) {
-      console.error(err);
       Swal.fire("Error", "Failed to save", "error");
     }
   };
 
   const formatDate = (value) => {
-    if (!value) return todayISO;
+    if (!value) return "";
 
     if (value?.seconds) {
       return new Date(value.seconds * 1000)
@@ -166,7 +190,7 @@ const ProspectFormDetails = ({ id }) => {
     }
 
     const d = new Date(value);
-    return !isNaN(d) ? d.toISOString().split("T")[0] : todayISO;
+    return !isNaN(d) ? d.toISOString().split("T")[0] : "";
   };
 
   if (loading) return <Text>Loading...</Text>;
@@ -180,24 +204,25 @@ const ProspectFormDetails = ({ id }) => {
           
           {/* BASIC DETAILS */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {[
-              { label: "Mentor Name", key: "mentorName", frozen: true },
-              { label: "Mentor Phone", key: "mentorPhone", frozen: true },
-              { label: "Mentor Email", key: "mentorEmail", frozen: true },
-              { label: "Assessment Date", key: "assessmentDate", frozen: true },
-              { label: "Prospect Name", key: "fullName", frozen: true },
-              { label: "Phone", key: "phoneNumber", frozen: true },
-              { label: "Email", key: "email", frozen: true },
-              { label: "Country", key: "country" },
-              { label: "City", key: "city" },
-              { label: "Profession", key: "profession" },
+              {[
+              { label: "Mentor Name", key: "mentorName", frozen: true, required: true },
+              { label: "Mentor Phone", key: "mentorPhone", frozen: true, required: true },
+              { label: "Mentor Email", key: "mentorEmail", frozen: true, required: true },
+              { label: "Assessment Date", key: "assessmentDate", frozen: true, required: true },
+              { label: "Prospect Name", key: "fullName", frozen: true, required: true },
+              { label: "Phone", key: "phoneNumber", frozen: true, required: true },
+              { label: "Email", key: "email", frozen: true, required: true },
+              { label: "Country", key: "country", required: true },
+              { label: "City", key: "city", required: true },
+              { label: "Profession", key: "profession", required: true },
               { label: "Company", key: "companyName" },
               { label: "Industry", key: "industry" },
               { label: "Social Profile", key: "socialProfile" },
-            ].map(({ label, key, frozen }) => (
-              <FormField key={key} label={label}>
+            ].map(({ label, key, frozen, required }) => (
+              <FormField key={key} label={withRequirement(label, required)}>
                 {key === "assessmentDate" ? (
                   <DateInput
+                    type="date"
                     value={formatDate(form[key])}
                     disabled={frozen || !editMode}
                     onChange={(e) =>
@@ -220,7 +245,7 @@ const ProspectFormDetails = ({ id }) => {
           {/* SELECTS */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-6">
 
-            <FormField label="How Found">
+            <FormField label={withRequirement("How Found", true)}>
               <Select
                 value={form.howFound || ""}
                 disabled={!editMode}
@@ -234,7 +259,7 @@ const ProspectFormDetails = ({ id }) => {
               />
             </FormField>
 
-            <FormField label="Interest Level">
+            <FormField label={withRequirement("Interest Level", true)}>
               <Select
                 value={form.interestLevel || ""}
                 disabled={!editMode}
@@ -247,7 +272,7 @@ const ProspectFormDetails = ({ id }) => {
               />
             </FormField>
 
-            <FormField label="Informed Status">
+            <FormField label={withRequirement("Informed Status", true)}>
               <Select
                 value={form.informedStatus || ""}
                 disabled={!editMode}
@@ -260,7 +285,7 @@ const ProspectFormDetails = ({ id }) => {
               />
             </FormField>
 
-            <FormField label="Alignment Level">
+            <FormField label={withRequirement("Alignment Level", true)}>
               <Select
                 value={form.alignmentLevel || ""}
                 disabled={!editMode}
@@ -275,7 +300,7 @@ const ProspectFormDetails = ({ id }) => {
               />
             </FormField>
 
-            <FormField label="Recommendation">
+            <FormField label={withRequirement("Recommendation", true)}>
               <Select
                 value={form.recommendation || ""}
                 disabled={!editMode}
@@ -291,35 +316,101 @@ const ProspectFormDetails = ({ id }) => {
           </div>
 
           {/* ARRAYS */}
-          <FormField label="Interest Areas" className="pt-6">
-            <Input value={(form.interestAreas || []).join(", ")} disabled />
+          <FormField label={withRequirement("Interest Areas", true)} className="pt-6">
+            {editMode ? (
+              <div className="space-y-2 rounded-lg border border-slate-200 p-3">
+                {interestOptions.map((option) => (
+                  <label key={option} className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      value={option}
+                      checked={(form.interestAreas || []).includes(option)}
+                      onChange={(e) =>
+                        handleCheckboxChange(
+                          index,
+                          "interestAreas",
+                          option,
+                          e.target.checked
+                        )
+                      }
+                    />
+                    <span>{option}</span>
+                  </label>
+                ))}
+              </div>
+            ) : (
+              <Input value={(form.interestAreas || []).join(", ")} disabled />
+            )}
           </FormField>
 
-          <FormField label="Contribution Ways">
-            <Input value={(form.contributionWays || []).join(", ")} disabled />
+          <FormField label={withRequirement("Contribution Ways", true)}>
+            {editMode ? (
+              <div className="space-y-2 rounded-lg border border-slate-200 p-3">
+                {contributionOptions.map((option) => (
+                  <label key={option} className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      value={option}
+                      checked={(form.contributionWays || []).includes(option)}
+                      onChange={(e) =>
+                        handleCheckboxChange(
+                          index,
+                          "contributionWays",
+                          option,
+                          e.target.checked
+                        )
+                      }
+                    />
+                    <span>{option}</span>
+                  </label>
+                ))}
+              </div>
+            ) : (
+              <Input value={(form.contributionWays || []).join(", ")} disabled />
+            )}
           </FormField>
 
           {/* OTHER FIELDS */}
           {form.howFoundOther && (
-            <FormField label="How Found Other">
-              <Input value={form.howFoundOther} disabled />
+            <FormField label={withRequirement("How Found Other", true)}>
+              <Input
+                value={form.howFoundOther}
+                disabled={!editMode}
+                onChange={(e) =>
+                  handleChange(index, "howFoundOther", e.target.value)
+                }
+              />
             </FormField>
           )}
 
-          {form.interestOther && (
-            <FormField label="Interest Other">
-              <Input value={form.interestOther} disabled />
+          {(form.interestOther || editMode) &&
+            (form.interestAreas || []).includes("Others (please specify)") && (
+            <FormField label={withRequirement("Interest Other", true)}>
+              <Input
+                value={form.interestOther || ""}
+                disabled={!editMode}
+                onChange={(e) =>
+                  handleChange(index, "interestOther", e.target.value)
+                }
+              />
             </FormField>
           )}
 
-          {form.contributionOther && (
-            <FormField label="Contribution Other">
-              <Input value={form.contributionOther} disabled />
+          {(form.contributionOther || editMode) &&
+            (form.contributionWays || []).includes("Other (please specify)") && (
+            <FormField label={withRequirement("Contribution Other", true)}>
+              <Input
+                value={form.contributionOther || ""}
+                disabled={!editMode}
+                onChange={(e) =>
+                  handleChange(index, "contributionOther", e.target.value)
+                }
+              />
             </FormField>
           )}
 
           {/* COMMENTS */}
-          <FormField label="Additional Comments">
+          <FormField label={withRequirement("Additional Comments")}>
             <Input
               value={form.additionalComments || ""}
               disabled={!editMode}

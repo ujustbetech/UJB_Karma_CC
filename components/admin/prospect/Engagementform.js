@@ -1,9 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
-import { db } from "@/lib/firebase/firebaseClient";
-import { COLLECTIONS } from "@/lib/utility_collection";
-import { collection, addDoc, getDocs, doc, getDoc } from "firebase/firestore";
+import React, { useEffect, useMemo, useState } from "react";
 
 import Text from "@/components/ui/Text";
 import Card from "@/components/ui/Card";
@@ -13,15 +10,7 @@ import Select from "@/components/ui/Select";
 import DateInput from "@/components/ui/DateInput";
 import FormField from "@/components/ui/FormField";
 
-const EngagementForm = ({ id }) => {
-
-const [loading, setLoading] = useState(false);
-const [entries, setEntries] = useState([]);
-const [userList, setUserList] = useState([]);
-const [filteredUsers, setFilteredUsers] = useState([]);
-const [userSearch, setUserSearch] = useState("");
-
-const [formData, setFormData] = useState({
+const INITIAL_FORM = {
   callDate: "",
   orbiterName: "",
   occasion: "",
@@ -32,363 +21,401 @@ const [formData, setFormData] = useState({
   orbiterSuggestions: [""],
   teamSuggestions: [""],
   referralPossibilities: [""],
-  nextFollowupDate: ""
-});
-
-
-
-/* ================= ARRAY FIELD HANDLERS ================= */
-
-const handleArrayChange = (field, index, value) => {
-  const updated = [...formData[field]];
-  updated[index] = value;
-  setFormData({ ...formData, [field]: updated });
+  nextFollowupDate: "",
 };
 
-const addMoreField = (field) => {
-  setFormData({ ...formData, [field]: [...formData[field], ""] });
-};
+const OCCASION_OPTIONS = [
+  { label: "Select", value: "" },
+  { label: "Referral Follow up", value: "Referral Follow up" },
+  { label: "Rapport building", value: "Rapport building" },
+  { label: "Event Calling", value: "Event Calling" },
+  { label: "Enquiry Follow ups", value: "Enquiry Follow ups" },
+  { label: "Birthday Wishes", value: "Birthday Wishes" },
+  { label: "Other", value: "Other" },
+];
 
-/* ================= USER SEARCH ================= */
+function normalizeDateOnly(value) {
+  if (!value) return "";
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
 
-const handleSearchUser = (e) => {
-  const value = e.target.value.toLowerCase();
-  setUserSearch(value);
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return "";
 
-  const filtered = userList.filter(
-    (user) => user.name && user.name.toLowerCase().includes(value)
+  const year = parsed.getFullYear();
+  const month = String(parsed.getMonth() + 1).padStart(2, "0");
+  const day = String(parsed.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function formatDate(value) {
+  const normalized = normalizeDateOnly(value);
+  if (!normalized) return "—";
+
+  const [year, month, day] = normalized.split("-");
+  return `${day}/${month}/${year}`;
+}
+
+function validateEngagementForm(formData, userList, entries = []) {
+  const nextErrors = {};
+  const orbiterName = String(formData.orbiterName || "").trim();
+  const discussionDetails = String(formData.discussionDetails || "").trim();
+  const today = normalizeDateOnly(new Date().toISOString());
+  const callDate = normalizeDateOnly(formData.callDate);
+  const nextFollowupDate = normalizeDateOnly(formData.nextFollowupDate);
+  const latestSavedCallDate = [...entries]
+    .map((entry) => normalizeDateOnly(entry?.callDate))
+    .filter(Boolean)
+    .sort()
+    .at(-1);
+
+  if (!callDate) {
+    nextErrors.callDate = "Date of calling is required.";
+  } else if (callDate < today) {
+    nextErrors.callDate = "Date of calling must be today's date.";
+  } else if (callDate > today) {
+    nextErrors.callDate = "Date of calling cannot be in the future.";
+  } else if (latestSavedCallDate && callDate < latestSavedCallDate) {
+    nextErrors.callDate =
+      "Date of calling cannot be earlier than the latest saved engagement entry.";
+  }
+
+  if (!orbiterName) {
+    nextErrors.orbiterName = "Orbiter name is required.";
+  } else if (
+    Array.isArray(userList) &&
+    userList.length > 0 &&
+    !userList.some((user) => String(user.name || "").trim() === orbiterName)
+  ) {
+    nextErrors.orbiterName = "Select a valid orbiter from the suggestions.";
+  }
+
+  if (!formData.occasion) {
+    nextErrors.occasion = "Occasion is required.";
+  }
+
+  if (formData.occasion === "Other" && !String(formData.otherOccasion || "").trim()) {
+    nextErrors.otherOccasion = "Please specify the occasion.";
+  }
+
+  if (!discussionDetails) {
+    nextErrors.discussionDetails = "Discussion details are required.";
+  } else if (discussionDetails.length < 5) {
+    nextErrors.discussionDetails = "Discussion details must be at least 5 characters.";
+  }
+
+  if (!nextFollowupDate) {
+    nextErrors.nextFollowupDate = "Next follow-up date is required.";
+  } else if (callDate && nextFollowupDate < callDate) {
+    nextErrors.nextFollowupDate =
+      "Next follow-up date cannot be earlier than the call date.";
+  }
+
+  return nextErrors;
+}
+
+const EngagementForm = ({ id }) => {
+  const [loading, setLoading] = useState(false);
+  const [initialLoading, setInitialLoading] = useState(true);
+  const [entries, setEntries] = useState([]);
+  const [userList, setUserList] = useState([]);
+  const [filteredUsers, setFilteredUsers] = useState([]);
+  const [userSearch, setUserSearch] = useState("");
+  const [errors, setErrors] = useState({});
+  const [formData, setFormData] = useState(INITIAL_FORM);
+
+  const sortedEntries = useMemo(
+    () =>
+      [...entries].sort((a, b) => {
+        const left = String(b.updatedAt?.seconds || b.updatedAt || b.callDate || "");
+        const right = String(a.updatedAt?.seconds || a.updatedAt || a.callDate || "");
+        return left.localeCompare(right);
+      }),
+    [entries]
   );
 
-  setFilteredUsers(filtered);
-};
-const formatDate = (date) => {
-  if (!date) return "—";
-  const d = new Date(date);
-  const day = String(d.getDate()).padStart(2, "0");
-  const month = String(d.getMonth() + 1).padStart(2, "0");
-  const year = d.getFullYear();
-  return `${day}/${month}/${year}`;
-};
-const handleSelectUser = (user) => {
-  setFormData((prev) => ({ ...prev, orbiterName: user.name }));
-  setUserSearch("");
-  setFilteredUsers([]);
-};
+  const fetchTabData = async () => {
+    if (!id) return;
 
-/* ================= FETCH USERS ================= */
-
-useEffect(() => {
-  const fetchUsers = async () => {
     try {
-      const userRef = collection(db, COLLECTIONS.userDetail);
-      const snapshot = await getDocs(userRef);
+      const res = await fetch(`/api/admin/prospects?id=${id}&section=engagementlogs`, {
+        credentials: "include",
+      });
+      const data = await res.json().catch(() => ({}));
 
-      const data = snapshot.docs.map((doc) => ({
-        id: doc.id,
-        name: doc.data()["Name"],
-        phone: doc.data()["MobileNo"],
-        Email: doc.data()["Email"],
-      }));
+      if (!res.ok) {
+        throw new Error(data.message || "Failed to load engagement logs");
+      }
 
-      setUserList(data);
-    } catch (error) {
-      console.error("Error fetching users:", error);
-    }
-  };
-
-  fetchUsers();
-}, []);
-
-/* ================= FORM HANDLERS ================= */
-
-const handleChange = (e) => {
-  const { name, value } = e.target;
-  setFormData((prev) => ({ ...prev, [name]: value }));
-};
-
-const handleSave = async () => {
-
-  if (!id) {
-    alert("Prospect ID missing!");
-    return;
-  }
-
-  setLoading(true);
-
-  try {
-
-    const stage5Ref = collection(db, "Prospects", id, "engagementform");
-
-    await addDoc(stage5Ref, {
-      ...formData,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    });
-
-    alert("Data saved successfully!");
-
-    setFormData({
-  callDate: "",
-  orbiterName: "",
-  occasion: "",
-  referralId: "",
-  eventName: "",
-  otherOccasion: "",
-  discussionDetails: "",
-  orbiterSuggestions: [""],
-  teamSuggestions: [""],
-  referralPossibilities: [""],
-  nextFollowupDate: ""
-});
-
-    fetchEntries();
-
-  } catch (err) {
-
-    console.error("Error saving data:", err);
-    alert("Failed to save data.");
-
-  } finally {
-
-    setLoading(false);
-
-  }
-};
-
-/* ================= FETCH ENTRIES ================= */
-
-const fetchEntries = async () => {
-
-  if (!id) return;
-
-  try {
-
-    const stage5Ref = collection(db, "Prospects", id, "engagementform");
-    const snapshot = await getDocs(stage5Ref);
-
-    const data = snapshot.docs.map((doc) => ({
-      id: doc.id,
-      ...doc.data(),
-    }));
-
-    setEntries(data);
-
-  } catch (err) {
-
-    console.error("Error fetching data:", err);
-
-  }
-};
-
-const fetchProspectName = async () => {
-
-  if (!id) return;
-
-  try {
-
-    const prospectRef = doc(db, "Prospects", id);
-    const prospectSnap = await getDoc(prospectRef);
-
-    if (prospectSnap.exists()) {
-
-      const data = prospectSnap.data();
+      const users = Array.isArray(data.users) ? data.users : [];
+      setUserList(users);
+      setEntries(Array.isArray(data.entries) ? data.entries : []);
 
       setFormData((prev) => ({
         ...prev,
-        orbiterName: data.prospectName || "",
+        orbiterName:
+          prev.orbiterName ||
+          data.prospect?.orbiterName ||
+          "",
       }));
+    } catch (err) {
+      console.error("Error loading engagement logs:", err);
+    } finally {
+      setInitialLoading(false);
+    }
+  };
 
+  useEffect(() => {
+    fetchTabData();
+  }, [id]);
+
+  const handleSearchUser = (value) => {
+    const nextValue = value;
+    const lowered = nextValue.toLowerCase();
+
+    setUserSearch(nextValue);
+    setFormData((prev) => ({ ...prev, orbiterName: nextValue }));
+    setErrors((prev) => ({ ...prev, orbiterName: "" }));
+
+    const filtered = userList.filter((user) =>
+      String(user.name || "").toLowerCase().includes(lowered)
+    );
+
+    setFilteredUsers(lowered ? filtered.slice(0, 8) : []);
+  };
+
+  const handleSelectUser = (user) => {
+    const selectedName = user?.name || "";
+    setFormData((prev) => ({ ...prev, orbiterName: selectedName }));
+    setUserSearch(selectedName);
+    setFilteredUsers([]);
+    setErrors((prev) => ({ ...prev, orbiterName: "" }));
+  };
+
+  const handleChange = (name, value) => {
+    setFormData((prev) => ({
+      ...prev,
+      [name]: value,
+      ...(name === "occasion" && value !== "Other" ? { otherOccasion: "" } : {}),
+    }));
+    setErrors((prev) => ({ ...prev, [name]: "" }));
+  };
+
+  const handleSave = async () => {
+    if (!id) {
+      alert("Prospect ID missing!");
+      return;
     }
 
-  } catch (err) {
+    const validationErrors = validateEngagementForm(formData, userList, entries);
+    setErrors(validationErrors);
 
-    console.error("Error fetching prospect name:", err);
+    if (Object.keys(validationErrors).length > 0) {
+      return;
+    }
 
-  }
-};
+    setLoading(true);
 
-useEffect(() => {
-  fetchEntries();
-  fetchProspectName();
-}, [id]);
+    try {
+      const payload = {
+        ...formData,
+        callDate: normalizeDateOnly(formData.callDate),
+        nextFollowupDate: normalizeDateOnly(formData.nextFollowupDate),
+        discussionDetails: String(formData.discussionDetails || "").trim(),
+        orbiterName: String(formData.orbiterName || "").trim(),
+        otherOccasion: String(formData.otherOccasion || "").trim(),
+      };
 
-/* ================= UI ================= */
+      const res = await fetch(`/api/admin/prospects?id=${id}&section=engagementlogs`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        credentials: "include",
+        body: JSON.stringify({ entry: payload }),
+      });
+      const data = await res.json().catch(() => ({}));
 
-return (
+      if (!res.ok) {
+        throw new Error(data.message || "Failed to save engagement log");
+      }
 
-<>
-<Text variant="h1">Engagement Logs</Text>
+      setEntries(Array.isArray(data.entries) ? data.entries : []);
+      setFormData((prev) => ({
+        ...INITIAL_FORM,
+        orbiterName: prev.orbiterName,
+      }));
+      setUserSearch("");
+      setFilteredUsers([]);
+      setErrors({});
+      alert("Engagement log saved successfully!");
+    } catch (err) {
+      console.error("Error saving engagement log:", err);
+      alert(err.message || "Failed to save engagement log.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
-<Card>
+  return (
+    <>
+      <Text variant="h1">Engagement Logs</Text>
 
-<form className="space-y-6">
+      <Card>
+        <form className="space-y-6" onSubmit={(e) => e.preventDefault()}>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <FormField label="Date of Calling" required error={errors.callDate}>
+                <DateInput
+                  value={formData.callDate}
+                  min={normalizeDateOnly(new Date().toISOString())}
+                  max={normalizeDateOnly(new Date().toISOString())}
+                  onChange={(e) => handleChange("callDate", e.target.value)}
+                />
+            </FormField>
 
-<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <FormField label="Name of the Orbiter" required error={errors.orbiterName}>
+              <div className="relative">
+                <Input
+                  placeholder="Search Orbiter"
+                  value={formData.orbiterName}
+                  onChange={(e) => handleSearchUser(e.target.value)}
+                />
 
-<FormField label="Date of Calling">
-<DateInput
-value={formData.callDate}
-onChange={(e)=>setFormData({...formData,callDate:e.target.value})}
-/>
-</FormField>
+                {filteredUsers.length > 0 && (
+                  <div className="absolute z-10 w-full bg-white border rounded mt-1 max-h-40 overflow-auto">
+                    {filteredUsers.map((user) => (
+                      <div
+                        key={user.id}
+                        className="px-3 py-2 hover:bg-slate-100 cursor-pointer"
+                        onClick={() => handleSelectUser(user)}
+                      >
+                        {user.name}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </FormField>
 
-<FormField label="Name of the Orbiter">
+            <FormField label="Occasion" required error={errors.occasion}>
+              <Select
+                value={formData.occasion}
+                onChange={(v) => handleChange("occasion", v)}
+                options={OCCASION_OPTIONS}
+              />
+            </FormField>
 
-<div className="relative">
+            <FormField
+              label="Next Follow-up Date"
+              required
+              error={errors.nextFollowupDate}
+            >
+              <DateInput
+                value={formData.nextFollowupDate}
+                min={normalizeDateOnly(formData.callDate)}
+                onChange={(e) => handleChange("nextFollowupDate", e.target.value)}
+              />
+            </FormField>
 
-<Input
-placeholder="Search Orbiter"
-value={formData.orbiterName}
-onChange={(e)=>handleSearchUser(e)}
-/>
+            {formData.occasion === "Other" && (
+              <FormField
+                label="Specify Occasion"
+                required
+                error={errors.otherOccasion}
+                className="md:col-span-2"
+              >
+                <Input
+                  value={formData.otherOccasion}
+                  onChange={(e) => handleChange("otherOccasion", e.target.value)}
+                  placeholder="Enter the specific occasion"
+                />
+              </FormField>
+            )}
+          </div>
 
-{filteredUsers.length > 0 && (
-<div className="absolute z-10 w-full bg-white border rounded mt-1 max-h-40 overflow-auto">
-{filteredUsers.map((user)=>(
-<div
-key={user.id}
-className="px-3 py-2 hover:bg-slate-100 cursor-pointer"
-onClick={()=>handleSelectUser(user)}
->
-{user.name}
-</div>
-))}
-</div>
-)}
+          <FormField
+            label="Discussion Details"
+            required
+            error={errors.discussionDetails}
+          >
+            <textarea
+              className="w-full border rounded-lg p-3"
+              name="discussionDetails"
+              rows={4}
+              value={formData.discussionDetails}
+              onChange={(e) => handleChange("discussionDetails", e.target.value)}
+            />
+          </FormField>
+        </form>
+      </Card>
 
-</div>
+      <Card className="mt-6">
+        <Text variant="h3">Saved Engagement Entries</Text>
 
-</FormField>
+        {initialLoading ? (
+          <Text>Loading...</Text>
+        ) : sortedEntries.length === 0 ? (
+          <Text>No data found.</Text>
+        ) : (
+          <div className="overflow-x-auto mt-4">
+            <table className="min-w-full border border-gray-200 rounded-lg overflow-hidden">
+              <thead className="bg-gray-100 text-gray-700 text-sm">
+                <tr>
+                  <th className="px-4 py-3 border-b text-left">Date</th>
+                  <th className="px-4 py-3 border-b text-left">Orbiter</th>
+                  <th className="px-4 py-3 border-b text-left">Occasion</th>
+                  <th className="px-4 py-3 border-b text-left">Discussion</th>
+                  <th className="px-4 py-3 border-b text-left">Next Followup</th>
+                  <th className="px-4 py-3 border-b text-left">Last Updated</th>
+                </tr>
+              </thead>
 
-<FormField label="Occasion">
+              <tbody className="text-sm text-gray-700">
+                {sortedEntries.map((entry, index) => (
+                  <tr
+                    key={entry.id}
+                    className={`hover:bg-gray-50 ${
+                      index % 2 === 0 ? "bg-white" : "bg-gray-50"
+                    }`}
+                  >
+                    <td className="px-4 py-3 border-b">{formatDate(entry.callDate)}</td>
+                    <td className="px-4 py-3 border-b">{entry.orbiterName || "—"}</td>
+                    <td className="px-4 py-3 border-b">
+                      <span className="px-2 py-1 text-xs rounded bg-blue-100 text-blue-700">
+                        {entry.occasion === "Other" && entry.otherOccasion
+                          ? entry.otherOccasion
+                          : entry.occasion || "—"}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 border-b max-w-xs truncate">
+                      {entry.discussionDetails || "—"}
+                    </td>
+                    <td className="px-4 py-3 border-b">
+                      {formatDate(entry.nextFollowupDate)}
+                    </td>
+                    <td className="px-4 py-3 border-b text-gray-500">
+                      {entry.updatedAt
+                        ? formatDate(
+                            entry.updatedAt.seconds
+                              ? entry.updatedAt.toDate?.() || new Date(entry.updatedAt.seconds * 1000)
+                              : entry.updatedAt
+                          )
+                        : "—"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Card>
 
-<Select
-value={formData.occasion}
-onChange={(v)=>setFormData({...formData,occasion:v})}
-options={[
-{label:"Referral Follow up",value:"Referral Follow up"},
-{label:"Rapport building",value:"Rapport building"},
-{label:"Event Calling",value:"Event Calling"},
-{label:"Enquiry Follow ups",value:"Enquiry Follow ups"},
-{label:"Birthday Wishes",value:"Birthday Wishes"},
-{label:"Other",value:"Other"},
-]}
-/>
-
-</FormField>
-
-<FormField label="Next Follow-up Date">
-<DateInput
-value={formData.nextFollowupDate}
-onChange={(e)=>setFormData({...formData,nextFollowupDate:e.target.value})}
-/>
-</FormField>
-
-</div>
-
-<FormField label="Discussion Details">
-<textarea
-className="w-full border rounded-lg p-3"
-name="discussionDetails"
-value={formData.discussionDetails}
-onChange={handleChange}
-/>
-</FormField>
-
-</form>
-
-</Card>
-
-<Card className="mt-6">
-
-<Text variant="h3">Saved Engagement Entries</Text>
-
-{entries.length === 0 ? (
-
-<Text>No data found.</Text>
-
-) : (
-
-<div className="overflow-x-auto mt-4">
-
-<table className="min-w-full border border-gray-200 rounded-lg overflow-hidden">
-
-<thead className="bg-gray-100 text-gray-700 text-sm">
-
-<tr>
-<th className="px-4 py-3 border-b text-left">Date</th>
-<th className="px-4 py-3 border-b text-left">Orbiter</th>
-<th className="px-4 py-3 border-b text-left">Occasion</th>
-<th className="px-4 py-3 border-b text-left">Discussion</th>
-<th className="px-4 py-3 border-b text-left">Next Followup</th>
-<th className="px-4 py-3 border-b text-left">Last Updated</th>
-</tr>
-
-</thead>
-
-<tbody className="text-sm text-gray-700">
-
-{entries.map((entry,index)=>(
-<tr
-key={entry.id}
-className={`hover:bg-gray-50 ${
-index % 2 === 0 ? "bg-white" : "bg-gray-50"
-}`}
->
-
-<td className="px-4 py-3 border-b">
-{formatDate(entry.callDate)}
-</td>
-
-<td className="px-4 py-3 border-b">
-{entry.orbiterName}
-</td>
-
-<td className="px-4 py-3 border-b">
-<span className="px-2 py-1 text-xs rounded bg-blue-100 text-blue-700">
-{entry.occasion}
-</span>
-</td>
-
-<td className="px-4 py-3 border-b max-w-xs truncate">
-{entry.discussionDetails}
-</td>
-
-<td className="px-4 py-3 border-b">
-{formatDate(entry.nextFollowupDate)}
-</td>
-
-<td className="px-4 py-3 border-b text-gray-500">
-{entry.updatedAt
-? formatDate(entry.updatedAt.seconds
-? entry.updatedAt.toDate()
-: entry.updatedAt)
-: "—"}
-</td>
-
-</tr>
-))}
-
-</tbody>
-
-</table>
-
-</div>
-
-)}
-
-</Card>
-
-<div className="flex justify-end mt-4">
-<Button onClick={handleSave} disabled={loading}>
-{loading ? "Saving..." : "Save"}
-</Button>
-</div>
-
-</>
-
-);
-
+      <div className="flex justify-end mt-4">
+        <Button onClick={handleSave} disabled={loading}>
+          {loading ? "Saving..." : "Save"}
+        </Button>
+      </div>
+    </>
+  );
 };
 
 export default EngagementForm;

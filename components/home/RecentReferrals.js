@@ -9,13 +9,9 @@ import {
   limit,
   onSnapshot,
 } from "firebase/firestore";
+import { COLLECTIONS } from "@/lib/utility_collection";
 import Slider from "react-slick";
-import {
-  Clock,
-  Send,
-  ChevronLeft,
-  ChevronRight,
-} from "lucide-react";
+import { Clock, Send } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { Forum } from "next/font/google";
 
@@ -28,31 +24,37 @@ export default function RecentPassReferral() {
   const [referrals, setReferrals] = useState([]);
   const router = useRouter();
   const sliderRef = useRef(null);
-  // const [referrals, setReferrals] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const q = query(
-      collection(db, "Referral"),
+      collection(db, COLLECTIONS.referral),
       orderBy("timestamp", "desc"),
       limit(5)
     );
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const data = snapshot.docs.map((doc) => {
-        const d = doc.data();
-        return {
-          id: doc.id,
-          name: d.cosmoOrbiter?.name || "Orbiter",
-          serviceName: d.service?.name || "Service",
-          createdAt: d.timestamp?.toDate?.() || null,
-          status: d.dealStatus || "Pending",
-        };
-      });
+    const unsubscribe = onSnapshot(
+      q,
+      (snapshot) => {
+        const data = snapshot.docs.map((doc) => {
+          const d = doc.data();
+          return {
+            id: doc.id,
+            name: d.cosmoOrbiter?.name || "Orbiter",
+            serviceName: d.service?.name || "Service",
+            createdAt: d.timestamp?.toDate?.() || null,
+            status: d.dealStatus || "Pending",
+          };
+        });
 
-      setReferrals(data);
-      setLoading(false); // 👈 stop loading
-    });
+        setReferrals(data);
+        setLoading(false);
+      },
+      () => {
+        setReferrals([]);
+        setLoading(false);
+      }
+    );
 
     return () => unsubscribe();
   }, []);
@@ -68,26 +70,21 @@ export default function RecentPassReferral() {
     return "just now";
   };
 
- // 🎯 ONLY badge color changes
-const getStatusBadge = (status) => {
-  switch (status) {
-    case "Deal Won":
-    case "Closed": // optional if both mean success
-      return "bg-emerald-500 text-white";
-
-    case "Discussion in Progress":
-      return "bg-amber-500 text-white";
-
-    case "Pending":
-      return "bg-blue-500 text-white";
-
-    case "Lost":
-      return "bg-rose-500 text-white";
-
-    default:
-      return "bg-slate-500 text-white";
-  }
-};
+  const getStatusBadge = (status) => {
+    switch (status) {
+      case "Deal Won":
+      case "Closed":
+        return "bg-emerald-500 text-white";
+      case "Discussion in Progress":
+        return "bg-amber-500 text-white";
+      case "Pending":
+        return "bg-blue-500 text-white";
+      case "Lost":
+        return "bg-rose-500 text-white";
+      default:
+        return "bg-slate-500 text-white";
+    }
+  };
 
   const settings = {
     dots: true,
@@ -99,8 +96,6 @@ const getStatusBadge = (status) => {
 
   return (
     <div className="space-y-6">
-
-      {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Send size={18} className="text-[#a2cbda]" />
@@ -120,29 +115,7 @@ const getStatusBadge = (status) => {
         </button>
       </div>
 
-      {/* Carousel */}
       <div className="relative">
-
-        {/* Prev */}
-        {/* <button
-          onClick={() => sliderRef.current?.slickPrev()}
-          className="absolute -left-4 top-1/2 -translate-y-1/2 z-10 
-                     bg-white border border-slate-200 
-                     rounded-full p-2 shadow-sm hover:bg-slate-50"
-        >
-          <ChevronLeft size={16} />
-        </button> */}
-
-        {/* Next */}
-        {/* <button
-          onClick={() => sliderRef.current?.slickNext()}
-          className="absolute -right-4 top-1/2 -translate-y-1/2 z-10 
-                     bg-white border border-slate-200 
-                     rounded-full p-2 shadow-sm hover:bg-slate-50"
-        >
-          <ChevronRight size={16} />
-        </button> */}
-
         {loading && (
           <div className="bg-white border border-slate-200 rounded-2xl p-6 animate-pulse">
             <div className="flex justify-between items-start mb-4">
@@ -157,15 +130,13 @@ const getStatusBadge = (status) => {
           </div>
         )}
 
-        {!loading && (
+        {!loading && referrals.length > 0 && (
           <Slider ref={sliderRef} {...settings}>
             {referrals.map((item) => (
               <div key={item.id} className="px-2">
                 <div
                   onClick={() => router.push(`/ReferralList/${item.id}`)}
-                  className="bg-white border border-slate-200 
-                           rounded-2xl p-6 cursor-pointer 
-                           hover:shadow-md transition-all duration-300"
+                  className="bg-white border border-slate-200 rounded-2xl p-6 cursor-pointer hover:shadow-md transition-all duration-300"
                 >
                   <div className="flex justify-between items-start mb-4">
                     <div>
@@ -177,7 +148,6 @@ const getStatusBadge = (status) => {
                       </p>
                     </div>
 
-                    {/* 🎯 Colored Badge Only */}
                     <span
                       className={`text-xs font-semibold px-3 py-1 rounded-full ${getStatusBadge(
                         item.status
@@ -196,8 +166,6 @@ const getStatusBadge = (status) => {
             ))}
           </Slider>
         )}
-
-
       </div>
     </div>
   );

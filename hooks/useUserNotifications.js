@@ -34,8 +34,7 @@ export default function useUserNotifications(user) {
           read: readIds.has(item.id),
         }))
       );
-    } catch (error) {
-      console.error("Failed to load notifications", error);
+    } catch {
       setNotifications([]);
     } finally {
       setLoading(false);

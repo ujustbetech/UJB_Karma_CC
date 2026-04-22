@@ -28,6 +28,20 @@ const Followup = ({ id, data = {} }) => {
 
   const [eventCreated, setEventCreated] = useState(null);
   const [meetings, setMeetings] = useState([]);
+  const [editingMeetingId, setEditingMeetingId] = useState(null);
+
+  const getMeetingStatus = (meeting) => {
+    if (!meeting) return "Scheduled";
+    if (meeting.status) return meeting.status;
+    if (meeting.completed) return "Done";
+    if (meeting.cancelled) return "Cancelled";
+    return "Scheduled";
+  };
+
+  const isClosedMeeting = (meeting) => {
+    const status = getMeetingStatus(meeting);
+    return status === "Done" || status === "Cancelled";
+  };
 
   /* ---------------- FETCH DATA ---------------- */
 
@@ -61,16 +75,15 @@ const Followup = ({ id, data = {} }) => {
 
     const data = snapshot.docs.map(doc => ({
       id: doc.id,
-      ...doc.data()
+      ...doc.data(),
+      status: getMeetingStatus(doc.data())
     }));
 
     data.sort((a,b)=> new Date(b.createdAt) - new Date(a.createdAt));
 
     setMeetings(data);
 
-    if(data.length > 0){
-      setEventCreated(data[0]);
-    }
+    setEventCreated(data.length > 0 ? data[0] : null);
 
   };
 
@@ -110,19 +123,29 @@ const Followup = ({ id, data = {} }) => {
       mode: eventMode,
       zoomLink: eventMode === "online" ? zoomLink : "",
       venue: eventMode === "offline" ? venue : "",
+      status: "Scheduled",
+      completed: false,
       createdAt: new Date()
     };
 
     try{
 
-      const meetingRef = collection(db, COLLECTIONS.prospect, id, "meetings");
-
-      await addDoc(meetingRef, meetingData);
+      if(rescheduleMode && editingMeetingId){
+        const meetingDocRef = doc(db, COLLECTIONS.prospect, id, "meetings", editingMeetingId);
+        await updateDoc(meetingDocRef, {
+          ...meetingData,
+          updatedAt: new Date()
+        });
+      } else {
+        const meetingRef = collection(db, COLLECTIONS.prospect, id, "meetings");
+        await addDoc(meetingRef, meetingData);
+      }
 
       alert(rescheduleMode ? "Meeting rescheduled" : "Meeting scheduled");
 
       setCreateMode(false);
       setRescheduleMode(false);
+      setEditingMeetingId(null);
 
       setEventDate("");
       setZoomLink("");
@@ -137,6 +160,42 @@ const Followup = ({ id, data = {} }) => {
 
     }
 
+  };
+
+  const handleMeetingDone = async () => {
+    if (!eventCreated?.id) return alert("No active meeting found.");
+
+    try {
+      const meetingDocRef = doc(db, COLLECTIONS.prospect, id, "meetings", eventCreated.id);
+      await updateDoc(meetingDocRef, {
+        completed: true,
+        status: "Done",
+        completedAt: new Date()
+      });
+      fetchMeetings();
+    } catch (err) {
+      console.error("Meeting done error", err);
+      alert("Failed to mark meeting done");
+    }
+  };
+
+  const handleMeetingCancel = async () => {
+    if (!eventCreated?.id) return alert("No active meeting found.");
+    if (!window.confirm("Cancel this meeting?")) return;
+
+    try {
+      const meetingDocRef = doc(db, COLLECTIONS.prospect, id, "meetings", eventCreated.id);
+      await updateDoc(meetingDocRef, {
+        cancelled: true,
+        status: "Cancelled",
+        completed: false,
+        cancelledAt: new Date()
+      });
+      fetchMeetings();
+    } catch (err) {
+      console.error("Meeting cancel error", err);
+      alert("Failed to cancel meeting");
+    }
   };
 
   /* ---------------- COMMENTS ---------------- */
@@ -165,6 +224,8 @@ const Followup = ({ id, data = {} }) => {
 
   /* ---------------- UI ---------------- */
 
+  const showLatestMeetingBox = eventCreated && !isClosedMeeting(eventCreated);
+
   return (
 
   <div className="max-w-5xl mx-auto p-6 text-black">
@@ -173,7 +234,7 @@ const Followup = ({ id, data = {} }) => {
   Meeting Schedule Logs
   </h2>
 
-  {!createMode && !eventCreated && (
+  {!createMode && !showLatestMeetingBox && (
   <button
   className="bg-black text-white px-5 py-2 rounded-lg mb-6"
   onClick={()=>setCreateMode(true)}
@@ -184,7 +245,7 @@ const Followup = ({ id, data = {} }) => {
 
   {/* EVENT DETAILS */}
 
-  {eventCreated && !rescheduleMode && (
+  {showLatestMeetingBox && !rescheduleMode && (
 
   <div className="bg-white border p-6 rounded-xl mb-6">
 
@@ -217,10 +278,25 @@ const Followup = ({ id, data = {} }) => {
   setEventMode(eventCreated.mode);
   setZoomLink(eventCreated.zoomLink || "");
   setVenue(eventCreated.venue || "");
+  setEditingMeetingId(eventCreated.id);
   setRescheduleMode(true);
   }}
   >
   Reschedule
+  </button>
+
+  <button
+  className="bg-green-600 text-white px-4 py-2 rounded"
+  onClick={handleMeetingDone}
+  >
+  Done
+  </button>
+
+  <button
+  className="bg-red-600 text-white px-4 py-2 rounded"
+  onClick={handleMeetingCancel}
+  >
+  Cancel
   </button>
 
   </div>
@@ -247,9 +323,6 @@ const Followup = ({ id, data = {} }) => {
   />
   </div>
 
-  {!rescheduleMode && (
-
-  <>
   <div>
   <label>Mode</label>
   <select
@@ -284,9 +357,6 @@ const Followup = ({ id, data = {} }) => {
 
   )}
 
-  </>
-  )}
-
   <button
   onClick={handleCreateOrReschedule}
   className="bg-black text-white py-2 rounded"
@@ -315,6 +385,7 @@ const Followup = ({ id, data = {} }) => {
 
   <p><strong>Date:</strong> {m.date}</p>
   <p><strong>Mode:</strong> {m.mode}</p>
+  <p><strong>Status:</strong> {getMeetingStatus(m)}</p>
 
   {m.mode==="online"
   ? <p>Zoom: {m.zoomLink}</p>

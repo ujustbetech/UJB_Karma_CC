@@ -2,8 +2,8 @@
 
 import { useState, useEffect } from "react";
 import { X } from "lucide-react";
-import { doc, updateDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase/firebaseClient";
+import { doc, updateDoc } from "firebase/firestore";
 import { COLLECTIONS } from "@/lib/utility_collection";
 
 export default function EditAboutSheet({
@@ -72,6 +72,10 @@ export default function EditAboutSheet({
     const handleSave = async () => {
         try {
             if (!ujbCode) return;
+            const userDocId = user?.__docId;
+            if (!userDocId) {
+                throw new Error("User profile document not found");
+            }
 
             setLoading(true);
 
@@ -92,7 +96,7 @@ export default function EditAboutSheet({
             };
 
             await updateDoc(
-                doc(db, COLLECTIONS.userDetail, ujbCode), // ✅ use prop
+                doc(db, COLLECTIONS.userDetail, userDocId),
                 updatedData
             );
 
@@ -456,3 +460,5 @@ function TextAreaBox({
         </div>
     );
 }
+
+

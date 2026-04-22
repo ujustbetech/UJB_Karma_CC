@@ -84,11 +84,10 @@ export default function HomePage() {
           );
         }
       } catch (err) {
-        console.error("Agreement error:", err);
         Swal.fire(
-          "Error",
-          "Something went wrong while saving the agreement",
-          "error"
+          "Notice",
+          "Some dashboard data is unavailable right now.",
+          "info"
         );
       }
     };

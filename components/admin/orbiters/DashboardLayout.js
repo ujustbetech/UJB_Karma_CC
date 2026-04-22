@@ -1,8 +1,6 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { collection, getDocs } from 'firebase/firestore';
-import { db } from '@/lib/firebase/firebaseClient';
 
 import Card from '@/components/ui/Card';
 import Text from '@/components/ui/Text';
@@ -29,9 +27,27 @@ export default function DashboardLayout() {
   const [users, setUsers] = useState([]);
 
   useEffect(() => {
-    getDocs(collection(db, 'usersdetail')).then(snap => {
-      setUsers(snap.docs.map(d => d.data()));
-    });
+    async function fetchUsers() {
+      try {
+        const res = await fetch('/api/admin/orbiters?view=full', {
+          credentials: 'include',
+        });
+        const data = await res.json().catch(() => ({}));
+        const message = data.message || 'Failed to load orbiters';
+
+        if (!res.ok) {
+          setUsers([]);
+          console.warn(message);
+          return;
+        }
+
+        setUsers(Array.isArray(data.users) ? data.users : []);
+      } catch (error) {
+        setUsers([]);
+      }
+    }
+
+    fetchUsers();
   }, []);
 
   /* ================= KPI ================= */

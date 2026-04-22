@@ -2,9 +2,6 @@
 
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
-import { doc, getDoc } from "firebase/firestore";
-import { db } from "@/lib/firebase/firebaseClient";
-import { COLLECTIONS } from "@/lib/utility_collection";
 
 import Card from "@/components/ui/Card";
 import Text from "@/components/ui/Text";
@@ -148,11 +145,17 @@ export default function EditAdminEvent() {
       }
 
       try {
-        const docRef = doc(db, COLLECTIONS.prospect, id);
-        const snap = await getDoc(docRef);
+        const res = await fetch(`/api/admin/prospects?id=${id}`, {
+          credentials: "include",
+        });
+        const data = await res.json().catch(() => ({}));
 
-        if (snap.exists()) {
-          setEventData(snap.data());
+        if (!res.ok) {
+          throw new Error(data.message || "Failed to fetch prospect");
+        }
+
+        if (data.prospect) {
+          setEventData(data.prospect);
         }
       } catch (err) {
         console.error(err);

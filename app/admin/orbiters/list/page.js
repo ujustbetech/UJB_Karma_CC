@@ -1,8 +1,5 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
-import { db } from "@/lib/firebase/firebaseClient";
-import { collection, getDocs, deleteDoc, doc } from "firebase/firestore";
-import { COLLECTIONS } from "@/lib/utility_collection";
 import * as XLSX from "xlsx";
 import Text from "@/components/ui/Text";
 import Card from "@/components/ui/Card";
@@ -46,9 +43,17 @@ export default function OrbitersListingPage() {
     const fetchUsers = async () => {
         setLoading(true);
         try {
-            const snap = await getDocs(collection(db, COLLECTIONS.userDetail));
-            const list = snap.docs.map((d) => {
-                const data = d.data();
+            const res = await fetch("/api/admin/orbiters?view=full", {
+                credentials: "include",
+            });
+            const payload = await res.json().catch(() => ({}));
+
+            if (!res.ok) {
+                throw new Error(payload.message || "Failed to fetch users");
+            }
+
+            const rawUsers = Array.isArray(payload.users) ? payload.users : [];
+            const list = rawUsers.map((data) => {
 
                 const rawStatus =
                     data["ProfileStatus"] ||
@@ -65,18 +70,18 @@ export default function OrbitersListingPage() {
                         : cleaned;
 
                 return {
-                    id: d.id,
+                    id: data.id || data["ujbCode"] || data["UJBCode"] || "",
                     name: data["Name"] || "",
                     phoneNumber: data["MobileNo"] || "",
                     role: data["Category"] || "",
                     status: statusValue,
-                    ujbCode: data["ujbCode"] || data["UJBCode"] || d.id,
+                    ujbCode: data["ujbCode"] || data["UJBCode"] || data.id,
                 };
             });
 
             setUsers(list);
-        } catch {
-            toast.error("Failed to fetch users");
+        } catch (error) {
+            toast.error(error.message || "Failed to fetch users");
         } finally {
             setLoading(false);
         }
@@ -147,12 +152,24 @@ export default function OrbitersListingPage() {
     const confirmDelete = async () => {
         if (!userToDelete) return;
         try {
-            await deleteDoc(doc(db, COLLECTIONS.userDetail, userToDelete.id));
+            const res = await fetch(
+                `/api/admin/orbiters?ujbCode=${encodeURIComponent(userToDelete.id)}`,
+                {
+                    method: "DELETE",
+                    credentials: "include",
+                }
+            );
+            const payload = await res.json().catch(() => ({}));
+
+            if (!res.ok) {
+                throw new Error(payload.message || "Delete failed");
+            }
+
             toast.success("User deleted");
             setDeleteOpen(false);
             fetchUsers();
-        } catch {
-            toast.error("Delete failed");
+        } catch (error) {
+            toast.error(error.message || "Delete failed");
         }
     };
 

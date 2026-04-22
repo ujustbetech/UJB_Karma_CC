@@ -1,28 +1,13 @@
-﻿"use client";
+"use client";
 
-import { useState, useEffect } from "react";
-import { db } from "@/lib/firebase/firebaseClient";
-
-import {
-  collection,
-  addDoc,
-  doc,
-  getDoc,
-  getDocs,
-  query,
-  where,
-  setDoc,
-  serverTimestamp,
-  updateDoc,
-} from "firebase/firestore";
-
+import { useEffect, useState } from "react";
 import Swal from "sweetalert2";
-import { useParams } from "next/navigation";
-import { COLLECTIONS } from "@/lib/utility_collection";
-;
-const tabs = ["Mentor", "Prospect", "Alignment", "Assessment"];
+import { useParams, useRouter } from "next/navigation";
 
+const tabs = ["Mentor", "Prospect", "Alignment", "Assessment"];
 const today = new Date().toISOString().split("T")[0];
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const PHONE_REGEX = /^(?:\+91)?[6-9]\d{9}$/;
 
 const initialFormState = {
   fullName: "",
@@ -48,8 +33,9 @@ const initialFormState = {
   howFoundOther: "",
   interestOther: "",
   contributionOther: "",
-  assessmentDate: today, // ðŸ‘ˆ auto-fill today
+  assessmentDate: today,
 };
+
 const interestOptions = [
   "Skill Sharing & Collaboration",
   "Business Growth & Referrals",
@@ -66,753 +52,761 @@ const contributionOptions = [
   "Other (please specify)",
 ];
 
-export default function ProspectForm() {
+function normalizePhone(value) {
+  const digits = String(value || "").replace(/\D/g, "");
 
+  if (digits.length === 12 && digits.startsWith("91")) {
+    return `+${digits}`;
+  }
+
+  if (digits.length === 10) {
+    return `+91${digits}`;
+  }
+
+  return String(value || "").trim();
+}
+
+function getFieldClass(error) {
+  return `w-full rounded-lg border p-3 ${
+    error ? "border-red-500 focus:border-red-500" : "border-gray-300"
+  }`;
+}
+
+function FieldError({ message }) {
+  if (!message) return null;
+
+  return <p className="mt-1 text-sm text-red-600">{message}</p>;
+}
+
+function FieldLabel({ label, required = false }) {
+  return (
+    <label className="mb-2 block text-sm font-medium text-gray-700">
+      {label}
+      {required ? <span className="text-red-600"> *</span> : null}
+    </label>
+  );
+}
+
+export default function ProspectForm() {
   const params = useParams();
+  const router = useRouter();
   const id = params?.id;
-const [submitting, setSubmitting] = useState(false)
+
+  const [submitting, setSubmitting] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [countries, setCountries] = useState([]);
   const [cities, setCities] = useState([]);
   const [activeTab, setActiveTab] = useState(0);
   const [formData, setFormData] = useState(initialFormState);
-const [isSubmitted, setIsSubmitted] = useState(false);
-  /* FETCH COUNTRIES */
+  const [errors, setErrors] = useState({});
 
   useEffect(() => {
     fetch("https://countriesnow.space/api/v0.1/countries/positions")
-      .then(res => res.json())
-      .then(data => setCountries(data.data.map(c => c.name)));
+      .then((res) => res.json())
+      .then((data) =>
+        setCountries(Array.isArray(data.data) ? data.data.map((c) => c.name) : [])
+      )
+      .catch(() => setCountries([]));
   }, []);
 
-  /* CITY FETCH */
-
-  const handleCountryChange = async (e) => {
-
-    const country = e.target.value;
-
-    setFormData(prev => ({ ...prev, country, city: "" }));
-
-    const response = await fetch(
-      "https://countriesnow.space/api/v0.1/countries/cities",
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ country })
-      }
-    );
-
-    const data = await response.json();
-    setCities(data.data || []);
-
-  };
-
-  const handleCityChange = (e) => {
-    setFormData(prev => ({ ...prev, city: e.target.value }));
-  };
-
-  /* CP FUNCTIONS */
-
-  const ensureCpBoardUser = async (orbiter) => {
-
-    if (!orbiter?.ujbcode) return;
-
-    const ref = doc(db, "CPBoard", orbiter.ujbcode);
-    const snap = await getDoc(ref);
-
-    if (!snap.exists()) {
-
-      await setDoc(ref, {
-        id: orbiter.ujbcode,
-        name: orbiter.name,
-        phoneNumber: orbiter.phone,
-        role: orbiter.category || "CosmOrbiter",
-        totals: { R: 0, H: 0, W: 0 },
-        createdAt: serverTimestamp(),
-      });
-
-    }
-
-  };
-
-  const updateCategoryTotals = async (orbiter, categories, points) => {
-
-    if (!orbiter?.ujbcode) return;
-
-    const ref = doc(db, "CPBoard", orbiter.ujbcode);
-    const snap = await getDoc(ref);
-
-    if (!snap.exists()) return;
-
-    const data = snap.data();
-    const totals = data.totals || { R: 0, H: 0, W: 0 };
-
-    const splitPoints = Math.floor(points / categories.length);
-
-    const updatedTotals = { ...totals };
-
-    categories.forEach((cat) => {
-      updatedTotals[cat] = (updatedTotals[cat] || 0) + splitPoints;
-    });
-
-    await updateDoc(ref, { totals: updatedTotals });
-
-  };
-useEffect(() => {
-  const checkIfSubmitted = async () => {
-    if (!id) return;
-
-    const ref = collection(db, COLLECTIONS.prospect, id, "prospectform");
-    const snap = await getDocs(ref);
-
-    if (!snap.empty) {
-      setIsSubmitted(true);
-    }
-  };
-
-  checkIfSubmitted();
-}, [id]);
-  const addCpForProspectAssessment = async (orbiter, prospectPhone) => {
-
-    if (!orbiter?.ujbcode) return;
-
-    await ensureCpBoardUser(orbiter);
-
-    const activityNo = "002";
-    const points = 100;
-    const categories = ["R"];
-
-    const q = query(
-      collection(db, "CPBoard", orbiter.ujbcode, "activities"),
-      where("activityNo", "==", activityNo),
-      where("prospectPhone", "==", prospectPhone)
-    );
-
-    const snap = await getDocs(q);
-
-    if (!snap.empty) return;
-
-    await addDoc(
-      collection(db, "CPBoard", orbiter.ujbcode, "activities"),
-      {
-        activityNo,
-        activityName: "Prospect Assessment (Tool)",
-        points,
-        categories,
-        prospectName: formData.fullName,
-        prospectPhone,
-        addedAt: serverTimestamp(),
-      }
-    );
-
-    await updateCategoryTotals(orbiter, categories, points);
-
-  };
-
-  /* FETCH PROSPECT */
-
   useEffect(() => {
-
     const fetchProspectDetails = async () => {
-
       if (!id) return;
 
-      const prospectRef = doc(db, COLLECTIONS.prospect, id);
-      const snap = await getDoc(prospectRef);
+      try {
+        const res = await fetch(`/api/prospects/${id}`);
+        const data = await res.json().catch(() => ({}));
 
-      if (snap.exists()) {
+        if (!res.ok) {
+          throw new Error(data.message || "Failed to fetch prospect");
+        }
 
-        const data = snap.data();
+        if (data.isSubmitted) {
+          router.replace(`/user/prospects/${id}/completed`);
+          return;
+        }
 
-        setFormData(prev => ({
+        const prospect = data.prospect || {};
+        const nextCountry = prospect.country || "";
+
+        setFormData((prev) => ({
           ...prev,
-          fullName: data.prospectName || "",
-          phoneNumber: data.prospectPhone || "",
-          email: data.email || "",
-          mentorName: data.orbiterName || "",
-          mentorPhone: data.orbiterContact || "",
-          mentorEmail: data.orbiterEmail || "",
-          profession: data.occupation || "",
+          fullName: prospect.prospectName || "",
+          phoneNumber: prospect.prospectPhone || "",
+          email: prospect.email || "",
+          country: nextCountry,
+          city: prospect.city || "",
+          profession: prospect.occupation || "",
+          companyName: prospect.companyName || "",
+          industry: prospect.industry || "",
+          socialProfile: prospect.socialProfile || "",
+          mentorName: prospect.orbiterName || "",
+          mentorPhone: prospect.orbiterContact || "",
+          mentorEmail: prospect.orbiterEmail || "",
         }));
 
+        if (nextCountry) {
+          const cityRes = await fetch(
+            "https://countriesnow.space/api/v0.1/countries/cities",
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ country: nextCountry }),
+            }
+          );
+          const cityData = await cityRes.json().catch(() => ({}));
+          setCities(Array.isArray(cityData.data) ? cityData.data : []);
+        }
+      } catch (error) {
+        Swal.fire("Error", "Unable to load prospect details", "error");
+      } finally {
+        setLoading(false);
       }
-
     };
 
     fetchProspectDetails();
+  }, [id, router]);
 
-  }, [id]);
+  const validateForm = (data) => {
+    const nextErrors = {};
 
-  /* HANDLERS */
+    if (!data.mentorName.trim()) nextErrors.mentorName = "Mentor name is required.";
+    if (!PHONE_REGEX.test(data.mentorPhone.replace(/\s/g, ""))) {
+      nextErrors.mentorPhone = "Enter a valid Indian mobile number.";
+    }
+    if (!EMAIL_REGEX.test(data.mentorEmail.trim())) {
+      nextErrors.mentorEmail = "Enter a valid email address.";
+    }
+    if (!data.assessmentDate) {
+      nextErrors.assessmentDate = "Assessment date is required.";
+    } else {
+      const selectedDate = new Date(`${data.assessmentDate}T00:00:00`);
+      const maxDate = new Date();
+      maxDate.setHours(0, 0, 0, 0);
 
-  const handleChange = (e) =>
-    setFormData({ ...formData, [e.target.name]: e.target.value });
+      if (Number.isNaN(selectedDate.getTime()) || selectedDate > maxDate) {
+        nextErrors.assessmentDate = "Assessment date cannot be in the future.";
+      }
+    }
 
-  const handleCheckboxChange = (e, key) => {
+    if (!data.fullName.trim()) nextErrors.fullName = "Prospect name is required.";
+    if (!PHONE_REGEX.test(data.phoneNumber.replace(/\s/g, ""))) {
+      nextErrors.phoneNumber = "Enter a valid Indian mobile number.";
+    }
+    if (!EMAIL_REGEX.test(data.email.trim())) {
+      nextErrors.email = "Enter a valid email address.";
+    }
+    if (!data.country) nextErrors.country = "Country is required.";
+    if (!data.city) nextErrors.city = "City is required.";
+    if (!data.profession.trim()) nextErrors.profession = "Occupation is required.";
 
-    const { value, checked } = e.target;
+    if (!data.howFound) nextErrors.howFound = "Please select an option.";
+    if (data.howFound === "Other" && !data.howFoundOther.trim()) {
+      nextErrors.howFoundOther = "Please specify how you found the prospect.";
+    }
 
-    setFormData(prev => ({
-      ...prev,
-      [key]: checked
-        ? [...prev[key], value]
-        : prev[key].filter(v => v !== value),
-    }));
+    if (!data.interestLevel) nextErrors.interestLevel = "Please select an option.";
+    if (data.interestAreas.length === 0) {
+      nextErrors.interestAreas = "Select at least one interest area.";
+    }
+    if (
+      data.interestAreas.includes("Others (please specify)") &&
+      !data.interestOther.trim()
+    ) {
+      nextErrors.interestOther = "Please specify the other interest area.";
+    }
 
+    if (data.contributionWays.length === 0) {
+      nextErrors.contributionWays = "Select at least one contribution way.";
+    }
+    if (
+      data.contributionWays.includes("Other (please specify)") &&
+      !data.contributionOther.trim()
+    ) {
+      nextErrors.contributionOther = "Please specify the other contribution.";
+    }
+
+    if (!data.informedStatus) {
+      nextErrors.informedStatus = "Please select an option.";
+    }
+    if (!data.alignmentLevel) {
+      nextErrors.alignmentLevel = "Please select an option.";
+    }
+    if (!data.recommendation) {
+      nextErrors.recommendation = "Please select an option.";
+    }
+
+    return nextErrors;
   };
 
-  /* SUBMIT */
-const handleSubmit = async () => {
+  const handleChange = (e) => {
+    const { name, value } = e.target;
 
-  // ðŸ”’ prevent resubmit if already submitted
-  if (isSubmitted) return;
+    setFormData((prev) => ({ ...prev, [name]: value }));
+    setErrors((prev) => ({ ...prev, [name]: "" }));
+  };
 
-  setSubmitting(true);
+  const handleCountryChange = async (e) => {
+    const country = e.target.value;
 
-  try {
+    setFormData((prev) => ({ ...prev, country, city: "" }));
+    setErrors((prev) => ({ ...prev, country: "", city: "" }));
 
-    const subcollectionRef = collection(
-      db,
-      COLLECTIONS.prospect,
-      id,
-      "prospectform"
-    );
-
-    // ðŸ”¥ double check from DB (extra safety)
-    const existing = await getDocs(subcollectionRef);
-    if (!existing.empty) {
-      setIsSubmitted(true);
-      Swal.fire("Info", "Form already submitted", "info");
-      setSubmitting(false);
+    if (!country) {
+      setCities([]);
       return;
     }
 
-    const finalData = {
+    try {
+      const response = await fetch(
+        "https://countriesnow.space/api/v0.1/countries/cities",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ country }),
+        }
+      );
+
+      const data = await response.json().catch(() => ({}));
+      setCities(Array.isArray(data.data) ? data.data : []);
+    } catch (error) {
+      setCities([]);
+    }
+  };
+
+  const handleCityChange = (e) => {
+    setFormData((prev) => ({ ...prev, city: e.target.value }));
+    setErrors((prev) => ({ ...prev, city: "" }));
+  };
+
+  const handleCheckboxChange = (e, key) => {
+    const { value, checked } = e.target;
+
+    setFormData((prev) => ({
+      ...prev,
+      [key]: checked
+        ? [...prev[key], value]
+        : prev[key].filter((entry) => entry !== value),
+    }));
+
+    setErrors((prev) => ({
+      ...prev,
+      [key]: "",
+      ...(key === "interestAreas" ? { interestOther: "" } : {}),
+      ...(key === "contributionWays" ? { contributionOther: "" } : {}),
+    }));
+  };
+
+  const handleSubmit = async () => {
+    const normalizedData = {
       ...formData,
-      howFound:
-        formData.howFound === "Other"
-          ? formData.howFoundOther
-          : formData.howFound,
+      phoneNumber: normalizePhone(formData.phoneNumber),
+      mentorPhone: normalizePhone(formData.mentorPhone),
+      email: formData.email.trim(),
+      mentorEmail: formData.mentorEmail.trim(),
+      fullName: formData.fullName.trim(),
+      mentorName: formData.mentorName.trim(),
+      profession: formData.profession.trim(),
+      companyName: formData.companyName.trim(),
+      industry: formData.industry.trim(),
+      socialProfile: formData.socialProfile.trim(),
+      howFoundOther: formData.howFoundOther.trim(),
+      interestOther: formData.interestOther.trim(),
+      contributionOther: formData.contributionOther.trim(),
+      additionalComments: formData.additionalComments.trim(),
     };
 
-    await addDoc(subcollectionRef, finalData);
+    const validationErrors = validateForm(normalizedData);
 
-    // ðŸ”¥ LOCK FOREVER AFTER SUBMIT
-    setIsSubmitted(true);
-
-    /* -------- CP LOGIC -------- */
-
-    const q = query(
-      collection(db, COLLECTIONS.userDetail),
-      where("MobileNo", "==", formData.mentorPhone)
-    );
-
-    const snap = await getDocs(q);
-
-    if (!snap.empty) {
-
-      const d = snap.docs[0].data();
-
-      const orbiter = {
-        ujbcode: d.UJBCode,
-        name: d.Name,
-        phone: d.MobileNo,
-        category: d.Category,
-      };
-
-      await addCpForProspectAssessment(
-        orbiter,
-        formData.phoneNumber
-      );
+    if (Object.keys(validationErrors).length > 0) {
+      setErrors(validationErrors);
+      Swal.fire("Validation", "Please complete the required fields.", "warning");
+      return;
     }
 
-    Swal.fire("Success", "Assessment Submitted!", "success");
+    setErrors({});
+    setSubmitting(true);
 
-    // âŒ DO NOT reset form (important for lock view)
-    // setFormData(...) âŒ remove this
+    try {
+      const res = await fetch(`/api/prospects/${id}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(normalizedData),
+      });
+      const data = await res.json().catch(() => ({}));
 
-  } catch (err) {
+      if (res.status === 409) {
+        router.replace(`/user/prospects/${id}/completed`);
+        return;
+      }
 
-    console.error(err);
-    Swal.fire("Error", "Something went wrong.", "error");
+      if (res.status === 400 && data.errors) {
+        setErrors(data.errors);
+        Swal.fire(
+          "Validation",
+          data.message || "Please correct the highlighted fields.",
+          "warning"
+        );
+        return;
+      }
 
-  } finally {
-    setSubmitting(false);
-  }
-};
+      if (!res.ok) {
+        throw new Error(data.message || "Something went wrong.");
+      }
+
+      router.replace(`/user/prospects/${id}/completed?submitted=1`);
+    } catch (error) {
+      Swal.fire("Error", "Something went wrong.", "error");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   const nextTab = () =>
     activeTab < tabs.length - 1 && setActiveTab(activeTab + 1);
 
-  const prevTab = () =>
-    activeTab > 0 && setActiveTab(activeTab - 1);
+  const prevTab = () => activeTab > 0 && setActiveTab(activeTab - 1);
+
+  if (loading) {
+    return (
+      <main className="min-h-screen bg-gray-50 py-10">
+        <div className="mx-auto max-w-4xl rounded-2xl bg-white p-8 shadow-lg">
+          <p className="text-center text-gray-600">Loading assessment form...</p>
+        </div>
+      </main>
+    );
+  }
 
   return (
-
     <main className="min-h-screen bg-gray-50 py-10">
-
-      <div className="max-w-4xl mx-auto bg-white shadow-lg rounded-2xl p-8 max-h-[85vh] overflow-y-auto">
-
-        {/* Tabs */}
-
-        <div className="flex justify-between mb-10">
-
-          {tabs.map((tab, i) => (
-
+      <div className="mx-auto max-w-4xl max-h-[85vh] overflow-y-auto rounded-2xl bg-white p-8 shadow-lg">
+        <div className="mb-10 flex justify-between gap-2">
+          {tabs.map((tab, index) => (
             <div
-              key={i}
-              onClick={() => setActiveTab(i)}
-              className={`px-4 py-2 rounded-full text-sm cursor-pointer
-              ${activeTab === i
-                ? "bg-indigo-600 text-white"
-                : "bg-gray-200 text-gray-600"
+              key={tab}
+              onClick={() => setActiveTab(index)}
+              className={`cursor-pointer rounded-full px-4 py-2 text-sm ${
+                activeTab === index
+                  ? "bg-indigo-600 text-white"
+                  : "bg-gray-200 text-gray-600"
               }`}
             >
               {tab}
             </div>
-
           ))}
-
         </div>
-{isSubmitted && (
-  <div className="bg-red-100 text-red-600 p-3 rounded-lg text-center mb-6">
-    Form already submitted. Editing is disabled.
-  </div>
-)}
-        <form  className="space-y-6 min-h-[500px]">
-
-          {/* TAB 1 */}
-{/* TAB 1 */}
-
-{activeTab === 0 && (
-
-<div className="space-y-4">
-
-<h3 className="text-lg font-semibold text-gray-700">
-MentOrbiter Details
-</h3>
-
-<input
-className="w-full border rounded-lg p-3"
-name="mentorName"
-value={formData.mentorName}
-onChange={handleChange}
-placeholder="Your Name"
-/>
-
-<input
-className="w-full border rounded-lg p-3"
-name="mentorPhone"
-value={formData.mentorPhone}
-onChange={handleChange}
-placeholder="Contact Number"
-/>
-
-<input
-className="w-full border rounded-lg p-3"
-name="mentorEmail"
-value={formData.mentorEmail}
-onChange={handleChange}
-placeholder="Email Address"
-/>
-
-<input
-type="date"
-className="w-full border rounded-lg p-3"
-name="assessmentDate"
-value={formData.assessmentDate}
-onChange={handleChange}
-/>
-
-</div>
-
-)}
-
-{/* TAB 2 */}
-
-{activeTab === 1 && (
-
-<div className="space-y-4">
-
-<h3 className="text-lg font-semibold text-gray-700">
-Prospect Details
-</h3>
-
-
-<input
-  disabled={isSubmitted}
-  className="w-full border p-3"
-  name="fullName"
-  value={formData.fullName}
-  onChange={handleChange}
-  placeholder="Prospect Name"
-/>
-<input
-className="w-full border rounded-lg p-3"
-name="phoneNumber"
-value={formData.phoneNumber}
-onChange={handleChange}
-placeholder="Contact Number"
-/>
-
-<input
-className="w-full border rounded-lg p-3"
-name="email"
-value={formData.email}
-onChange={handleChange}
-placeholder="Email Address"
-/>
-
-<select
-className="w-full border rounded-lg p-3"
-value={formData.country}
-onChange={handleCountryChange}
->
-<option value="">Select Country</option>
-
-{countries.map((c,i)=>(
-<option key={i} value={c}>{c}</option>
-))}
-
-</select>
-
-<select
-className="w-full border rounded-lg p-3"
-value={formData.city}
-onChange={handleCityChange}
->
-<option value="">Select City</option>
-
-{cities.map((city,i)=>(
-<option key={i} value={city}>{city}</option>
-))}
-
-</select>
-
-<input
-className="w-full border rounded-lg p-3"
-name="profession"
-value={formData.profession}
-onChange={handleChange}
-placeholder="Occupation"
-/>
-
-<input
-className="w-full border rounded-lg p-3"
-name="companyName"
-value={formData.companyName}
-onChange={handleChange}
-placeholder="Company"
-/>
-
-<input
-className="w-full border rounded-lg p-3"
-name="industry"
-value={formData.industry}
-onChange={handleChange}
-placeholder="Industry"
-/>
-
-<input
-className="w-full border rounded-lg p-3"
-name="socialProfile"
-value={formData.socialProfile}
-onChange={handleChange}
-placeholder="Social Profile"
-/>
-
-</div>
 
-)}
-
-{/* TAB 3 */}
-
-{activeTab === 2 && (
-
-<div className="space-y-6">
-
-<h3 className="text-lg font-semibold text-gray-700">
-Alignment with UJustBe
-</h3>
-
-{/* How found */}
-
-<div>
-
-<label className="text-sm font-medium">
-How did you find the prospect?
-</label>
-
-<select
-name="howFound"
-value={formData.howFound}
-onChange={handleChange}
-className="w-full border rounded-lg p-3 mt-2"
->
-<option value="">Select</option>
-<option value="Referral">Referral</option>
-<option value="Networking Event">Networking Event</option>
-<option value="Social Media">Social Media</option>
-<option value="Other">Other</option>
-</select>
-
-</div>
-
-{formData.howFound === "Other" && (
-
-<input
-className="w-full border rounded-lg p-3"
-name="howFoundOther"
-value={formData.howFoundOther}
-onChange={handleChange}
-placeholder="Please specify"
-/>
-
-)}
-
-{/* Interest Level */}
-
-<div>
-
-<label className="text-sm font-medium">
-Interest Level
-</label>
-
-<select
-name="interestLevel"
-value={formData.interestLevel}
-onChange={handleChange}
-className="w-full border rounded-lg p-3 mt-2"
->
-<option value="">Select</option>
-<option value="Actively involved">Actively involved</option>
-<option value="Some interest">Some interest</option>
-<option value="Unfamiliar but open">Unfamiliar but open</option>
-</select>
-
-</div>
-
-{/* Interest Areas */}
-
-<div>
-
-<label className="text-sm font-medium">
-Interest Areas
-</label>
-
-<div className="space-y-2 mt-2">
-
-{interestOptions.map((opt,i)=>(
-<label key={i} className="flex items-center gap-2">
-
-<input
-type="checkbox"
-value={opt}
-checked={formData.interestAreas.includes(opt)}
-onChange={(e)=>handleCheckboxChange(e,"interestAreas")}
-/>
-
-{opt}
-
-</label>
-))}
-
-</div>
-
-</div>
-
-{formData.interestAreas.includes("Others (please specify)") && (
-
-<input
-className="w-full border rounded-lg p-3"
-name="interestOther"
-value={formData.interestOther}
-onChange={handleChange}
-placeholder="Enter interest"
-/>
-
-)}
-
-{/* Contribution Ways */}
-
-<div>
-
-<label className="text-sm font-medium">
-Contribution Ways
-</label>
-
-<div className="space-y-2 mt-2">
-
-{contributionOptions.map((opt,i)=>(
-<label key={i} className="flex items-center gap-2">
-
-<input
-type="checkbox"
-value={opt}
-checked={formData.contributionWays.includes(opt)}
-onChange={(e)=>handleCheckboxChange(e,"contributionWays")}
-/>
-
-{opt}
-
-</label>
-))}
-
-</div>
-
-</div>
-
-{formData.contributionWays.includes("Other (please specify)") && (
-
-<input
-className="w-full border rounded-lg p-3"
-name="contributionOther"
-value={formData.contributionOther}
-onChange={handleChange}
-placeholder="Enter contribution"
-/>
-
-)}
-
-{/* Informed Status */}
-
-<div>
-
-<label className="text-sm font-medium">
-Informed Status
-</label>
-
-<select
-name="informedStatus"
-value={formData.informedStatus}
-onChange={handleChange}
-className="w-full border rounded-lg p-3 mt-2"
->
-<option value="">Select</option>
-<option value="Fully aware">Fully aware</option>
-<option value="Partially aware">Partially aware</option>
-<option value="Not informed">Not informed</option>
-</select>
-
-</div>
-
-</div>
-
-)}
-
-{/* TAB 4 */}
-
-{activeTab === 3 && (
-
-<div className="space-y-6">
-
-<h3 className="text-lg font-semibold text-gray-700">
-Assessment & Recommendation
-</h3>
-
-<div>
-
-<label className="text-sm font-medium">
-Alignment Level
-</label>
-
-<select
-name="alignmentLevel"
-value={formData.alignmentLevel}
-onChange={handleChange}
-className="w-full border rounded-lg p-3 mt-2"
->
-<option value="">Select</option>
-<option value="Not aligned">Not aligned</option>
-<option value="Slightly aligned">Slightly aligned</option>
-<option value="Neutral">Neutral</option>
-<option value="Mostly aligned">Mostly aligned</option>
-<option value="Fully aligned">Fully aligned</option>
-</select>
-
-</div>
-
-<div>
-
-<label className="text-sm font-medium">
-Recommendation
-</label>
-
-<select
-name="recommendation"
-value={formData.recommendation}
-onChange={handleChange}
-className="w-full border rounded-lg p-3 mt-2"
->
-<option value="">Select</option>
-<option value="Strongly recommended">Strongly recommended</option>
-<option value="Needs alignment">Needs alignment</option>
-<option value="Not recommended">Not recommended</option>
-</select>
-
-</div>
-
-<div>
-
-<label className="text-sm font-medium">
-Additional Comments
-</label>
-
-<textarea
-name="additionalComments"
-value={formData.additionalComments}
-onChange={handleChange}
-rows={4}
-className="w-full border rounded-lg p-3 mt-2"
-/>
-
-</div>
-
-</div>
-
-)}
-
-          {/* NAV BUTTONS */}
+        <form className="min-h-[500px] space-y-6">
+          {activeTab === 0 && (
+            <div className="space-y-4">
+              <h3 className="text-lg font-semibold text-gray-700">
+                MentOrbiter Details
+              </h3>
+
+              <div>
+                <FieldLabel label="MentOrbiter Name" required />
+                <input
+                  className={getFieldClass(errors.mentorName)}
+                  name="mentorName"
+                  value={formData.mentorName}
+                  onChange={handleChange}
+                  placeholder="Your Name"
+                />
+                <FieldError message={errors.mentorName} />
+              </div>
+
+              <div>
+                <FieldLabel label="MentOrbiter Contact Number" required />
+                <input
+                  className={getFieldClass(errors.mentorPhone)}
+                  name="mentorPhone"
+                  value={formData.mentorPhone}
+                  onChange={handleChange}
+                  placeholder="Contact Number"
+                />
+                <FieldError message={errors.mentorPhone} />
+              </div>
+
+              <div>
+                <FieldLabel label="MentOrbiter Email Address" required />
+                <input
+                  className={getFieldClass(errors.mentorEmail)}
+                  name="mentorEmail"
+                  value={formData.mentorEmail}
+                  onChange={handleChange}
+                  placeholder="Email Address"
+                />
+                <FieldError message={errors.mentorEmail} />
+              </div>
+
+              <div>
+                <FieldLabel label="Assessment Date" required />
+                <input
+                  type="date"
+                  className={getFieldClass(errors.assessmentDate)}
+                  name="assessmentDate"
+                  value={formData.assessmentDate}
+                  onChange={handleChange}
+                  max={today}
+                />
+                <FieldError message={errors.assessmentDate} />
+              </div>
+            </div>
+          )}
+
+          {activeTab === 1 && (
+            <div className="space-y-4">
+              <h3 className="text-lg font-semibold text-gray-700">
+                Prospect Details
+              </h3>
+
+              <div>
+                <FieldLabel label="Prospect Name" required />
+                <input
+                  className={getFieldClass(errors.fullName)}
+                  name="fullName"
+                  value={formData.fullName}
+                  onChange={handleChange}
+                  placeholder="Prospect Name"
+                />
+                <FieldError message={errors.fullName} />
+              </div>
+
+              <div>
+                <FieldLabel label="Contact Number" required />
+                <input
+                  className={getFieldClass(errors.phoneNumber)}
+                  name="phoneNumber"
+                  value={formData.phoneNumber}
+                  onChange={handleChange}
+                  placeholder="Contact Number"
+                />
+                <FieldError message={errors.phoneNumber} />
+              </div>
+
+              <div>
+                <FieldLabel label="Email Address" required />
+                <input
+                  className={getFieldClass(errors.email)}
+                  name="email"
+                  value={formData.email}
+                  onChange={handleChange}
+                  placeholder="Email Address"
+                />
+                <FieldError message={errors.email} />
+              </div>
+
+              <div>
+                <FieldLabel label="Country" required />
+                <select
+                  className={getFieldClass(errors.country)}
+                  value={formData.country}
+                  onChange={handleCountryChange}
+                >
+                  <option value="">Select Country</option>
+                  {countries.map((country) => (
+                    <option key={country} value={country}>
+                      {country}
+                    </option>
+                  ))}
+                </select>
+                <FieldError message={errors.country} />
+              </div>
+
+              <div>
+                <FieldLabel label="City" required />
+                <select
+                  className={getFieldClass(errors.city)}
+                  value={formData.city}
+                  onChange={handleCityChange}
+                >
+                  <option value="">Select City</option>
+                  {cities.map((city) => (
+                    <option key={city} value={city}>
+                      {city}
+                    </option>
+                  ))}
+                </select>
+                <FieldError message={errors.city} />
+              </div>
+
+              <div>
+                <FieldLabel label="Occupation" required />
+                <input
+                  className={getFieldClass(errors.profession)}
+                  name="profession"
+                  value={formData.profession}
+                  onChange={handleChange}
+                  placeholder="Occupation"
+                />
+                <FieldError message={errors.profession} />
+              </div>
+
+              <div>
+                <FieldLabel label="Company" />
+                <input
+                  className={getFieldClass()}
+                  name="companyName"
+                  value={formData.companyName}
+                  onChange={handleChange}
+                  placeholder="Company"
+                />
+              </div>
+
+              <div>
+                <FieldLabel label="Industry" />
+                <input
+                  className={getFieldClass()}
+                  name="industry"
+                  value={formData.industry}
+                  onChange={handleChange}
+                  placeholder="Industry"
+                />
+              </div>
+
+              <div>
+                <FieldLabel label="Social Profile" />
+                <input
+                  className={getFieldClass()}
+                  name="socialProfile"
+                  value={formData.socialProfile}
+                  onChange={handleChange}
+                  placeholder="Social Profile"
+                />
+              </div>
+            </div>
+          )}
+
+          {activeTab === 2 && (
+            <div className="space-y-6">
+              <h3 className="text-lg font-semibold text-gray-700">
+                Alignment with UJustBe
+              </h3>
+
+              <div>
+                <FieldLabel label="How did you find the prospect?" required />
+                <select
+                  name="howFound"
+                  value={formData.howFound}
+                  onChange={handleChange}
+                  className={`${getFieldClass(errors.howFound)} mt-2`}
+                >
+                  <option value="">Select</option>
+                  <option value="Referral">Referral</option>
+                  <option value="Networking Event">Networking Event</option>
+                  <option value="Social Media">Social Media</option>
+                  <option value="Other">Other</option>
+                </select>
+                <FieldError message={errors.howFound} />
+              </div>
+
+              {formData.howFound === "Other" && (
+                <div>
+                  <FieldLabel label="How did you find the prospect? (Other)" required />
+                  <input
+                    className={getFieldClass(errors.howFoundOther)}
+                    name="howFoundOther"
+                    value={formData.howFoundOther}
+                    onChange={handleChange}
+                    placeholder="Please specify"
+                  />
+                  <FieldError message={errors.howFoundOther} />
+                </div>
+              )}
+
+              <div>
+                <FieldLabel label="Interest Level" required />
+                <select
+                  name="interestLevel"
+                  value={formData.interestLevel}
+                  onChange={handleChange}
+                  className={`${getFieldClass(errors.interestLevel)} mt-2`}
+                >
+                  <option value="">Select</option>
+                  <option value="Actively involved">Actively involved</option>
+                  <option value="Some interest">Some interest</option>
+                  <option value="Unfamiliar but open">Unfamiliar but open</option>
+                </select>
+                <FieldError message={errors.interestLevel} />
+              </div>
+
+              <div>
+                <FieldLabel label="Interest Areas" required />
+                <div className="mt-2 space-y-2">
+                  {interestOptions.map((option) => (
+                    <label key={option} className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        value={option}
+                        checked={formData.interestAreas.includes(option)}
+                        onChange={(e) => handleCheckboxChange(e, "interestAreas")}
+                      />
+                      {option}
+                    </label>
+                  ))}
+                </div>
+                <FieldError message={errors.interestAreas} />
+              </div>
+
+              {formData.interestAreas.includes("Others (please specify)") && (
+                <div>
+                  <FieldLabel label="Other Interest Area" required />
+                  <input
+                    className={getFieldClass(errors.interestOther)}
+                    name="interestOther"
+                    value={formData.interestOther}
+                    onChange={handleChange}
+                    placeholder="Enter interest"
+                  />
+                  <FieldError message={errors.interestOther} />
+                </div>
+              )}
+
+              <div>
+                <FieldLabel label="Contribution Ways" required />
+                <div className="mt-2 space-y-2">
+                  {contributionOptions.map((option) => (
+                    <label key={option} className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        value={option}
+                        checked={formData.contributionWays.includes(option)}
+                        onChange={(e) =>
+                          handleCheckboxChange(e, "contributionWays")
+                        }
+                      />
+                      {option}
+                    </label>
+                  ))}
+                </div>
+                <FieldError message={errors.contributionWays} />
+              </div>
+
+              {formData.contributionWays.includes("Other (please specify)") && (
+                <div>
+                  <FieldLabel label="Other Contribution" required />
+                  <input
+                    className={getFieldClass(errors.contributionOther)}
+                    name="contributionOther"
+                    value={formData.contributionOther}
+                    onChange={handleChange}
+                    placeholder="Enter contribution"
+                  />
+                  <FieldError message={errors.contributionOther} />
+                </div>
+              )}
+
+              <div>
+                <FieldLabel label="Informed Status" required />
+                <select
+                  name="informedStatus"
+                  value={formData.informedStatus}
+                  onChange={handleChange}
+                  className={`${getFieldClass(errors.informedStatus)} mt-2`}
+                >
+                  <option value="">Select</option>
+                  <option value="Fully aware">Fully aware</option>
+                  <option value="Partially aware">Partially aware</option>
+                  <option value="Not informed">Not informed</option>
+                </select>
+                <FieldError message={errors.informedStatus} />
+              </div>
+            </div>
+          )}
+
+          {activeTab === 3 && (
+            <div className="space-y-6">
+              <h3 className="text-lg font-semibold text-gray-700">
+                Assessment & Recommendation
+              </h3>
+
+              <div>
+                <FieldLabel label="Alignment Level" required />
+                <select
+                  name="alignmentLevel"
+                  value={formData.alignmentLevel}
+                  onChange={handleChange}
+                  className={`${getFieldClass(errors.alignmentLevel)} mt-2`}
+                >
+                  <option value="">Select</option>
+                  <option value="Not aligned">Not aligned</option>
+                  <option value="Slightly aligned">Slightly aligned</option>
+                  <option value="Neutral">Neutral</option>
+                  <option value="Mostly aligned">Mostly aligned</option>
+                  <option value="Fully aligned">Fully aligned</option>
+                </select>
+                <FieldError message={errors.alignmentLevel} />
+              </div>
+
+              <div>
+                <FieldLabel label="Recommendation" required />
+                <select
+                  name="recommendation"
+                  value={formData.recommendation}
+                  onChange={handleChange}
+                  className={`${getFieldClass(errors.recommendation)} mt-2`}
+                >
+                  <option value="">Select</option>
+                  <option value="Strongly recommended">
+                    Strongly recommended
+                  </option>
+                  <option value="Needs alignment">Needs alignment</option>
+                  <option value="Not recommended">Not recommended</option>
+                </select>
+                <FieldError message={errors.recommendation} />
+              </div>
+
+              <div>
+                <FieldLabel label="Additional Comments" />
+                <textarea
+                  name="additionalComments"
+                  value={formData.additionalComments}
+                  onChange={handleChange}
+                  rows={4}
+                  className={`${getFieldClass()} mt-2`}
+                />
+              </div>
+            </div>
+          )}
 
           <div className="flex justify-between pt-6">
-
             <button
               type="button"
               onClick={prevTab}
-              disabled={activeTab === 0}
-              className="px-6 py-2 bg-gray-200 rounded-lg"
+              disabled={activeTab === 0 || submitting}
+              className="rounded-lg bg-gray-200 px-6 py-2 disabled:cursor-not-allowed disabled:opacity-60"
             >
               Back
             </button>
 
             {activeTab === tabs.length - 1 ? (
-       <button
-         type="button"  
-  onClick={handleSubmit}
-  disabled={submitting || isSubmitted}
-  className={`px-6 py-2 text-white ${
-    submitting || isSubmitted ? "bg-gray-400 cursor-not-allowed" : "bg-indigo-600"
-  }`}
->
-  {isSubmitted ? "Already Submitted" : submitting ? "Submitting..." : "Submit"}
-</button>
-            ) : (
-           
               <button
-  type="button"
-  onClick={nextTab}
-  className="px-6 py-2 bg-indigo-600 text-white rounded-lg"
->
-  Next
-</button>
+                type="button"
+                onClick={handleSubmit}
+                disabled={submitting}
+                className={`rounded-lg px-6 py-2 text-white ${
+                  submitting
+                    ? "cursor-not-allowed bg-gray-400"
+                    : "bg-indigo-600"
+                }`}
+              >
+                {submitting ? "Submitting..." : "Submit"}
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={nextTab}
+                disabled={submitting}
+                className="rounded-lg bg-indigo-600 px-6 py-2 text-white disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                Next
+              </button>
             )}
-
           </div>
-
         </form>
-
       </div>
-
     </main>
-
   );
-
 }

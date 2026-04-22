@@ -1,17 +1,8 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import {
-  collection,
-  getDocs,
-  doc,
-  updateDoc,
-  query,
-  where
-} from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage } from '@/lib/firebase/firebaseClient';
-import { COLLECTIONS } from '@/lib/utility_collection';
 import { encryptData, decryptData } from '@/utils/encryption';
 
 /* ---------------- FILE HELPERS ---------------- */
@@ -112,18 +103,24 @@ export default function useOrbiterProfile(ujbcode, toast) {
       if (!ujbcode) return;
 
       try {
-        const q = query(
-          collection(db, COLLECTIONS.userDetail),
-          where('UJBCode', '==', ujbcode)
+        const res = await fetch(
+          `/api/admin/orbiters?ujbCode=${encodeURIComponent(ujbcode)}`,
+          {
+            credentials: 'include'
+          }
         );
+        const payload = await res.json().catch(() => ({}));
 
-        const snapshot = await getDocs(q);
+        if (!res.ok) {
+          throw new Error(payload.message || 'Failed to load profile');
+        }
 
-        if (!snapshot.empty) {
-          const userDoc = snapshot.docs[0];
-          const data = userDoc.data();
+        const userDoc = payload.user || null;
 
-          setDocId(userDoc.id);
+        if (userDoc) {
+          const data = userDoc;
+
+          setDocId(userDoc.id || ujbcode);
           setFormData(data);
 
           setResidentStatus(data.residentStatus || '');
@@ -325,11 +322,27 @@ const handleBankProofChange = (file) => {
         status: 'active',
       };
 
-      const userRef = doc(db, COLLECTIONS.userDetail, docId);
+      const res = await fetch(
+        `/api/admin/orbiters?ujbCode=${encodeURIComponent(docId || ujbcode)}`,
+        {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          credentials: 'include',
+          body: JSON.stringify({
+            update: {
+              subscription: subscriptionData,
+            }
+          })
+        }
+      );
 
-      await updateDoc(userRef, {
-        subscription: subscriptionData,
-      });
+      const payload = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        throw new Error(payload.message || 'Approval failed');
+      }
 
       // update local state
       setFormData((prev) => ({
@@ -547,8 +560,30 @@ if (!bankProofFile && formData.bankDetails?.proofFile?.url) {
         achievementCertificates: finalAchievements,
       };
 
-      const userRef = doc(db, COLLECTIONS.userDetail, docId);
-      await updateDoc(userRef, finalData);
+      const res = await fetch(
+        `/api/admin/orbiters?ujbCode=${encodeURIComponent(docId || ujbcode)}`,
+        {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          credentials: 'include',
+          body: JSON.stringify({
+            update: finalData,
+          })
+        }
+      );
+
+      const payload = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        throw new Error(payload.message || 'Failed to update profile');
+      }
+
+      if (payload.user) {
+        setFormData(payload.user);
+        setDocId(payload.user.id || docId || ujbcode);
+      }
 
       toast.success('Profile updated successfully');
 

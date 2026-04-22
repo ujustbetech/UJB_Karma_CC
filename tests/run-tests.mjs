@@ -11,8 +11,10 @@ import {
   validateUserSessionRecord,
 } from "../lib/auth/userSessionWorkflow.mjs";
 import {
+  buildBootstrapAdminRecord,
   buildAdminSessionPayload,
   findAuthorizedAdmin,
+  shouldBootstrapAdmin,
   validateAdminSessionAccess,
 } from "../lib/auth/adminAccessWorkflow.mjs";
 import {
@@ -159,6 +161,22 @@ await run("admin-only access boundaries stay role-aware", () => {
     validateAdminSessionAccess({ ...payload, designation: "" }, hasAdminAccess).ok,
     true
   );
+});
+
+await run("first admin login bootstraps when admin registry is empty", () => {
+  assert.equal(shouldBootstrapAdmin([]), true);
+  assert.equal(shouldBootstrapAdmin([{ data: () => ({}) }]), false);
+
+  const bootstrap = buildBootstrapAdminRecord({
+    email: "founder@example.com",
+    name: "Founder",
+    picture: "photo.png",
+  });
+
+  assert.equal(bootstrap.email, "founder@example.com");
+  assert.equal(bootstrap.role, "Admin");
+  assert.equal(bootstrap.designation, "Founding Admin");
+  assert.equal(bootstrap.bootstrap, true);
 });
 
 await run("agreement acceptance workflow remains consistent", () => {
