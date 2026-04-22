@@ -7,7 +7,6 @@ import clsx from "clsx";
 import { NAV_ITEMS } from "./nav.config";
 import {
   ChevronRight,
-  Settings,
   LogOut,
   PanelLeftClose,
   PanelLeftOpen,
@@ -211,14 +210,6 @@ export default function Sidebar({ collapsed, setCollapsed }) {
           )}
           {!collapsed && <span className="ml-3">Collapse</span>}
         </button>
-
-        <Link
-          href="/admin/settings"
-          className="flex items-center h-9 px-3 rounded-[10px] text-sm text-slate-400 hover:bg-slate-100 hover:text-slate-900"
-        >
-          <Settings className="h-4 w-4" />
-          {!collapsed && <span className="ml-3">Settings</span>}
-        </Link>
 
         <Link
           href="/logout"

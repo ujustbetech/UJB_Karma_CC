@@ -4,7 +4,7 @@ import {
   USER_COOKIE_NAME,
 } from "@/lib/auth/accessControl";
 
-export function middleware(req) {
+export function proxy(req) {
   const { pathname } = req.nextUrl;
 
   if (pathname.startsWith("/user")) {

@@ -1,6 +1,5 @@
 import {
   LayoutGrid,
-  Users,
   CreditCard,
   BarChart3,
   Gift,
@@ -10,6 +9,7 @@ import {
   Droplets,
   UserSearch,
   Coins,
+  Settings,
 } from "lucide-react";
 
 export const NAV_ITEMS = [
@@ -17,14 +17,6 @@ export const NAV_ITEMS = [
     label: "Dashboard",
     href: "/admin",
     icon: LayoutGrid,
-  },
-  {
-    label: "Users",
-    icon: Users,
-    children: [
-      { label: "All Users", href: "/admin/users/add" },
-      { label: "Roles", href: "/admin/users/manage" },
-    ],
   },
   {
     label: "Orbiters",
@@ -120,5 +112,13 @@ export const NAV_ITEMS = [
     label: "Reports",
     href: "/admin/reports",
     icon: BarChart3,
+  },
+  {
+    label: "Settings",
+    icon: Settings,
+    children: [
+      { label: "Manage User", href: "/admin/settings/users" },
+      { label: "Manage Role", href: "/admin/settings/roles" },
+    ],
   },
 ];

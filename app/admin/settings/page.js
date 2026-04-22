@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
 
-export default function LegacyManageAdminsPage() {
+export default function SettingsPage() {
   redirect("/admin/settings/users");
 }
