@@ -3,9 +3,15 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "node scripts/run-next-with-env.mjs development dev",
+    "dev:staging": "node scripts/run-next-with-env.mjs staging dev",
     "build": "next build",
+    "build:development": "node scripts/run-next-with-env.mjs development build",
+    "build:staging": "node scripts/run-next-with-env.mjs staging build",
+    "build:production": "node scripts/run-next-with-env.mjs production build",
     "start": "next start",
+    "start:staging": "node scripts/run-next-with-env.mjs staging start",
+    "start:production": "node scripts/run-next-with-env.mjs production start",
     "lint": "eslint",
     "test": "node tests/run-tests.mjs"
   },

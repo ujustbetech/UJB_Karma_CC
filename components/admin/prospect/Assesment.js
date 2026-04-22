@@ -1,509 +1,399 @@
-import React, { useState, useEffect } from 'react';
-import { doc, updateDoc, getDoc,query,collection,setDoc,where,getDocs,addDoc,serverTimestamp } from 'firebase/firestore';
-import { db } from '@/lib/firebase/firebaseClient';
-import emailjs from '@emailjs/browser';
-import { COLLECTIONS } from "@/lib/utility_collection";
-import Swal from 'sweetalert2';
-import { sendWhatsAppTemplateRequest } from '@/utils/whatsappClient';
+import React, { useEffect, useMemo, useState } from "react";
+import Swal from "sweetalert2";
+import emailjs from "@emailjs/browser";
+
+import { sendWhatsAppTemplateRequest } from "@/utils/whatsappClient";
+
+const STATUS_CONFIG = {
+  "Choose to enroll": {
+    noteLabel: "",
+    noteRequired: false,
+    emailBody: ({ prospectName }) => `
+Dear ${prospectName},
+
+Subject: Welcome to UJustBe Universe - Ready to Make Your Authentic Choice?
+
+We are happy to inform you that your enrollment into UJustBe has been approved because we find you aligned with the basic contributor criteria of the UJustBe Universe.
+
+Now, we invite you to make your authentic choice:
+To say Yes to this journey.
+To say Yes to discovering, contributing, and growing.
+To say Yes to being part of a community where you just be - and that is more than enough.
+
+If this resonates with you, simply reply to this email with your confirmation as Yes. Once we receive your approval, we will share the details of the next steps in the enrollment process.
+`.trim(),
+    whatsappBody: ({ prospectName }) =>
+      `Congratulations ${prospectName}! We are happy to inform you that your enrollment into UJustBe has been approved. Kindly reply Yes if you would like to proceed.`,
+  },
+  "Decline by UJustBe": {
+    noteLabel: "Reason for declining",
+    noteRequired: true,
+    emailBody: ({ prospectName, note }) => `
+Dear ${prospectName},
+
+Thank you for your interest in becoming a part of the UJustBe Universe.
+
+At this time, enrollment is not approved because we do not find the required alignment with the culture and values of UJustBe.
+
+Reason: ${note || "Non-alignment with UJustBe culture and values."}
+
+We appreciate your understanding and wish you all the best on your path ahead.
+`.trim(),
+    whatsappBody: ({ prospectName, note }) =>
+      `Hello ${prospectName}, thank you for your interest in UJustBe. Enrollment is not approved at this time due to non-alignment. Reason: ${note || "Non-alignment with UJustBe culture and values."}`,
+  },
+  "Decline by Prospect": {
+    noteLabel: "Reason shared by prospect",
+    noteRequired: true,
+    emailBody: ({ prospectName, note }) => `
+Dear ${prospectName},
+
+Thank you for taking the time to consider being part of the UJustBe Universe.
+
+We truly value your honesty and respect your decision to not move forward at this time.
+
+Reason shared: ${note || "Prospect chose not to proceed at this time."}
+
+Your No is respected, and the door remains open for future consideration whenever you feel ready to re-explore this journey.
+`.trim(),
+    whatsappBody: ({ prospectName, note }) =>
+      `Hello ${prospectName}, thank you for your honest response. We respect your decision not to move forward at this time. ${note ? `Reason: ${note}. ` : ""}The door remains open for future consideration.`,
+  },
+  "Need some time": {
+    noteLabel: "Context / discussion note",
+    noteRequired: false,
+    emailBody: ({ prospectName, note }) => `
+Dear ${prospectName},
+
+Thank you for your honest response and we respect that you need some time before making a decision.
+
+Please share your final decision within 5 working days so we can plan the next steps accordingly.
+
+${note ? `Discussion note: ${note}` : ""}
+`.trim(),
+    whatsappBody: ({ prospectName, note }) =>
+      `Hello ${prospectName}, thank you for your honest response. Please share your final decision within 5 working days. ${note || ""}`.trim(),
+  },
+  "Awaiting response": {
+    noteLabel: "Reminder / response note",
+    noteRequired: true,
+    emailBody: ({ prospectName, note }) => `
+Dear ${prospectName},
+
+Your enrollment into the UJustBe Universe has been approved, and the only pending part is your reply.
+
+Please respond with your decision, including confirming Yes if you want to proceed, within 2 working days.
+
+${note ? `Reminder note: ${note}` : ""}
+`.trim(),
+    whatsappBody: ({ prospectName, note }) =>
+      `Hello ${prospectName}, your enrollment is approved and we are awaiting your response. Please reply within 2 working days. ${note || ""}`.trim(),
+  },
+};
+
+const FINAL_STATUSES = new Set([
+  "Choose to enroll",
+  "Decline by UJustBe",
+  "Decline by Prospect",
+]);
+
+const sanitizeText = (text) =>
+  String(text || "").replace(/[^a-zA-Z0-9 .,!?'"@#&()\-]/g, " ");
+
+const formatDisplayDate = () =>
+  new Date().toLocaleDateString("en-IN", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  });
+
+const formatLogDate = (value) => {
+  if (!value) return "";
+
+  if (value.seconds) {
+    return new Date(value.seconds * 1000).toLocaleString("en-IN");
+  }
+
+  return new Date(value).toLocaleString("en-IN");
+};
 
 const Assessment = ({ id, fetchData }) => {
   const [loading, setLoading] = useState(false);
-  const [status, setStatus] = useState('');
-  const [currentDate, setCurrentDate] = useState('');
-  const [declineReason, setDeclineReason] = useState('');
-const isFrozen = loading || (status && status !== "No status yet");
-  // Fetch the status from Firestore
+  const [status, setStatus] = useState("No status yet");
+  const [currentDate, setCurrentDate] = useState(formatDisplayDate());
+  const [statusNote, setStatusNote] = useState("");
+  const [logs, setLogs] = useState([]);
+  const [prospectMeta, setProspectMeta] = useState({
+    prospectName: "",
+    prospectEmail: "",
+    prospectPhone: "",
+    orbiterName: "",
+  });
+
+  const isFrozen = loading || FINAL_STATUSES.has(status);
+
+  const currentConfig = useMemo(
+    () => STATUS_CONFIG[status] || null,
+    [status]
+  );
+
   useEffect(() => {
     const fetchStatus = async () => {
       try {
-        const docRef = doc(db, COLLECTIONS.prospect, id);
-        const docSnap = await getDoc(docRef);
-        if (docSnap.exists()) {
-          setStatus(docSnap.data().status || 'No status yet');
-       setDeclineReason(docSnap.data().declineReason || '');
+        const res = await fetch(
+          `/api/admin/prospects?id=${id}&section=authenticchoice`,
+          { credentials: "include" }
+        );
+        const responseData = await res.json().catch(() => ({}));
 
+        if (!res.ok) {
+          throw new Error(responseData.message || "Failed to fetch authentic choice");
         }
+
+        const prospect = responseData.prospect || {};
+        setStatus(prospect.status || "No status yet");
+        setStatusNote(prospect.declineReason || prospect.statusNote || "");
+        setLogs(
+          Array.isArray(responseData.authenticChoiceLogs)
+            ? responseData.authenticChoiceLogs
+            : []
+        );
+        setProspectMeta({
+          prospectName: prospect.prospectName || "",
+          prospectEmail: prospect.email || "",
+          prospectPhone: prospect.prospectPhone || "",
+          orbiterName: prospect.orbiterName || "Orbiter",
+        });
       } catch (error) {
-        console.error('Error fetching status:', error);
+        console.error("Error fetching authentic choice:", error);
       }
     };
 
-    // Get the current date
-    const today = new Date().toLocaleDateString("en-IN", {
-      day: 'numeric', month: 'long', year: 'numeric'
-    });
-    setCurrentDate(today);
-
-    fetchStatus();
+    setCurrentDate(formatDisplayDate());
+    if (id) {
+      fetchStatus();
+    }
   }, [id]);
-  const updateCategoryTotals = async (orbiter, categories, points) => {
-  if (!orbiter?.ujbcode || !categories?.length) return;
 
-  const ref = doc(db, "CPBoard", orbiter.ujbcode);
-  const snap = await getDoc(ref);
-  if (!snap.exists()) return;
+  const sendAssessmentEmail = async (selectedStatus, note) => {
+    if (!prospectMeta.prospectEmail) return;
 
-  const totals = snap.data().totals || { R: 0, H: 0, W: 0 };
-  const split = Math.floor(points / categories.length);
+    const config = STATUS_CONFIG[selectedStatus];
+    const body = config?.emailBody
+      ? config.emailBody({
+          prospectName: prospectMeta.prospectName,
+          note,
+        })
+      : `Status updated: ${selectedStatus}`;
 
-  const updatedTotals = { ...totals };
-  categories.forEach((c) => {
-    updatedTotals[c] = (updatedTotals[c] || 0) + split;
-  });
-
-  await updateDoc(ref, {
-    totals: updatedTotals,
-    lastUpdatedAt: serverTimestamp(),
-  });
-};
-
-const addCpForEnrollment = async (orbiter, prospect) => {
-  if (!orbiter?.ujbcode) return;
-
-  // ✅ ensure CPBoard user exists WITH totals
-  const ref = doc(db, "CPBoard", orbiter.ujbcode);
-  const snap = await getDoc(ref);
-
-  if (!snap.exists()) {
-    await setDoc(ref, {
-      id: orbiter.ujbcode,
-      name: orbiter.name,
-      phoneNumber: orbiter.phone,
-      role: orbiter.category || "MentOrbiter",
-      totals: { R: 0, H: 0, W: 0 }, // ⭐ REQUIRED
-      createdAt: serverTimestamp(),
-    });
-  }
-
-  // 🚫 prevent duplicate CP
-  const q = query(
-    collection(db, "CPBoard", orbiter.ujbcode, "activities"),
-    where("activityNo", "==", "011"),
-    where("prospectPhone", "==", prospect.prospectPhone)
-  );
-
-  const dupSnap = await getDocs(q);
-  if (!dupSnap.empty) return;
-
-  const points = 100;
-  const categories = ["R"];
-
-  await addDoc(
-    collection(db, "CPBoard", orbiter.ujbcode, "activities"),
-    {
-      activityNo: "011",
-      activityName: "Initiating Enrollment (Tool)",
-      points,
-      categories, // ✅ FIXED
-      purpose:
-        "Marks transition from prospecting to formal enrollment; key conversion milestone.",
-      prospectName: prospect.prospectName,
-      prospectPhone: prospect.prospectPhone,
-      source: "Assessment",
-      month: new Date().toLocaleString("default", {
-        month: "short",
-        year: "numeric",
-      }),
-      addedAt: serverTimestamp(),
-    }
-  );
-
-  // ⭐ UPDATE TOTALS
-  await updateCategoryTotals(orbiter, categories, points);
-};
-
-
-  const sendAssessmentEmail = async (prospectName, prospectEmail, orbiterName, selectedstatus, formattedDate) => {
-    if (!prospectEmail) {
-      console.error("🚫 Prospect email is missing");
-      return;
-    }
-  
-    let body = '';
-  
-    switch (selectedstatus) {
-      case "Choose to enroll":
-        body = `
-        Dear ${prospectName}, 
-
-        Subject: 🌟 Welcome to UJustBe Universe – Ready to Make Your Authentic Choice? 
-
-        We are happy to inform you that your enrollment into UJustBe has been approved as we find you are aligned with the basic criteria of UJustBe Universe of being Contributor.
-
-        You have taken the first step toward becoming part of a universe built on authenticity, contribution, and conscious connection. It’s a space where like-minded individuals come together to create meaningful impact — and your presence truly matters.
-
-        Now, we invite you to make your authentic choice:
-        To say Yes to this journey.
-        To say Yes to discovering, contributing, and growing.
-        To say Yes to being part of a community where you just be — and that’s more than enough.
-
-        If this resonates with you, simply reply to this email with your confirmation as Yes. Once we receive your approval, we’ll share the details of the next steps in the enrollment process.
-      `;
-        break;
-  
-      case "Declined by UJustBe":
-        body = `
-        Dear ${prospectName}, 
-
-        Subject: UJustBe Enrollment Update – Non-Alignment with Our Culture and Values 
-
-        Thank you for your interest in becoming a part of the UJustBe Universe. After assessment from our team, we want to inform you that, at this time, we do not find that your values and alignment fully match culture and values of the UJustBe Universe. 
-
-        At UJustBe, we place a strong emphasis on authenticity, contribution, and conscious connection, and these values are the foundation of everything we do. While we recognize the effort you’ve put forth in your journey, we believe that a deep connection to our values is essential in this space.
-
-        We appreciate your understanding and wish you all the best on your path ahead.
-      `;
-        break;
-  
-      case "Declined by Prospect":
-        body = `
-        Subject: Thank You for Your Honest Response
-
-          Dear ${prospectName},
-  
-          Thank you for taking the time to consider being a part of the UJustBe Universe.
- 
-We truly value your honesty and respect your decision to not move forward at this time.
- 
-At UJustBe, we honour authenticity — and your choice is a reflection of that.
- 
-Saying No is just as important as saying Yes, especially when done consciously and with clarity.
- 
-Should you ever feel drawn to re-explore this journey of contribution, connection, and conscious living, please know that the doors to the UJustBe Universe will remain open for you.
- 
-Wishing you continued growth and fulfillment in whichever direction you choose.
-        `;
-        break;
-  
-      case "Need some time":
-        body = `
-        Subject: Holding Space for Your Choice – Response Requested in 5 Working Days
-        
-          Dear ${prospectName},
-  
-          Thank you for your honest response and we truly respect that you need some time before making a decision.
- 
-At UJustBe, we honour authentic choices, and we’re happy to hold space for you. To support our planning, we request you to share your final response within 5 working days.
- 
-If there is anything you would like to understand better or reflect on together, we are here for you.
-        `;
-        break;
-  
-      case "Awaiting response":
-        body = `
-        Subject: Reminder: Your Spot in UJustBe Awaits Your Authentic Choice
-
-          Dear ${prospectName},
-  
-         We are writing to gently remind you that your enrollment into the UJustBe Universe has been approved — and we are excited about the possibility of you joining us on this journey.
- 
-At this stage, we are waiting for your response to take the next steps. If this space resonates with you, we invite you to reply with a Yes to confirm your participation.
- 
-If you choose not to proceed, we completely respect your decision. Either way, we kindly request you to share your response within 2 working days, so we can plan the way forward accordingly.
- 
-Looking forward to hearing from you.
-        `;
-        break;
-  
-      default:
-        body = `
-          Dear ${prospectName},
-  
-          Your current status is: ${selectedstatus}.
-        `;
-    }
-  
-    const templateParams = {
-      prospect_name: prospectName,
-      to_email: prospectEmail,
-      body,
-      orbiter_name: orbiterName,
-    };
-  
     try {
       await emailjs.send(
-        'service_acyimrs',
-        'template_cdm3n5x',
-        templateParams,
-        'w7YI9DEqR9sdiWX9h'
+        "service_acyimrs",
+        "template_cdm3n5x",
+        {
+          prospect_name: prospectMeta.prospectName,
+          to_email: prospectMeta.prospectEmail,
+          body,
+          orbiter_name: prospectMeta.orbiterName,
+        },
+        "w7YI9DEqR9sdiWX9h"
       );
-      console.log("📧 Email sent successfully.");
     } catch (error) {
-      console.error("❌ Failed to send email:", error);
+      console.error("Failed to send status email:", error);
     }
   };
-  
 
+  const sendAssessmentMessage = async (selectedStatus, note) => {
+    if (!prospectMeta.prospectPhone) return;
 
-const sanitizeText = (text) => {
-  return text?.replace(/[^a-zA-Z0-9 .,!?'"@#&()\-]/g, ' ') || '';
-};
+    const config = STATUS_CONFIG[selectedStatus];
+    const bodyText = config?.whatsappBody
+      ? config.whatsappBody({
+          prospectName: prospectMeta.prospectName,
+          note,
+        })
+      : `Status updated: ${selectedStatus}`;
 
-const sendAssesmentMessage = async (orbiterName, prospectName, bodyText, phone) => {
-  try {
-    await sendWhatsAppTemplateRequest({
-      phone,
-      templateName: 'enrollment_journey',
-      parameters: [
-        sanitizeText(bodyText),
-        sanitizeText(orbiterName),
-      ],
-    });
-    console.log(`✅ WhatsApp message sent to ${prospectName}`);
-  } catch (error) {
-    console.error(`❌ Failed to send WhatsApp to ${prospectName}`, error.response?.data || error.message);
-  }
-};
+    try {
+      await sendWhatsAppTemplateRequest({
+        phone: prospectMeta.prospectPhone,
+        templateName: "enrollment_journey",
+        parameters: [
+          sanitizeText(bodyText),
+          sanitizeText(prospectMeta.orbiterName),
+        ],
+      });
+    } catch (error) {
+      console.error("Failed to send status WhatsApp:", error);
+    }
+  };
 
-// Helper function to format line breaks
-// Helper function to format line breaks for WhatsApp
-const formatMessage = (message) => {
-  return message.replace(/\\n/g, '\n'); // Replace '\\n' with real newlines
-};
+  const handleSaveStatus = async (selectedStatus, note = "") => {
+    setLoading(true);
 
-const handleSaveStatus = async (selectedstatus, reason = '') => {
-  setLoading(true);
-  try {
-    const docRef = doc(db, COLLECTIONS.prospect, id);
-    const docSnap = await getDoc(docRef);
-
-    if (docSnap.exists()) {
-      const data = docSnap.data();
-      const prospectEmail = data.email;
-      const prospectPhone = data.prospectPhone; // 📱 phone field
-      const prospectName = data.prospectName;
-      const orbiterName = data.orbiterName;
-
-      
-      const updateData = { status: selectedstatus };
-
-      if (
-        selectedstatus === 'Declined by UJustBe' ||
-        selectedstatus === 'Declined by Prospect'
-      ) {
-        updateData.declineReason = reason;
-      }
-      
-      await updateDoc(docRef, updateData);
-      setStatus(selectedstatus);
-/* ⭐ ADD CP WHEN ENROLLMENT IS CHOSEN */
-if (selectedstatus === "Choose to enroll") {
-  const qMentor = query(
-    collection(db, COLLECTIONS.userDetail),
-    where("MobileNo", "==", data.orbiterContact)
-  );
-
-  const mentorSnap = await getDocs(qMentor);
-
-  if (!mentorSnap.empty) {
-    const d = mentorSnap.docs[0].data();
-
-    if (d.UJBCode) {
-      const orbiter = {
-        ujbcode: d.UJBCode,
-        name: d["Name"],
-        phone: d["MobileNo"],
-        category: d.Category,
-      };
-
-      await addCpForEnrollment(
-        orbiter,
+    try {
+      const res = await fetch(
+        `/api/admin/prospects?id=${id}&section=authenticchoice`,
         {
-          prospectName,
-          prospectPhone,
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          credentials: "include",
+          body: JSON.stringify({
+            status: selectedStatus,
+            note,
+          }),
         }
       );
-    }
-  }
-}
+      const responseData = await res.json().catch(() => ({}));
 
-     
-      // Build body text for WhatsApp with formatMessage function
-      let bodyText = '';
-  
-      if (selectedstatus === "Choose to enroll") {
-        bodyText = formatMessage(`Congratulations ${prospectName}! We are Happy to inform you that, your enrollment into UJustBe has been approved! ✨\n\nWe now invite you to make your authentic choice to say Yes to this journey.\n\nKindly check your email for full details and next steps.\n\nLooking forward to your confirmation!`);
-      } else if (selectedstatus === "Declined by UJustBe") {
-        bodyText = formatMessage(`Hello ${prospectName}, Thank you for your interest in joining UJustBe!\n\nAfter assessment from our team, we want to inform you that we don’t currently find your alignment with UJustBe's core culture and values.\n\nWe wish you the best in your future endeavors and appreciate your understanding.`);
-      } else if (selectedstatus === "Declined by Prospect") {
-        bodyText = formatMessage(`Hello ${prospectName}, we appreciate your interest in UJustBe!\n\nOur team would like to follow up with you at a later time. Kindly check your email for details, and we’ll be in touch soon.`);
-      } else if (selectedstatus === "Need some time") {
-        bodyText = formatMessage(`Hello ${prospectName}, Thank you for your honest response and we truly respect that you need some time before making a decision.\n\nWe will hold space for your decision and request you to share your response within 5 working days. This will help us plan the next steps accordingly.\n\nIf you have any questions or need clarity in the meantime, we’re just a message away.`);
-      } else {
-        bodyText = formatMessage(`Hello ${prospectName}, We are still waiting for your response regarding enrollment in the UJustBe Universe.\n\nWe would be happy to have you with us on this journey of authenticity and contribution.\n\nIf you feel aligned, simply reply Yes here.\n\nIf not, that’s completely okay too.\n\nWe just request you to share your decision within 2 working days, so we can plan accordingly.\n\nLooking forward to hearing from you soon!`);
+      if (!res.ok) {
+        throw new Error(responseData.message || "Failed to save authentic choice");
       }
-      
-      
 
-      // Send Email (only for "Choose to enroll" or "Declined")
-    // Send Email for all statuses
-const formattedDate = new Date().toLocaleDateString("en-IN", { day: 'numeric', month: 'long', year: 'numeric' });
-await sendAssessmentEmail(prospectName, prospectEmail, orbiterName, selectedstatus, formattedDate);
+      const prospect = responseData.prospect || {};
+      setStatus(prospect.status || selectedStatus);
+      setStatusNote(prospect.declineReason || prospect.statusNote || note);
+      setLogs(
+        Array.isArray(prospect.authenticChoiceLogs)
+          ? prospect.authenticChoiceLogs
+          : logs
+      );
 
-// Send WhatsApp for all statuses
-await sendAssesmentMessage(orbiterName, prospectName, bodyText, prospectPhone);
+      await Promise.all([
+        sendAssessmentEmail(selectedStatus, note),
+        sendAssessmentMessage(selectedStatus, note),
+      ]);
 
-Swal.fire({
-  icon: "success",
-  title: "Notification Sent",
-  text: `Status "${selectedstatus}" has been sent to the prospect via Email and WhatsApp.`,
-  confirmButtonColor: "#3085d6"
-});
-   
+      Swal.fire({
+        icon: "success",
+        title: "Notification Sent",
+        text: `Status "${selectedStatus}" has been saved and shared with the prospect.`,
+        confirmButtonColor: "#3085d6",
+      });
 
-      // Refresh UI
-    
       fetchData?.();
-      setDeclineReason(''); 
-    } else {
-      console.error("❌ No such document!");
+    } catch (error) {
+      console.error("Error saving authentic choice:", error);
+      Swal.fire("Error", error.message || "Failed to save status", "error");
+    } finally {
+      setLoading(false);
     }
-  } catch (error) {
-    console.error("❌ Error saving status or sending email/whatsapp:", error);
-  }
-  setLoading(false);
-};
+  };
 
+  const confirmSaveStatus = (newStatus) => {
+    const config = STATUS_CONFIG[newStatus];
 
+    if (config?.noteLabel) {
+      Swal.fire({
+        title: newStatus,
+        input: "textarea",
+        inputLabel: config.noteLabel,
+        inputPlaceholder: "Type here...",
+        inputAttributes: {
+          "aria-label": config.noteLabel,
+        },
+        showCancelButton: true,
+        confirmButtonText: "Submit",
+        preConfirm: (value) => {
+          const trimmed = String(value || "").trim();
 
-const confirmSaveStatus = (newStatus) => {
-  if (
-    newStatus === 'Declined by UJustBe' ||
-    newStatus === 'Declined by Prospect'
-  ) {
-    Swal.fire({
-      title: 'Add Reason',
-      input: 'textarea',
-      inputLabel: 'Reason for declining',
-      inputPlaceholder: 'Type your reason here...',
-      inputAttributes: {
-        'aria-label': 'Type your reason here'
-      },
-      showCancelButton: true,
-      confirmButtonText: 'Submit',
-      preConfirm: (reason) => {
-        if (!reason) {
-          Swal.showValidationMessage('Reason is required');
+          if (config.noteRequired && !trimmed) {
+            Swal.showValidationMessage(`${config.noteLabel} is required`);
+          }
+
+          return trimmed;
+        },
+      }).then((result) => {
+        if (result.isConfirmed) {
+          handleSaveStatus(newStatus, result.value || "");
         }
-        return reason;
-      }
-    }).then((result) => {
-      if (result.isConfirmed) {
-        const reason = result.value;
-        setDeclineReason(reason); // still update local state if needed elsewhere
-        handleSaveStatus(newStatus, reason);
-      }
-    });
-  } else {
+      });
+
+      return;
+    }
+
     Swal.fire({
-      title: 'Are you sure?',
+      title: "Are you sure?",
       text: `You want to set status as "${newStatus}"?`,
-      icon: 'warning',
+      icon: "warning",
       showCancelButton: true,
-      confirmButtonColor: '#3085d6',
-      cancelButtonColor: '#d33',
-      confirmButtonText: 'Yes, confirm it!'
+      confirmButtonColor: "#3085d6",
+      cancelButtonColor: "#d33",
+      confirmButtonText: "Yes, confirm it!",
     }).then((result) => {
       if (result.isConfirmed) {
         handleSaveStatus(newStatus);
       }
     });
-  }
-};
-useEffect(() => {
-  const getReason = async () => {
-    const docRef = doc(db, COLLECTIONS.prospect, id);
-    const docSnap = await getDoc(docRef);
-    if (docSnap.exists()) {
-      const data = docSnap.data();
-      if (data.status?.startsWith('Declined')) {
-        setDeclineReason(data.declineReason || '');
-      }
-    }
   };
-  getReason();
-}, [id]);
 
+  return (
+    <div className="max-w-4xl mx-auto p-6">
+      <div className="bg-white border rounded-xl shadow-sm p-6">
+        <h2 className="text-xl font-semibold mb-4">Authentic Choice by Prospect</h2>
 
-return (
-  <div className="max-w-4xl mx-auto p-6">
+        <h3 className="text-lg mb-2">
+          Status: <span className="font-medium">{status || "No status yet"}</span>
+        </h3>
 
-    <div className="bg-white border rounded-xl shadow-sm p-6">
+        {statusNote && (
+          <p className="mt-2 italic bg-slate-50 border border-slate-200 p-3 rounded-lg">
+            {status.startsWith("Decline") ? "Reason" : "Note"}: {statusNote}
+          </p>
+        )}
 
-      <h2 className="text-xl font-semibold mb-4">
-        Authentic Choice by Prospect
-      </h2>
+        <div className="mt-4">
+          <p className="text-gray-700 mb-4">Date: {currentDate}</p>
 
-      <h3 className="text-lg mb-2">
-        Status:{" "}
-        <span className="font-medium">
-          {status || "No status yet"}
-        </span>
-      </h3>
-
-      {status?.startsWith("Declined") && declineReason && (
-        <p className="mt-2 text-red-700 italic bg-red-50 border border-red-200 p-3 rounded-lg">
-          Reason: {declineReason}
-        </p>
-      )}
-
-      <div className="mt-4">
-
-        <p className="text-gray-700 mb-4">
-          Date: {currentDate}
-        </p>
-
-        <div className="flex flex-wrap gap-3">
-
-          <button
-            onClick={() => confirmSaveStatus("Choose to enroll")}
-         disabled={isFrozen}
-            className="bg-black text-white px-4 py-2 rounded-lg hover:bg-gray-800 disabled:bg-gray-400"
-          >
-            Choose to enroll
-          </button>
-
-          <button
-            onClick={() => confirmSaveStatus("Declined by UJustBe")}
-disabled={isFrozen}
-            className="bg-black text-white px-4 py-2 rounded-lg hover:bg-gray-800 disabled:bg-gray-400"
-          >
-            Decline by UJustBe
-          </button>
-
-          <button
-            onClick={() => confirmSaveStatus("Declined by Prospect")}
-          disabled={isFrozen}
-            className="bg-black text-white px-4 py-2 rounded-lg hover:bg-gray-800 disabled:bg-gray-400"
-          >
-            Decline by Prospect
-          </button>
-
-          <button
-            onClick={() => confirmSaveStatus("Need some time")}
-    disabled={isFrozen}
-            className="bg-black text-white px-4 py-2 rounded-lg hover:bg-gray-800 disabled:bg-gray-400"
-          >
-            Need some time
-          </button>
-
-          <button
-            onClick={() => confirmSaveStatus("Awaiting response")}
-      disabled={isFrozen}
-            className="bg-black text-white px-4 py-2 rounded-lg hover:bg-gray-800 disabled:bg-gray-400"
-          >
-            Awaiting response
-          </button>
-
+          <div className="flex flex-wrap gap-3">
+            {Object.keys(STATUS_CONFIG).map((choice) => (
+              <button
+                key={choice}
+                onClick={() => confirmSaveStatus(choice)}
+                disabled={isFrozen}
+                className="bg-black text-white px-4 py-2 rounded-lg hover:bg-gray-800 disabled:bg-gray-400"
+              >
+                {choice}
+              </button>
+            ))}
+          </div>
         </div>
 
+        <div className="mt-8">
+          <h3 className="text-lg font-semibold mb-3">Decision Log</h3>
+
+          {logs.length === 0 ? (
+            <p className="text-gray-500">No actions logged yet.</p>
+          ) : (
+            <div className="space-y-3">
+              {[...logs].reverse().map((entry, index) => (
+                <div
+                  key={`${entry.clickedAt || index}-${entry.status || index}`}
+                  className="rounded-lg border border-slate-200 bg-slate-50 p-3"
+                >
+                  <p className="font-medium">
+                    {entry.status || "Status updated"}
+                    {entry.previousStatus ? ` (from ${entry.previousStatus})` : ""}
+                  </p>
+                  <p className="text-sm text-slate-600">
+                    {entry.clickedBy || "Admin"} on {formatLogDate(entry.clickedAt)}
+                  </p>
+                  {entry.note && (
+                    <p className="mt-2 text-sm text-slate-700">
+                      {entry.status?.startsWith("Decline") ? "Reason" : "Note"}:{" "}
+                      {entry.note}
+                    </p>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
-
     </div>
-
-  </div>
-);
+  );
 };
 
 export default Assessment;
-

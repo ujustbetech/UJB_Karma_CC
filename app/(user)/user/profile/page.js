@@ -1,10 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { doc, getDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase/firebaseClient";
-import { COLLECTIONS } from "@/lib/utility_collection";
 import { useAuth } from "@/context/authContext";
+import { getUserDetailDocByUjbCode } from "@/lib/firebase/userDetailDoc";
 
 import ProfileHero from "@/components/profile/ProfileHero";
 import ProfileTabs from "@/components/profile/ProfileTabs";
@@ -26,22 +25,26 @@ export default function ProfilePage() {
 
   // ✅ Get UJBCode from session
   const ujbCode = sessionUser?.profile?.ujbCode;
+  const phone = sessionUser?.phone;
 
   useEffect(() => {
     if (!ujbCode) return;
 
     const fetchUser = async () => {
-      const snap = await getDoc(
-        doc(db, COLLECTIONS.userDetail, ujbCode)
-      );
+      const resolvedDoc = await getUserDetailDocByUjbCode(db, ujbCode, {
+        phone,
+      });
 
-      if (snap.exists()) {
-        setUser(snap.data());
+      if (resolvedDoc?.snap?.exists()) {
+        setUser({
+          __docId: resolvedDoc.id,
+          ...resolvedDoc.snap.data(),
+        });
       }
     };
 
     fetchUser();
-  }, [ujbCode]);
+  }, [ujbCode, phone]);
 
   if (loading || !user) {
     return <ProfileSkeleton />;

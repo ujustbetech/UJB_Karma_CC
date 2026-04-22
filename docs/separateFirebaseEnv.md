@@ -75,6 +75,17 @@ Recommended env files:
 - `.env.staging`
 - `.env.production`
 
+In this repository, `development` and `production` work with Next.js' normal env behavior, and `staging` is supported through the package scripts:
+
+- `npm run dev:staging`
+- `npm run build:staging`
+- `npm run start:staging`
+
+The current codebase also exposes the active stage through:
+
+- `publicEnv.appEnv`
+- `serverEnv.appEnv`
+
 Example values:
 
 ```env

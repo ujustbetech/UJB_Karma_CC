@@ -22,19 +22,23 @@ export default function MobileHeader() {
     if (!user?.profile?.ujbCode) return;
 
     const fetchCPPoints = async () => {
-      const activitiesRef = collection(
-        doc(db, "CPBoard", user.profile.ujbCode),
-        "activities"
-      );
+      try {
+        const activitiesRef = collection(
+          doc(db, "CPBoard", user.profile.ujbCode),
+          "activities"
+        );
 
-      const snap = await getDocs(activitiesRef);
+        const snap = await getDocs(activitiesRef);
 
-      let total = 0;
-      snap.forEach((docSnap) => {
-        total += Number(docSnap.data()?.points) || 0;
-      });
+        let total = 0;
+        snap.forEach((docSnap) => {
+          total += Number(docSnap.data()?.points) || 0;
+        });
 
-      setCPPoints(total);
+        setCPPoints(total);
+      } catch {
+        setCPPoints(0);
+      }
     };
 
     fetchCPPoints();
@@ -44,14 +48,20 @@ export default function MobileHeader() {
     if (!user?.profile?.ujbCode) return;
 
     const fetchUserDetails = async () => {
-      const userRef = doc(db, "usersdetail", user.profile.ujbCode);
-      const snap = await getDoc(userRef);
+      try {
+        const userRef = doc(db, "usersdetail", user.profile.ujbCode);
+        const snap = await getDoc(userRef);
 
-      if (snap.exists()) {
-        const data = snap.data();
-        setUserCategory(data?.Category || "Member");
-        setProfileImage(data?.ProfilePhotoURL || "");
-      }
+        if (snap.exists()) {
+          const data = snap.data();
+          setUserCategory(data?.Category || "Member");
+          setProfileImage(data?.ProfilePhotoURL || "");
+          return;
+        }
+      } catch {}
+
+      setUserCategory("Member");
+      setProfileImage("");
     };
 
     fetchUserDetails();

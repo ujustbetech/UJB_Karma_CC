@@ -129,11 +129,15 @@ export default function EditProductSheet({
 
     const handleSave = async () => {
         try {
+            const userDocId = user?.__docId;
+            if (!userDocId) {
+                throw new Error("User profile document not found");
+            }
+
             setLoading(true);
-            // const ujbCode = localStorage.getItem("mmUJBCode");
 
             await updateDoc(
-                doc(db, COLLECTIONS.userDetail, ujbCode),
+                doc(db, COLLECTIONS.userDetail, userDocId),
                 { products }
             );
 

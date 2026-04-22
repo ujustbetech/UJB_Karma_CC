@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Slider from "react-slick";
 import { db } from "@/lib/firebase/firebaseClient";
 import { collection, getDocs } from "firebase/firestore";
+import { COLLECTIONS } from "@/lib/utility_collection";
 import { useAuth } from "@/context/authContext";
 import { useRouter } from "next/navigation";
 import { Sparkles } from "lucide-react";
@@ -27,7 +28,9 @@ export default function RecommendedServices() {
     async function fetchRecommendations() {
       try {
         const profile = user.profile;
-        const snap = await getDocs(collection(db, "usersdetail"));
+        const snap = await getDocs(
+          collection(db, COLLECTIONS.userDetail)
+        );
 
         const userKeywords = [
           profile.Category1,
@@ -123,8 +126,8 @@ export default function RecommendedServices() {
 
         scoredServices.sort((a, b) => b.score - a.score);
         setServices(scoredServices.slice(0, 6));
-      } catch (error) {
-        console.error("Recommendation error:", error);
+      } catch {
+        setServices([]);
       } finally {
         setLoading(false);
       }
@@ -231,3 +234,4 @@ export default function RecommendedServices() {
     </div>
   );
 }
+

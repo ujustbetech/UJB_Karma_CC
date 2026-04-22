@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { db } from "@/lib/firebase/firebaseClient";
 import { collection, getDocs } from "firebase/firestore";
+import { COLLECTIONS } from "@/lib/utility_collection";
 import { useRouter } from "next/navigation";
 import Slider from "react-slick";
 import {
@@ -42,7 +43,7 @@ export default function MeetingsSection() {
     async function fetchData() {
       try {
         const monthlySnap = await getDocs(
-          collection(db, "MonthlyMeeting_dev")
+          collection(db, COLLECTIONS.monthlyMeeting)
         );
 
         let monthly = [];
@@ -53,12 +54,14 @@ export default function MeetingsSection() {
         });
         setMonthlyEvents(monthly);
 
-        const conclaveSnap = await getDocs(collection(db, "Conclaves_dev"));
+        const conclaveSnap = await getDocs(
+          collection(db, COLLECTIONS.conclaves)
+        );
         let conclaves = [];
 
         for (const conclaveDoc of conclaveSnap.docs) {
           const meetingsSnap = await getDocs(
-            collection(db, "Conclaves_dev", conclaveDoc.id, "meetings")
+            collection(db, COLLECTIONS.conclaves, conclaveDoc.id, "meetings")
           );
 
           meetingsSnap.forEach((doc) => {
@@ -69,8 +72,9 @@ export default function MeetingsSection() {
         }
 
         setConclaveEvents(conclaves);
-      } catch (err) {
-        console.error(err);
+      } catch {
+        setMonthlyEvents([]);
+        setConclaveEvents([]);
       } finally {
         setLoading(false);
       }
@@ -302,3 +306,4 @@ export default function MeetingsSection() {
     </div>
   );
 }
+

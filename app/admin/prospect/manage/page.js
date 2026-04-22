@@ -1,9 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { db } from "@/lib/firebase/firebaseClient";
-import { collection, getDocs, deleteDoc, doc } from "firebase/firestore";
-import { COLLECTIONS } from "@/lib/utility_collection";
 import { format } from "date-fns";
 import * as XLSX from "xlsx";
 
@@ -106,59 +103,16 @@ const fetchProspects = async () => {
 setLoading(true);
 
 try {
-
-const snap = await getDocs(collection(db, COLLECTIONS.prospect));
-
-const list = await Promise.all(
-
-snap.docs.map(async (docSnap) => {
-
-const data = docSnap.data();
-
-const engagementCol = collection(
-db,
-`${COLLECTIONS.prospect}/${docSnap.id}/engagementform`
-);
-
-const engagementSnap = await getDocs(engagementCol);
-
-let lastEngagementDate = null;
-let nextFollowupDate = null;
-
-if (!engagementSnap.empty) {
-
-const engagements = engagementSnap.docs.map((e) => e.data());
-
-engagements.sort((a, b) => {
-
-const dateA = a.updatedAt?.seconds || a.createdAt?.seconds || 0;
-const dateB = b.updatedAt?.seconds || b.createdAt?.seconds || 0;
-
-return dateB - dateA;
-
+const res = await fetch("/api/admin/prospects", {
+credentials: "include",
 });
+const data = await res.json().catch(() => ({}));
 
-const latest = engagements[0];
-
-if (latest.callDate) lastEngagementDate = latest.callDate;
-else if (latest.updatedAt) lastEngagementDate = latest.updatedAt;
-else if (latest.createdAt) lastEngagementDate = latest.createdAt;
-
-if (latest.nextFollowupDate)
-nextFollowupDate = latest.nextFollowupDate;
+if (!res.ok) {
+throw new Error(data.message || "Failed to fetch prospects");
 }
 
-return {
-id: docSnap.id,
-...data,
-lastEngagementDate,
-nextFollowupDate,
-};
-
-})
-);
-
-setProspects(list);
+setProspects(Array.isArray(data.prospects) ? data.prospects : []);
 
 } catch {
 
@@ -247,8 +201,15 @@ setDeleteOpen(true);
 const confirmDelete = async () => {
 
 try {
+const res = await fetch(`/api/admin/prospects?id=${prospectToDelete.id}`, {
+method: "DELETE",
+credentials: "include",
+});
+const data = await res.json().catch(() => ({}));
 
-await deleteDoc(doc(db, COLLECTIONS.prospect, prospectToDelete.id));
+if (!res.ok) {
+throw new Error(data.message || "Delete failed");
+}
 
 toast.success("Prospect deleted");
 

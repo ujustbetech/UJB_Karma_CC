@@ -11,6 +11,7 @@ const Followup = ({ id, data = { followups: [], comments: [] ,event: [] }, fetch
   const [loading, setLoading] = useState(false);
   const [comment, setComment] = useState('');
   const [NTphone, setNTPhone] = useState('');
+  const [NTemail, setNTEmail] = useState('');
   const [Name, setName] = useState('');
   const [comments, setComments] = useState([]);
   const [userSearch, setUserSearch] = useState('');
@@ -81,7 +82,19 @@ useEffect(() => {
     venue: '',
     reason: ''
   });
-  
+ 
+  const getMeetingStatus = (meeting) => {
+    if (!meeting) return 'Scheduled';
+    if (meeting.status) return meeting.status;
+    if (meeting.completed) return 'Done';
+    if (meeting.cancelled) return 'Cancelled';
+    return 'Scheduled';
+  };
+
+  const isClosedMeeting = (meeting) => {
+    const status = getMeetingStatus(meeting);
+    return status === 'Done' || status === 'Cancelled';
+  };
 
 const deleteAccordionEvent = async (meetingId) => {
 
@@ -100,7 +113,8 @@ const fetchMeetings = async () => {
 
     const meetings = snapshot.docs.map(doc => ({
       id: doc.id,
-      ...doc.data()
+      ...doc.data(),
+      status: getMeetingStatus(doc.data()),
     }));
 
     setIntroEvents(meetings);
@@ -193,6 +207,11 @@ const handleCreateOrReschedule = async () => {
         zoomLink: eventMode === "online" ? zoomLink : "",
         venue: eventMode === "offline" ? venue : "",
         reason: rescheduleReason || "",
+        status: "Scheduled",
+        completed: false,
+        NTMemberName: Name || "",
+        NTMemberPhone: NTphone || "",
+        NTMemberEmail: NTemail || "",
         updatedAt: new Date()
       });
 
@@ -210,7 +229,9 @@ const handleCreateOrReschedule = async () => {
         venue: eventMode === "offline" ? venue : "",
         NTMemberName: Name,
         NTMemberPhone: NTphone,
+        NTMemberEmail: NTemail,
         completed: false,
+        status: "Scheduled",
         createdAt: new Date()
 
       });
@@ -260,15 +281,24 @@ const handleCreateOrReschedule = async () => {
 
     // Email
 
-    await sendEmailToProspect(
-  data.prospectName,
-  data.email,
-  formattedEventDate,
-  eventMode === "online" ? zoomLink : "",
-  rescheduleMode,
-  rescheduleReason,
-  eventMode === "offline" ? venue : ""
-);
+    const emailRecipients = [
+      { name: data.prospectName, email: data.email },
+      { name: Name, email: NTemail },
+    ].filter((recipient) => recipient.email);
+
+    await Promise.all(
+      emailRecipients.map((recipient) =>
+        sendMeetingEmail({
+          recipientName: recipient.name,
+          recipientEmail: recipient.email,
+          date: formattedEventDate,
+          zoomLink: eventMode === "online" ? zoomLink : "",
+          isReschedule: rescheduleMode,
+          reason: rescheduleReason,
+          venue: eventMode === "offline" ? venue : "",
+        })
+      )
+    );
 
 await fetchMeetings(); // ADD THIS
 
@@ -279,19 +309,43 @@ await fetchMeetings(); // ADD THIS
   }
 
 };
-  const sendEmailToProspect = async (prospectName, email, date, zoomLink, isReschedule = false, reason = '', venue = '') => {
+  const sendMeetingEmail = async ({
+    recipientName,
+    recipientEmail,
+    date,
+    zoomLink,
+    isReschedule = false,
+    isCancelled = false,
+    reason = '',
+    venue = '',
+  }) => {
     const scheduleDetails = zoomLink
       ? `Zoom Link: ${zoomLink}`
       : venue
         ? `Venue: ${venue}`
         : 'Details will be shared soon';
 
-    const body = isReschedule
-      ? `Dear ${prospectName},
+    const body = isCancelled
+      ? `Dear ${recipientName},
+
+We need to inform you that the scheduled meeting has been cancelled.
+
+Meeting details:
+
+Date: ${date}
+${scheduleDetails}
+
+Reason: ${reason || 'Scheduling constraints'}
+
+We will reconnect with the next available slot soon.`
+      : isReschedule
+      ? `Dear ${recipientName},
 
 As you are aware, due to ${reason}, we need to reschedule our upcoming call.
 
-We are available for the call on ${date}. Please confirm if this works for you, or let us know a convenient time within the next two working days so we can align accordingly.`
+We are available for the call on ${date}. Please confirm if this works for you, or let us know a convenient time within the next two working days so we can align accordingly.
+
+${scheduleDetails}`
       : `Thank you for confirming your availability. We look forward to connecting with you and sharing insights about UJustBe and how it fosters meaningful contributions in the areas of Relationship, Health, and Wealth.
 
 Schedule details:
@@ -304,8 +358,8 @@ Our conversation will be an opportunity to explore possibilities, answer any que
 Looking forward to speaking with you soon! `;
 
     const templateParams = {
-      prospect_name: prospectName,
-      to_email: email,
+      prospect_name: recipientName,
+      to_email: recipientEmail,
       body,
     };
 
@@ -317,9 +371,9 @@ Looking forward to speaking with you soon! `;
         'w7YI9DEqR9sdiWX9h'
       );
 
-      console.log(`✅ Email sent to ${prospectName} (${email})`);
+      console.log(`Email sent to ${recipientName} (${recipientEmail})`);
     } catch (error) {
-      console.error(`❌ Failed to send email to ${prospectName}:`, error);
+      console.error(`Failed to send email to ${recipientName}:`, error);
     }
   };
 
@@ -404,6 +458,7 @@ useEffect(() => {
   const handleSelectUser = (user) => {
    setName(user.name);
   setNTPhone(user.phone);   // fixed
+  setNTEmail(user.email || '');
   setUserSearch('');
   setFilteredUsers([]);
   };
@@ -442,6 +497,17 @@ Regardless of your choice, we are grateful for the opportunity to connect with y
     try {
       if (!data) return alert("Prospect data not available");
 
+      const latestOpenMatch = [...introEvents]
+        .map((meeting, index) => ({ meeting, index }))
+        .reverse()
+        .find(({ meeting }) => !isClosedMeeting(meeting));
+
+      const latestOpenIndex = latestOpenMatch?.index;
+
+      if (latestOpenIndex === undefined) {
+        return alert("No active meeting found.");
+      }
+
       const messagesToSend = [
         {
           name: data.prospectName,
@@ -461,6 +527,15 @@ Regardless of your choice, we are grateful for the opportunity to connect with y
           await sendThankYouEmail(msg.name, msg.email);
         }
       }
+
+      const updated = introEvents.map((meeting, index) =>
+        index === latestOpenIndex
+          ? { ...meeting, completed: true, status: 'Done', completedAt: Date.now() }
+          : meeting
+      );
+
+      const latestEvent = updated.length ? updated[updated.length - 1] : null;
+      await persistIntroEvents(updated, true, latestEvent);
 
       alert("Thank you messages sent successfully!");
     } catch (error) {
@@ -509,14 +584,52 @@ Regardless of your choice, we are grateful for the opportunity to connect with y
         mode: accordionForm.mode,
         zoomLink: accordionForm.mode === 'online' ? accordionForm.zoomLink : '',
         venue: accordionForm.mode === 'offline' ? accordionForm.venue : '',
+        status: 'Scheduled',
+        completed: false,
         rescheduleHistory: [...(ev.rescheduleHistory || []), rescheduleEntry]
       };
     });
 
     try {
+      const meetingDocRef = doc(db, COLLECTIONS.prospect, id, "intromeetings", prev.id);
+      await updateDoc(meetingDocRef, {
+        date: formatReadableDate(newDateRaw),
+        dateRaw: newDateRaw,
+        mode: accordionForm.mode,
+        zoomLink: accordionForm.mode === 'online' ? accordionForm.zoomLink : '',
+        venue: accordionForm.mode === 'offline' ? accordionForm.venue : '',
+        reason: accordionForm.reason || '',
+        status: 'Scheduled',
+        completed: false,
+        updatedAt: new Date(),
+      });
+
       // If this is the latest event, also update legacy event field
       const latestEvent = updated[updated.length - 1] || null;
       await persistIntroEvents(updated, true, latestEvent);
+      const updatedMeeting = updated[idx];
+      const emailRecipients = [
+        { name: data.prospectName, email: data.email },
+        {
+          name: updatedMeeting?.NTMemberName || data.orbiterName,
+          email: updatedMeeting?.NTMemberEmail || data.orbiterEmail,
+        },
+      ].filter((recipient) => recipient.email);
+
+      await Promise.all(
+        emailRecipients.map((recipient) =>
+          sendMeetingEmail({
+            recipientName: recipient.name,
+            recipientEmail: recipient.email,
+            date: updatedMeeting?.date || '',
+            zoomLink: updatedMeeting?.zoomLink || '',
+            isReschedule: true,
+            reason: accordionForm.reason || '',
+            venue: updatedMeeting?.venue || '',
+          })
+        )
+      );
+
       setEditingIndex(null);
       setAccordionForm({ dateRaw: '', mode: 'online', zoomLink: '', venue: '', reason: '' });
       alert('Meeting rescheduled.');
@@ -527,8 +640,13 @@ Regardless of your choice, we are grateful for the opportunity to connect with y
   };
 
   const markAccordionDone = async (idx) => {
-    const updated = introEvents.map((ev, i) => (i === idx ? { ...ev, completed: true } : ev));
+    const updated = introEvents.map((ev, i) =>
+      i === idx ? { ...ev, completed: true, status: 'Done', completedAt: Date.now() } : ev
+    );
     try {
+      const meeting = introEvents[idx];
+      const meetingDocRef = doc(db, COLLECTIONS.prospect, id, "intromeetings", meeting.id);
+      await updateDoc(meetingDocRef, { completed: true, status: 'Done', completedAt: new Date() });
       const latestEvent = updated[updated.length - 1] || null;
       await persistIntroEvents(updated, true, latestEvent);
       alert('Marked done.');
@@ -538,7 +656,54 @@ Regardless of your choice, we are grateful for the opportunity to connect with y
     }
   };
 
+  const cancelAccordionEvent = async (meetingId) => {
+    if (!window.confirm('Cancel this meeting?')) return;
 
+    const meeting = introEvents.find((event) => event.id === meetingId);
+    if (!meeting) return;
+
+    const updated = introEvents.map((event) =>
+      event.id === meetingId
+        ? { ...event, cancelled: true, status: 'Cancelled', completed: false, cancelledAt: Date.now() }
+        : event
+    );
+
+    try {
+      const meetingRef = doc(db, COLLECTIONS.prospect, id, "intromeetings", meetingId);
+      await updateDoc(meetingRef, { cancelled: true, status: 'Cancelled', completed: false, cancelledAt: new Date() });
+
+      const latestEvent = updated.length ? updated[updated.length - 1] : null;
+      await persistIntroEvents(updated, true, latestEvent);
+
+      const emailRecipients = [
+        { name: data.prospectName, email: data.email },
+        {
+          name: meeting?.NTMemberName || data.orbiterName,
+          email: meeting?.NTMemberEmail || data.orbiterEmail,
+        },
+      ].filter((recipient) => recipient.email);
+
+      await Promise.all(
+        emailRecipients.map((recipient) =>
+          sendMeetingEmail({
+            recipientName: recipient.name,
+            recipientEmail: recipient.email,
+            date: meeting?.date || '',
+            zoomLink: meeting?.zoomLink || '',
+            isCancelled: true,
+            reason: meeting?.reason || 'Meeting cancelled by the team',
+            venue: meeting?.venue || '',
+          })
+        )
+      );
+    } catch (err) {
+      console.error('cancelAccordionEvent', err);
+      alert('Failed to cancel.');
+    }
+  };
+
+const latestMeeting = introEvents.length ? introEvents[introEvents.length - 1] : null;
+const showLatestMeetingBox = latestMeeting && !isClosedMeeting(latestMeeting);
 
 return (
 <div className="max-w-6xl mx-auto p-6 text-black">
@@ -550,7 +715,7 @@ Meeting for Introduction to UJustBe
 
 {/* Schedule Button */}
 
-{!createMode && !rescheduleMode && (
+{!createMode && !rescheduleMode && !showLatestMeetingBox && (
 <button
 onClick={() => setCreateMode(true)}
 className="bg-black text-white px-5 py-2 rounded-lg hover:bg-gray-800 ml-auto block"
@@ -562,7 +727,7 @@ Schedule Meet
 
 {/* Latest Event */}
 
-{introEvents.length > 0 && !createMode && !rescheduleMode && (
+{showLatestMeetingBox && !createMode && !rescheduleMode && (
 
 <div className="bg-white border rounded-xl p-6 shadow-sm mt-6">
 
@@ -570,26 +735,26 @@ Schedule Meet
 Event Details
 </h4>
 
-<p><strong>Date:</strong> {introEvents[introEvents.length - 1].date}</p>
-<p><strong>Mode:</strong> {introEvents[introEvents.length - 1].mode}</p>
+<p><strong>Date:</strong> {latestMeeting.date}</p>
+<p><strong>Mode:</strong> {latestMeeting.mode}</p>
 
-{introEvents[introEvents.length - 1].mode === "online" ? (
+{latestMeeting.mode === "online" ? (
 
 <p>
 <strong>Zoom Link:</strong>{" "}
 <a
-href={introEvents[introEvents.length - 1].zoomLink}
+href={latestMeeting.zoomLink}
 target="_blank"
 className="text-blue-600 underline"
 >
-{introEvents[introEvents.length - 1].zoomLink}
+{latestMeeting.zoomLink}
 </a>
 </p>
 
 ) : (
 
 <p>
-<strong>Venue:</strong> {introEvents[introEvents.length - 1].venue}
+<strong>Venue:</strong> {latestMeeting.venue}
 </p>
 
 )}
@@ -599,11 +764,15 @@ className="text-blue-600 underline"
 <button
 className="bg-black text-white px-4 py-2 rounded-lg"
 onClick={() => {
-const last = introEvents[introEvents.length - 1];
+const last = latestMeeting;
 setEventDate(last.dateRaw);
 setEventMode(last.mode);
 setZoomLink(last.zoomLink || "");
 setVenue(last.venue || "");
+setEditingIndex(last.id || null);
+setName(last.NTMemberName || '');
+setNTPhone(last.NTMemberPhone || '');
+setNTEmail(last.NTMemberEmail || '');
 setRescheduleMode(true);
 }}
 >
@@ -701,10 +870,6 @@ className="p-2 hover:bg-gray-100 cursor-pointer"
 
 {/* Mode */}
 
-{!rescheduleMode && (
-
-<>
-
 <div>
 <label className="font-medium">Event Mode</label>
 
@@ -755,10 +920,6 @@ className="w-full border rounded-lg p-2"
 
 )}
 
-</>
-
-)}
-
 <button
 onClick={handleCreateOrReschedule}
 className="bg-black text-white px-5 py-2 rounded-lg"
@@ -773,6 +934,7 @@ className="bg-black text-white px-5 py-2 rounded-lg"
 
 {/* Schedule Another Meeting */}
 
+{introEvents.length > 0 && !showLatestMeetingBox && !createMode && !rescheduleMode && (
 <div className="mt-6">
 
 <button
@@ -786,6 +948,7 @@ className="bg-black text-white px-5 py-2 rounded-lg"
 </button>
 
 </div>
+)}
 
 
 {/* Accordion Meetings */}
@@ -810,8 +973,11 @@ introEvents.map((ev, idx) => (
 
 Meeting #{idx + 1} — {ev.date}
 
-{ev.completed && (
+{getMeetingStatus(ev) === 'Done' && (
 <span className="text-green-600 ml-2">[Done]</span>
+)}
+{getMeetingStatus(ev) === 'Cancelled' && (
+<span className="text-red-600 ml-2">[Cancelled]</span>
 )}
 
 </div>
@@ -826,7 +992,8 @@ className="border px-3 py-1 rounded"
 {openIndex === idx ? "Collapse" : "Expand"}
 </button>
 
-
+{!isClosedMeeting(ev) && (
+<>
 <button
 onClick={() => startAccordionEdit(idx)}
 className="bg-black text-white px-3 py-1 rounded"
@@ -844,12 +1011,13 @@ Done
 
 
 <button
-onClick={() => deleteAccordionEvent(ev.id)}
+onClick={() => cancelAccordionEvent(ev.id)}
 className="bg-red-600 text-white px-3 py-1 rounded"
 >
-Delete
+Cancel
 </button>
-
+</>
+)}
 </div>
 
 </div>
@@ -876,6 +1044,81 @@ Delete
 <strong>Venue:</strong> {ev.venue}
 </p>
 
+)}
+
+{editingIndex === ev.id && !isClosedMeeting(ev) && (
+<div className="mt-4 space-y-3 border-t pt-4">
+<div>
+<label className="block font-medium mb-1">Reschedule Date</label>
+<input
+type="datetime-local"
+value={accordionForm.dateRaw}
+onChange={(e) => setAccordionForm((prev) => ({ ...prev, dateRaw: e.target.value }))}
+className="w-full border rounded-lg p-2"
+/>
+</div>
+
+<div>
+<label className="block font-medium mb-1">Event Mode</label>
+<select
+value={accordionForm.mode}
+onChange={(e) => setAccordionForm((prev) => ({ ...prev, mode: e.target.value }))}
+className="w-full border rounded-lg p-2"
+>
+<option value="online">Online</option>
+<option value="offline">Offline</option>
+</select>
+</div>
+
+{accordionForm.mode === "online" ? (
+<div>
+<label className="block font-medium mb-1">Zoom Link</label>
+<input
+type="text"
+value={accordionForm.zoomLink}
+onChange={(e) => setAccordionForm((prev) => ({ ...prev, zoomLink: e.target.value }))}
+className="w-full border rounded-lg p-2"
+/>
+</div>
+) : (
+<div>
+<label className="block font-medium mb-1">Venue</label>
+<input
+type="text"
+value={accordionForm.venue}
+onChange={(e) => setAccordionForm((prev) => ({ ...prev, venue: e.target.value }))}
+className="w-full border rounded-lg p-2"
+/>
+</div>
+)}
+
+<div>
+<label className="block font-medium mb-1">Reason</label>
+<textarea
+value={accordionForm.reason}
+onChange={(e) => setAccordionForm((prev) => ({ ...prev, reason: e.target.value }))}
+className="w-full border rounded-lg p-2"
+/>
+</div>
+
+<div className="flex gap-2">
+<button
+onClick={() => saveAccordionReschedule(idx)}
+className="bg-black text-white px-4 py-2 rounded"
+>
+Save Reschedule
+</button>
+<button
+onClick={() => {
+setEditingIndex(null);
+setAccordionForm({ dateRaw: '', mode: 'online', zoomLink: '', venue: '', reason: '' });
+}}
+className="border px-4 py-2 rounded"
+>
+Close
+</button>
+</div>
+</div>
 )}
 
 </div>

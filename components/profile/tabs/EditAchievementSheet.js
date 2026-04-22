@@ -70,13 +70,16 @@ export default function EditAchievementSheet({
   const handleSave = async () => {
     try {
       if (!ujbCode) return;
+      const userDocId = user?.__docId;
+      if (!userDocId) {
+        throw new Error("User profile document not found");
+      }
 
       setLoading(true);
 
-      await updateDoc(
-        doc(db, COLLECTIONS.userDetail, ujbCode),
-        { achievementCertificates: certificates }
-      );
+      await updateDoc(doc(db, COLLECTIONS.userDetail, userDocId), {
+        achievementCertificates: certificates,
+      });
 
       if (typeof setUser === "function") {
         setUser((prev) => ({

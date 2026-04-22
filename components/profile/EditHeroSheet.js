@@ -2,10 +2,10 @@
 
 import { useState, useEffect } from "react";
 import { X, Upload } from "lucide-react";
-import { doc, updateDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase/firebaseClient";
-import { COLLECTIONS } from "@/lib/utility_collection";
+import { doc, updateDoc } from "firebase/firestore";
 import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import { COLLECTIONS } from "@/lib/utility_collection";
 
 export default function EditHeroSheet({ open, setOpen, user, setUser }) {
 
@@ -33,6 +33,7 @@ export default function EditHeroSheet({ open, setOpen, user, setUser }) {
     try {
       const storage = getStorage();
       const storedUjbCode = localStorage.getItem("mmUJBCode");
+      const userDocId = user?.__docId;
 
       const storageRef = ref(
         storage,
@@ -44,10 +45,13 @@ export default function EditHeroSheet({ open, setOpen, user, setUser }) {
 
       setPreview(downloadURL);
 
-      await updateDoc(
-        doc(db, COLLECTIONS.userDetail, storedUjbCode),
-        { ProfilePhotoURL: downloadURL }
-      );
+      if (!userDocId) {
+        throw new Error("User profile document not found");
+      }
+
+      await updateDoc(doc(db, COLLECTIONS.userDetail, userDocId), {
+        ProfilePhotoURL: downloadURL,
+      });
 
       // Live preview update
       setUser((prev) => ({
@@ -66,14 +70,16 @@ export default function EditHeroSheet({ open, setOpen, user, setUser }) {
     try {
       setLoading(true);
       const storedUjbCode = localStorage.getItem("mmUJBCode");
+      const userDocId = user?.__docId;
 
-      await updateDoc(
-        doc(db, COLLECTIONS.userDetail, storedUjbCode),
-        {
-          TagLine: tagline,
-          City: city,
-        }
-      );
+      if (!userDocId) {
+        throw new Error("User profile document not found");
+      }
+
+      await updateDoc(doc(db, COLLECTIONS.userDetail, userDocId), {
+        TagLine: tagline,
+        City: city,
+      });
 
       setUser((prev) => ({
         ...prev,

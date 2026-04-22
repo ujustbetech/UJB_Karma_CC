@@ -3,14 +3,7 @@
 import { useEffect, useState } from "react";
 import Slider from "react-slick";
 import { db } from "@/lib/firebase/firebaseClient";
-import {
-  collection,
-  getDocs,
-  query,
-  where,
-  orderBy,
-  limit,
-} from "firebase/firestore";
+import { collection, getDocs } from "firebase/firestore";
 import { Droplet, PlayCircle, Image as ImageIcon } from "lucide-react";
 import { Forum } from "next/font/google";
 import StoryViewer from "@/components/story/StoryViewer";
@@ -28,22 +21,29 @@ export default function DewdropLearningSection() {
 
   useEffect(() => {
     async function fetchContent() {
-      const q = query(
-        collection(db, "ContentData"),
-        where("switchValue", "==", true),
-        orderBy("AdminCreatedby", "desc"),
-        limit(8)
-      );
+      try {
+        const snap = await getDocs(collection(db, "ContentData"));
 
-      const snap = await getDocs(q);
+        const data = snap.docs
+          .map((doc) => ({
+            id: doc.id,
+            ...doc.data(),
+          }))
+          .filter((item) => item.switchValue === true)
+          .sort((a, b) => {
+            const valueA = String(a.AdminCreatedby || "");
+            const valueB = String(b.AdminCreatedby || "");
 
-      const data = snap.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-      }));
+            return valueB.localeCompare(valueA);
+          })
+          .slice(0, 8);
 
-      setContents(data);
-      setLoading(false);
+        setContents(data);
+      } catch {
+        setContents([]);
+      } finally {
+        setLoading(false);
+      }
     }
 
     fetchContent();
@@ -162,3 +162,4 @@ export default function DewdropLearningSection() {
     </div>
   );
 }
+

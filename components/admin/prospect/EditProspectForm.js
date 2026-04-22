@@ -1,9 +1,6 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { db } from "@/lib/firebase/firebaseClient";
-import { collection, getDocs, doc, updateDoc } from "firebase/firestore";
-import { COLLECTIONS } from "@/lib/utility_collection";
 
 import Text from "@/components/ui/Text";
 import Card from "@/components/ui/Card";
@@ -13,25 +10,37 @@ import Select from "@/components/ui/Select";
 import FormField from "@/components/ui/FormField";
 import { useToast } from "@/components/ui/ToastProvider";
 
-export default function EditProspect({ id, data }) {
+const INDIA_DIAL_CODE = "+91";
+const INDIAN_MOBILE_REGEX = /^(?:\+91)?[6-9]\d{9}$/;
+const EMAIL_REGEX = /^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/;
 
+const getAdultDobMax = () => {
+  const date = new Date();
+  date.setFullYear(date.getFullYear() - 18);
+  return date.toISOString().split("T")[0];
+};
+
+const normalizeIndianPhone = (value) => {
+  const digits = String(value || "").replace(/\D/g, "");
+
+  if (digits.length === 12 && digits.startsWith("91")) {
+    return `+${digits}`;
+  }
+
+  if (digits.length === 10) {
+    return `${INDIA_DIAL_CODE}${digits}`;
+  }
+
+  return String(value || "").trim();
+};
+
+export default function EditProspect({ id, data }) {
   const toast = useToast();
 
   const [userSearch, setUserSearch] = useState("");
   const [filteredUsers, setFilteredUsers] = useState([]);
   const [userList, setUserList] = useState([]);
-
-  /* DEFAULT DOB (ONLY DATE) */
-  const getTodayDate = () => {
-    const now = new Date();
-    return (
-      now.getFullYear() +
-      "-" +
-      String(now.getMonth() + 1).padStart(2, "0") +
-      "-" +
-      String(now.getDate()).padStart(2, "0")
-    );
-  };
+  const [errors, setErrors] = useState({});
 
   const [form, setForm] = useState({
     orbiterName: data?.orbiterName || "",
@@ -43,91 +52,173 @@ export default function EditProspect({ id, data }) {
     occupation: data?.occupation || "",
     hobbies: data?.hobbies || "",
     email: data?.email || "",
-    dob: data?.dob || getTodayDate(), // ✅ DOB only
+    dob: data?.dob || "",
   });
-
-  /* FETCH USERS */
 
   useEffect(() => {
     const fetchUsers = async () => {
+      try {
+        const res = await fetch("/api/admin/orbiters", {
+          credentials: "include",
+        });
+        const responseData = await res.json().catch(() => ({}));
 
-      const snapshot = await getDocs(collection(db, COLLECTIONS.userDetail));
+        if (!res.ok) {
+          throw new Error(responseData.message || "Failed to fetch orbiters");
+        }
 
-      const list = snapshot.docs.map((doc) => ({
-        id: doc.id,
-        name: doc.data()["Name"],
-        phone: doc.data()["MobileNo"],
-        email: doc.data()["Email"],
-      }));
+        const list = Array.isArray(responseData.orbiters)
+          ? responseData.orbiters.map((user) => ({
+              id: user.ujbCode,
+              name: user.name,
+              phone: user.phone,
+              email: user.email,
+            }))
+          : [];
 
-      setUserList(list);
+        setUserList(list);
+      } catch (error) {
+        console.error(error);
+        toast.error("Unable to load orbiters");
+      }
     };
 
     fetchUsers();
-  }, []);
-
-  /* SEARCH USER */
+  }, [toast]);
 
   const handleSearchUser = (value) => {
-
     setUserSearch(value);
 
-    const filtered = userList.filter(
-      (user) => user.name?.toLowerCase().includes(value.toLowerCase())
+    const filtered = userList.filter((user) =>
+      user.name?.toLowerCase().includes(value.toLowerCase())
     );
 
     setFilteredUsers(filtered);
   };
 
   const handleSelectUser = (user) => {
-
-    setForm({
-      ...form,
+    setForm((prev) => ({
+      ...prev,
       orbiterName: user.name,
       orbiterContact: user.phone,
       orbiterEmail: user.email,
-    });
+    }));
+    setErrors((prev) => ({
+      ...prev,
+      orbiterName: "",
+      orbiterContact: "",
+      orbiterEmail: "",
+    }));
 
     setUserSearch("");
     setFilteredUsers([]);
   };
 
-  /* SUBMIT */
+  const handleFieldChange = (field, value) => {
+    setForm((prev) => ({
+      ...prev,
+      [field]: value,
+    }));
+    setErrors((prev) => ({ ...prev, [field]: "" }));
+  };
+
+  const validateForm = () => {
+    const nextErrors = {};
+    const normalizedProspectPhone = normalizeIndianPhone(form.prospectPhone);
+    const normalizedOrbiterPhone = normalizeIndianPhone(form.orbiterContact);
+    const dobValue = String(form.dob || "").trim();
+    const dobDate = dobValue ? new Date(`${dobValue}T00:00:00`) : null;
+    const maxAdultDob = new Date(`${getAdultDobMax()}T23:59:59`);
+
+    if (!String(form.orbiterName || "").trim()) {
+      nextErrors.orbiterName = "Orbiter name is required.";
+    }
+
+    if (!INDIAN_MOBILE_REGEX.test(normalizedOrbiterPhone)) {
+      nextErrors.orbiterContact = `Orbiter phone must be a valid ${INDIA_DIAL_CODE} Indian mobile number.`;
+    }
+
+    if (form.orbiterEmail && !EMAIL_REGEX.test(String(form.orbiterEmail).trim())) {
+      nextErrors.orbiterEmail = "Enter a valid orbiter email address.";
+    }
+
+    if (!String(form.type || "").trim()) {
+      nextErrors.type = "Occasion for intimation is required.";
+    }
+
+    if (!String(form.prospectName || "").trim()) {
+      nextErrors.prospectName = "Prospect name is required.";
+    }
+
+    if (!INDIAN_MOBILE_REGEX.test(normalizedProspectPhone)) {
+      nextErrors.prospectPhone = `Prospect phone must be a valid ${INDIA_DIAL_CODE} Indian mobile number.`;
+    }
+
+    if (!String(form.occupation || "").trim()) {
+      nextErrors.occupation = "Occupation is required.";
+    }
+
+    if (!String(form.hobbies || "").trim()) {
+      nextErrors.hobbies = "Hobbies are required.";
+    }
+
+    if (!EMAIL_REGEX.test(String(form.email || "").trim())) {
+      nextErrors.email = "Enter a valid email address.";
+    }
+
+    if (!dobValue) {
+      nextErrors.dob = "DOB is required.";
+    } else if (Number.isNaN(dobDate?.getTime()) || dobDate > maxAdultDob) {
+      nextErrors.dob = "Prospect must be at least 18 years old.";
+    }
+
+    return {
+      nextErrors,
+      normalizedProspectPhone,
+      normalizedOrbiterPhone,
+    };
+  };
 
   const handleSubmit = async () => {
+    const { nextErrors, normalizedProspectPhone, normalizedOrbiterPhone } =
+      validateForm();
 
-    if (
-      !form.orbiterName ||
-      !form.orbiterContact ||
-      !form.orbiterEmail ||
-      !form.type ||
-      !form.prospectName ||
-      !form.prospectPhone ||
-      !form.occupation ||
-      !form.hobbies ||
-      !form.email ||
-      !form.dob
-    ) {
-      toast.error("Please fill all fields");
+    if (Object.keys(nextErrors).length > 0) {
+      setErrors(nextErrors);
+      toast.error("Please correct the highlighted fields");
       return;
     }
 
     try {
-
-      const prospectRef = doc(db, COLLECTIONS.prospect, id);
-
-      await updateDoc(prospectRef, {
-        ...form,
-        updatedAt: new Date(),
+      const res = await fetch(`/api/admin/prospects?id=${id}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        credentials: "include",
+        body: JSON.stringify({
+          userType: data?.userType || "prospect",
+          ...form,
+          orbiterContact: normalizedOrbiterPhone,
+          prospectPhone: normalizedProspectPhone,
+          prospectName: String(form.prospectName || "").trim(),
+          occupation: String(form.occupation || "").trim(),
+          hobbies: String(form.hobbies || "").trim(),
+          email: String(form.email || "").trim(),
+          orbiterEmail: String(form.orbiterEmail || "").trim(),
+          dob: String(form.dob || "").trim(),
+        }),
       });
+      const responseData = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        throw new Error(responseData.message || "Error updating prospect");
+      }
 
       toast.success("Prospect updated successfully");
-
     } catch (error) {
-
       console.error(error);
       toast.error("Error updating prospect");
-
     }
   };
 
@@ -136,9 +227,7 @@ export default function EditProspect({ id, data }) {
       <Text variant="h1">Edit Prospect</Text>
 
       <Card>
-
         <form className="space-y-6">
-
           <Text variant="h3">Orbiter Details</Text>
 
           <FormField label="Search Orbiter">
@@ -157,7 +246,7 @@ export default function EditProspect({ id, data }) {
                       onClick={() => handleSelectUser(user)}
                       className="px-3 py-2 hover:bg-slate-100 cursor-pointer"
                     >
-                      {user.name} — {user.phone}
+                      {user.name} - {user.phone}
                     </div>
                   ))}
                 </div>
@@ -166,113 +255,92 @@ export default function EditProspect({ id, data }) {
           </FormField>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-
-            <FormField label="Orbiter Name">
+            <FormField label="Orbiter Name" error={errors.orbiterName}>
               <Input value={form.orbiterName} disabled />
             </FormField>
 
-            <FormField label="Orbiter Phone">
+            <FormField label="Orbiter Phone" error={errors.orbiterContact}>
               <Input value={form.orbiterContact} disabled />
             </FormField>
 
-            <FormField label="Orbiter Email">
+            <FormField label="Orbiter Email" error={errors.orbiterEmail}>
               <Input value={form.orbiterEmail} disabled />
             </FormField>
-
           </div>
 
           <Text variant="h3">Prospect Information</Text>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-
-            <FormField label="Prospect Name" required>
+            <FormField label="Prospect Name" required error={errors.prospectName}>
               <Input
                 value={form.prospectName}
-                onChange={(e) =>
-                  setForm({ ...form, prospectName: e.target.value })
-                }
+                onChange={(e) => handleFieldChange("prospectName", e.target.value)}
               />
             </FormField>
 
-            <FormField label="Prospect Phone" required>
+            <FormField label="Prospect Phone" required error={errors.prospectPhone}>
               <Input
                 value={form.prospectPhone}
-                onChange={(e) =>
-                  setForm({ ...form, prospectPhone: e.target.value })
-                }
+                onChange={(e) => handleFieldChange("prospectPhone", e.target.value)}
               />
             </FormField>
 
-            <FormField label="Email" required>
+            <FormField label="Email" required error={errors.email}>
               <Input
                 value={form.email}
-                onChange={(e) =>
-                  setForm({ ...form, email: e.target.value })
-                }
+                onChange={(e) => handleFieldChange("email", e.target.value)}
               />
             </FormField>
 
-            {/* ✅ DOB FIELD */}
-            <FormField label="DOB" required>
+            <FormField label="DOB" required error={errors.dob}>
               <Input
                 type="date"
                 value={form.dob}
-                onChange={(e) =>
-                  setForm({ ...form, dob: e.target.value })
-                }
+                max={getAdultDobMax()}
+                onChange={(e) => handleFieldChange("dob", e.target.value)}
               />
             </FormField>
 
-            <FormField label="Occupation">
+            <FormField label="Occupation" required error={errors.occupation}>
               <Input
                 value={form.occupation}
-                onChange={(e) =>
-                  setForm({ ...form, occupation: e.target.value })
-                }
+                onChange={(e) => handleFieldChange("occupation", e.target.value)}
               />
             </FormField>
 
-            <FormField label="Hobbies">
+            <FormField label="Hobbies" required error={errors.hobbies}>
               <Input
                 value={form.hobbies}
-                onChange={(e) =>
-                  setForm({ ...form, hobbies: e.target.value })
-                }
+                onChange={(e) => handleFieldChange("hobbies", e.target.value)}
               />
             </FormField>
-
           </div>
 
-          <FormField label="Occasion for Intimation">
-
+          <FormField label="Occasion for Intimation" required error={errors.type}>
             <Select
               value={form.type}
-              onChange={(v) => setForm({ ...form, type: v })}
+              onChange={(v) => handleFieldChange("type", v)}
               options={[
                 { label: "Support Team Call", value: "support_call" },
                 { label: "Orbiter Connect", value: "orbiter_connection" },
                 { label: "Doorstep Service", value: "doorstep_service" },
                 { label: "Monthly Meeting", value: "monthly_meeting" },
                 { label: "E2A Interaction", value: "e2a_interactions" },
-                { label: "Unniversary Interaction", value: "unniversary_interactions" },
+                {
+                  label: "Unniversary Interaction",
+                  value: "unniversary_interactions",
+                },
                 { label: "Support", value: "support" },
                 { label: "NT", value: "nt" },
                 { label: "Management", value: "management" },
               ]}
             />
-
           </FormField>
 
           <div className="flex justify-end pt-4">
-
-            <Button onClick={handleSubmit}>
-              Update Prospect
-            </Button>
-
+            <Button onClick={handleSubmit}>Update Prospect</Button>
           </div>
-
         </form>
-
       </Card>
     </>
   );

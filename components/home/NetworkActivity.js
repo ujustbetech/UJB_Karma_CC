@@ -2,13 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { db } from "@/lib/firebase/firebaseClient";
-import {
-  collection,
-  getDocs,
-  query,
-  orderBy,
-  limit,
-} from "firebase/firestore";
+import { collection, getDocs, query, orderBy, limit } from "firebase/firestore";
+import { COLLECTIONS } from "@/lib/utility_collection";
 import { useRouter } from "next/navigation";
 import { Users } from "lucide-react";
 
@@ -18,26 +13,30 @@ export default function NetworkActivity() {
 
   useEffect(() => {
     async function fetchRecentReferrals() {
-      const q = query(
-        collection(db, "Referraldev"),
-        orderBy("createdAt", "desc"),
-        limit(5)
-      );
+      try {
+        const q = query(
+          collection(db, COLLECTIONS.referral),
+          orderBy("createdAt", "desc"),
+          limit(5)
+        );
 
-      const snap = await getDocs(q);
+        const snap = await getDocs(q);
 
-      const data = snap.docs.map((doc) => {
-        const d = doc.data();
+        const data = snap.docs.map((doc) => {
+          const d = doc.data();
 
-        return {
-          id: doc.id,
-          orbiterName: d.cosmoOrbiter?.name || "Orbiter",
-          serviceName: d.serviceName || "a service",
-          createdAt: d.createdAt?.toDate?.(),
-        };
-      });
+          return {
+            id: doc.id,
+            orbiterName: d.cosmoOrbiter?.name || "Orbiter",
+            serviceName: d.serviceName || "a service",
+            createdAt: d.createdAt?.toDate?.(),
+          };
+        });
 
-      setActivities(data);
+        setActivities(data);
+      } catch {
+        setActivities([]);
+      }
     }
 
     fetchRecentReferrals();
@@ -65,48 +64,31 @@ export default function NetworkActivity() {
 
   return (
     <div className="bg-white rounded-2xl p-5 shadow-md space-y-4">
-
       <div className="flex items-center gap-2">
         <Users size={18} className="text-orange-500" />
-        <h3 className="text-lg font-semibold text-slate-900">
-          Network Activity
-        </h3>
+        <h3 className="text-lg font-semibold text-slate-900">Network Activity</h3>
       </div>
 
       <div className="space-y-3">
-
         {activities.map((item) => (
-          <div
-            key={item.id}
-            className="flex justify-between items-center text-sm"
-          >
+          <div key={item.id} className="flex justify-between items-center text-sm">
             <div>
-              <span className="font-medium text-slate-800">
-                {item.orbiterName}
-              </span>{" "}
-              <span className="text-slate-500">
-                passed referral for
-              </span>{" "}
-              <span className="text-slate-800 font-medium">
-                {item.serviceName}
-              </span>
+              <span className="font-medium text-slate-800">{item.orbiterName}</span>{" "}
+              <span className="text-slate-500">passed referral for</span>{" "}
+              <span className="text-slate-800 font-medium">{item.serviceName}</span>
             </div>
 
-            <span className="text-xs text-slate-400">
-              {timeAgo(item.createdAt)}
-            </span>
+            <span className="text-xs text-slate-400">{timeAgo(item.createdAt)}</span>
           </div>
         ))}
-
       </div>
 
       <button
         onClick={() => router.push("/ReferralList")}
         className="text-sm text-orange-500 font-medium"
       >
-        View All →
+        View All
       </button>
-
     </div>
   );
 }

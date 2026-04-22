@@ -1,11 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { doc, getDoc, updateDoc, collection, getDocs ,  addDoc,
-  query,
-  where,setDoc,
-  serverTimestamp,} from 'firebase/firestore';
-import { COLLECTIONS } from "@/lib/utility_collection";
 import emailjs from '@emailjs/browser';
-import { db } from '@/lib/firebase/firebaseClient';
 import { sendWhatsAppTemplateRequest } from '@/utils/whatsappClient';
 
 const Followup = ({ id, data = { followups: [], comments: [] ,event: [] }, fetchData }) => {
@@ -59,27 +53,24 @@ const Followup = ({ id, data = { followups: [], comments: [] ,event: [] }, fetch
     return status === 'Done' || status === 'Cancelled';
   };
 
+  const updateProspectSection = async (updatePayload) => {
+    const res = await fetch(`/api/admin/prospects?id=${id}&section=followups`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      credentials: "include",
+      body: JSON.stringify({ update: updatePayload }),
+    });
+    const responseData = await res.json().catch(() => ({}));
+
+    if (!res.ok) {
+      throw new Error(responseData.message || "Failed to update meeting logs");
+    }
+  };
+
 
 // ================= CP HELPERS =================
-const updateCategoryTotals = async (orbiter, categories, points) => {
-  if (!orbiter?.ujbcode || !categories?.length) return;
-
-  const ref = doc(db, "CPBoard", orbiter.ujbcode);
-  const snap = await getDoc(ref);
-  if (!snap.exists()) return;
-
-  const data = snap.data();
-  const totals = data.totals || { R: 0, H: 0, W: 0 };
-
-  const split = Math.floor(points / categories.length);
-
-  const updatedTotals = { ...totals };
-  categories.forEach((c) => {
-    updatedTotals[c] = (updatedTotals[c] || 0) + split;
-  });
-
-  await updateDoc(ref, { totals: updatedTotals });
-};
 
 const addCpForMeetingDone = async (orbiter, prospect, mode) => {
   if (!orbiter?.ujbcode) return;
@@ -223,6 +214,7 @@ const addCpForMeetingScheduled = async (
   const isoToLocal = (iso) => {
     if (!iso) return '';
     const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return '';
     const yyyy = d.getFullYear();
     const mm = String(d.getMonth() + 1).padStart(2, '0');
     const dd = String(d.getDate()).padStart(2, '0');
@@ -230,52 +222,62 @@ const addCpForMeetingScheduled = async (
     const min = String(d.getMinutes()).padStart(2, '0');
     return `${yyyy}-${mm}-${dd}T${hh}:${min}`;
   };
+
+  const safeToIsoString = (value) => {
+    if (!value) return '';
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? '' : parsed.toISOString();
+  };
   // === END NEW ===
 
   useEffect(() => {
     const fetchDataLocal = async () => {
       try {
-        const docRef = doc(db, COLLECTIONS.prospect, id);
-        const docSnap = await getDoc(docRef);
-        if (docSnap.exists()) {
-          const dataDoc = docSnap.data();
-          setDocData(dataDoc);
-          setFollowup(dataDoc.followup || []);
-          setComments(dataDoc.comments || []);
-          if (dataDoc.event) {
-            setEventCreated(dataDoc.event);
-          }
+        const res = await fetch(`/api/admin/prospects?id=${id}&section=followups`, {
+          credentials: "include",
+        });
+        const responseData = await res.json().catch(() => ({}));
 
-          // === NEW: load events array if present, or convert single event to eventsList
-          if (Array.isArray(dataDoc.events)) {
-            setEventsList(
-              dataDoc.events.map((event, index) => ({
-                id: event.id ?? index,
-                ...event,
-                status: getMeetingStatus(event),
-              }))
-            );
-          } else if (dataDoc.event) {
-            // convert existing single event to eventsList locally (won't overwrite server unless we save)
-            const single = {
-              id: 0,
-              date: dataDoc.event.date || '',
-              dateISO: dataDoc.event.dateISO || (dataDoc.event.date ? new Date(dataDoc.event.date).toISOString() : ''),
-              mode: dataDoc.event.mode || dataDoc.event.eventMode || 'online',
-              zoomLink: dataDoc.event.zoomLink || '',
-              venue: dataDoc.event.venue || '',
-              reason: dataDoc.event.reason || '',
-              completed: dataDoc.event.completed || false,
-              status: getMeetingStatus(dataDoc.event),
-              createdAt: dataDoc.event.createdAt || Date.now(),
-              rescheduleHistory: dataDoc.event.rescheduleHistory || []
-            };
-            setEventsList([single]);
-          } else {
-            setEventsList([]);
-          }
-          // === END NEW ===
+        if (!res.ok) {
+          throw new Error(responseData.message || "Failed to fetch meeting logs");
         }
+
+        const dataDoc = responseData.prospect || {};
+        setDocData(dataDoc);
+        setFollowup(dataDoc.followup || []);
+        setComments(dataDoc.comments || []);
+        if (dataDoc.event) {
+          setEventCreated(dataDoc.event);
+        }
+
+        if (Array.isArray(dataDoc.events)) {
+          setEventsList(
+            dataDoc.events.map((event, index) => ({
+              id: event.id ?? index,
+              ...event,
+              status: getMeetingStatus(event),
+            }))
+          );
+        } else if (dataDoc.event) {
+          const single = {
+            id: 0,
+            date: dataDoc.event.date || '',
+            dateISO: dataDoc.event.dateISO || safeToIsoString(dataDoc.event.date),
+            mode: dataDoc.event.mode || dataDoc.event.eventMode || 'online',
+            zoomLink: dataDoc.event.zoomLink || '',
+            venue: dataDoc.event.venue || '',
+            reason: dataDoc.event.reason || '',
+            completed: dataDoc.event.completed || false,
+            status: getMeetingStatus(dataDoc.event),
+            createdAt: dataDoc.event.createdAt || Date.now(),
+            rescheduleHistory: dataDoc.event.rescheduleHistory || []
+          };
+          setEventsList([single]);
+        } else {
+          setEventsList([]);
+        }
+
+        setUserList(Array.isArray(responseData.users) ? responseData.users : []);
       } catch (err) {
         console.error('fetchDataLocal error:', err);
       }
@@ -289,6 +291,7 @@ const addCpForMeetingScheduled = async (
     if (!comment.trim()) return;
 
     const newComment = {
+      id: `comment-${Date.now()}`,
       text: comment.trim(),
       timestamp: new Date().toISOString(),
     };
@@ -296,8 +299,7 @@ const addCpForMeetingScheduled = async (
     const updatedComments = [newComment, ...comments];
 
     try {
-      const docRef = doc(db, COLLECTIONS.prospect, id);
-      await updateDoc(docRef, { comments: updatedComments });
+      await updateProspectSection({ comments: updatedComments });
       setComments(updatedComments);
       setComment('');
     } catch (err) {
@@ -308,13 +310,12 @@ const addCpForMeetingScheduled = async (
   // === NEW: helper to persist eventsList entire array to Firestore ===
   const persistEventsArray = async (newEventsArray, alsoUpdateEventField = false, latestEventForEventField = null) => {
     try {
-      const docRef = doc(db, COLLECTIONS.prospect, id);
       const updatePayload = { events: newEventsArray };
       // If we want to keep backward compatibility: also update `event` with latest event
       if (alsoUpdateEventField) {
         updatePayload.event = latestEventForEventField || (newEventsArray.length ? newEventsArray[newEventsArray.length - 1] : null);
       }
-      await updateDoc(docRef, updatePayload);
+      await updateProspectSection(updatePayload);
       setEventsList(newEventsArray);
 
       // update local eventCreated if we updated `event` field
@@ -349,8 +350,6 @@ const addCpForMeetingScheduled = async (
   };
 
   try {
-    const docRef = doc(db, COLLECTIONS.prospect, id);
-
     const newEventObj = {
       id: eventsList.length,
       date: formattedEventDate,
@@ -370,7 +369,6 @@ const addCpForMeetingScheduled = async (
 
     /* ================= RESCHEDULE FLOW ================= */
     if (rescheduleMode) {
-      await updateDoc(docRef, { event: eventDetails });
       setEventCreated(eventDetails);
 
       let updatedEvents = [];
@@ -417,44 +415,12 @@ const addCpForMeetingScheduled = async (
 
     /* ================= FIRST TIME SCHEDULE ================= */
     else {
-      await updateDoc(docRef, { event: eventDetails });
       setEventCreated(eventDetails);
 
       const updatedEvents = [...(eventsList || []), newEventObj];
       await persistEventsArray(updatedEvents, true, newEventObj);
 
       /* ⭐ ADD CP POINTS (Activity 003) */
-      const prospectSnap = await getDoc(doc(db, COLLECTIONS.prospect, id));
-      const p = prospectSnap.data();
-
-      if (p?.orbiterContact) {
-        const qMentor = query(
-          collection(db, COLLECTIONS.userDetail),
-          where("MobileNo", "==", p.orbiterContact)
-        );
-
-        const mentorSnap = await getDocs(qMentor);
-
-        if (!mentorSnap.empty) {
-          const d = mentorSnap.docs[0].data();
-
-          if (d.UJBCode) {
-            const orbiter = {
-              ujbcode: d.UJBCode,
-              name: d["Name"],
-              phone: d["MobileNo"],
-              category: d.Category,
-            };
-
-            await addCpForMeetingScheduled(
-              db,
-              orbiter,
-              p.prospectPhone,
-              p.prospectName
-            );
-          }
-        }
-      }
     }
 
     /* ================= UI RESET ================= */
@@ -477,8 +443,8 @@ const addCpForMeetingScheduled = async (
         venue: eventMode === 'offline' ? venue : '',
       },
       {
-        name: data.orbiterName,
-        phone: data.orbiterContact,
+        name: Name || data.orbiterName,
+        phone: NTphone || data.orbiterContact,
         date: formattedEventDate,
         zoomLink: eventMode === 'online' ? zoomLink : '',
         venue: eventMode === 'offline' ? venue : '',
@@ -495,7 +461,7 @@ const addCpForMeetingScheduled = async (
 
     const emailRecipients = [
       { name: data.prospectName, email: data.email },
-      { name: Name, email: NTemail },
+      { name: Name || data.orbiterName, email: NTemail || data.orbiterEmail },
     ].filter((recipient) => recipient.email);
 
     await Promise.all(
@@ -624,26 +590,6 @@ Our conversation will be an opportunity to explore possibilities, answer any que
     }
   };
 
-  useEffect(() => {
-    const fetchUsers = async () => {
-      try {
-        const userRef = collection(db, COLLECTIONS.userDetail);
-        const snapshot = await getDocs(userRef);
-        const data = snapshot.docs.map(doc => ({
-          id: doc.id,
-          name: doc.data().Name || doc.data()[" Name"] || "",
-          phone: doc.data().MobileNo || doc.data()["Mobile no"] || "",
-          email: doc.data().Email || doc.data()["Email"] || ""
-        }));
-        setUserList(data);
-      } catch (error) {
-        console.error('Error fetching users:', error);
-      }
-    };
-
-    fetchUsers();
-  }, []);
-
   const handleSearchUser = (e) => {
     const value = e.target.value.toLowerCase();
     setUserSearch(value);
@@ -706,58 +652,23 @@ Regardless of your choice, we are grateful for the opportunity to connect with y
     }
 
     /* ====== SEND THANK YOU ====== */
-    const messagesToSend = [
-      {
-        name: data.prospectName,
-        phone: data.prospectPhone,
-        email: data.email,
-      },
-      {
-        name: data.orbiterName,
-        phone: data.orbiterContact,
-        email: data.orbiterEmail,
-      },
-    ];
+      const messagesToSend = [
+        {
+          name: data.prospectName,
+          phone: data.prospectPhone,
+          email: data.email,
+        },
+        {
+          name: latestOpenMeeting?.NTMemberName || data.orbiterName,
+          phone: latestOpenMeeting?.NTMemberPhone || data.orbiterContact,
+          email: latestOpenMeeting?.NTMemberEmail || data.orbiterEmail,
+        },
+      ];
 
     for (const msg of messagesToSend) {
       await sendThankYouMessage(msg.name, msg.phone);
       if (msg.email) {
         await sendThankYouEmail(msg.name, msg.email);
-      }
-    }
-
-    /* ====== ADD CP POINTS HERE ====== */
-    const prospectSnap = await getDoc(doc(db, COLLECTIONS.prospect, id));
-    const p = prospectSnap.data();
-
-    if (p?.orbiterContact && latestOpenMeeting?.mode) {
-      const qMentor = query(
-        collection(db, COLLECTIONS.userDetail),
-        where("MobileNo", "==", p.orbiterContact)
-      );
-
-      const mentorSnap = await getDocs(qMentor);
-
-      if (!mentorSnap.empty) {
-        const d = mentorSnap.docs[0].data();
-
-        if (d.UJBCode) {
-          const orbiter = {
-            ujbcode: d.UJBCode,
-            name: d["Name"],
-            phone: d["MobileNo"],
-            category: d.Category,
-          };
-
-          await addCpForMeetingDone(
-            orbiter,
-            {
-              prospectName: p.prospectName,
-              prospectPhone: p.prospectPhone,
-            },
-            latestOpenMeeting.mode
-          );
-        }
       }
     }
 
@@ -769,7 +680,7 @@ Regardless of your choice, we are grateful for the opportunity to connect with y
     const latestEvent = updatedEvents.length ? updatedEvents[updatedEvents.length - 1] : null;
     await persistEventsArray(updatedEvents, true, latestEvent);
 
-    alert("Meeting marked as done & CP added successfully!");
+    alert("Meeting marked as done successfully!");
   } catch (error) {
     console.error("Meeting Done Error:", error);
     alert("Something went wrong while completing meeting.");
@@ -914,6 +825,26 @@ Regardless of your choice, we are grateful for the opportunity to connect with y
   };
   // === END NEW ===
 
+const resetMeetingForm = () => {
+  setCreateMode(false);
+  setRescheduleMode(false);
+  setRescheduleReason('');
+  setEventDate('');
+  setEventMode('online');
+  setZoomLink('');
+  setVenue('');
+  setName('');
+  setNTPhone('');
+  setNTEmail('');
+};
+
+const requiredLabel = (label) => (
+  <>
+    {label}
+    <span className="text-red-600"> *</span>
+  </>
+);
+
 const latestMeeting = eventsList.length ? eventsList[eventsList.length - 1] : eventCreated;
 const showLatestMeetingBox = latestMeeting && !isClosedMeeting(latestMeeting);
 
@@ -994,7 +925,7 @@ Done
 <div className="bg-white border rounded-xl shadow-sm p-6 mt-6 space-y-4">
 
 <div>
-<label className="block font-medium mb-1">Date</label>
+<label className="block font-medium mb-1">{requiredLabel("Date")}</label>
 <input
 type="datetime-local"
 value={eventDate}
@@ -1005,7 +936,7 @@ className="w-full border rounded-lg p-2"
 
 {rescheduleMode && (
 <div>
-<label className="block font-medium mb-1">Reason</label>
+<label className="block font-medium mb-1">{requiredLabel("Reason")}</label>
 <textarea
 value={rescheduleReason}
 onChange={(e) => setRescheduleReason(e.target.value)}
@@ -1015,7 +946,7 @@ className="w-full border rounded-lg p-2"
 )}
 
 <div>
-<label className="block font-medium mb-1">Event Mode</label>
+<label className="block font-medium mb-1">{requiredLabel("Event Mode")}</label>
 <select
 value={eventMode}
 onChange={(e) => setEventMode(e.target.value)}
@@ -1028,7 +959,7 @@ className="w-full border rounded-lg p-2"
 
 {eventMode === "online" && (
 <div>
-<label className="block font-medium mb-1">Zoom Link</label>
+<label className="block font-medium mb-1">{requiredLabel("Zoom Link")}</label>
 <input
 type="text"
 value={zoomLink}
@@ -1040,7 +971,7 @@ className="w-full border rounded-lg p-2"
 
 {eventMode === "offline" && (
 <div>
-<label className="block font-medium mb-1">Venue</label>
+<label className="block font-medium mb-1">{requiredLabel("Venue")}</label>
 <input
 type="text"
 value={venue}
@@ -1050,26 +981,24 @@ className="w-full border rounded-lg p-2"
 </div>
 )}
 
+<div className="flex gap-3">
 <button
+type="button"
 onClick={handleCreateOrReschedule}
 className="bg-black text-white px-5 py-2 rounded-lg hover:bg-gray-800"
 >
 {rescheduleMode ? "Reschedule" : "Schedule"}
 </button>
 
-</div>
-)}
-
-{/* Schedule Another Meeting */}
-
-{!showLatestMeetingBox && !createMode && !rescheduleMode && (
-<div className="mt-6">
 <button
-onClick={() => { setCreateMode(true); setOpenIndex(null); }}
-className="bg-black text-white px-5 py-2 rounded-lg hover:bg-gray-800"
+type="button"
+onClick={resetMeetingForm}
+className="border border-slate-300 px-5 py-2 rounded-lg hover:bg-slate-50"
 >
-+ Schedule Another Meeting
+Cancel
 </button>
+</div>
+
 </div>
 )}
 
@@ -1082,7 +1011,7 @@ className="bg-black text-white px-5 py-2 rounded-lg hover:bg-gray-800"
 ) : (
 eventsList.map((ev, idx) => (
 
-<div key={idx} className="border rounded-xl p-4 bg-white shadow-sm">
+<div key={ev.id ?? `event-${ev.dateISO || ev.date || idx}`} className="border rounded-xl p-4 bg-white shadow-sm">
 
 <div className="flex justify-between items-center">
 
@@ -1253,7 +1182,7 @@ Comments
 
 {comments.map((c, idx) => (
 <div
-key={idx}
+key={c.id || c.timestamp || `comment-${idx}`}
 className="bg-gray-100 border rounded-lg p-3"
 >
 <p className="text-xs text-gray-500 mb-1">
@@ -1292,4 +1221,6 @@ Send
 };
 
 export default Followup;
+
+
 
