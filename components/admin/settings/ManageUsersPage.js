@@ -2,20 +2,17 @@
 
 import { useEffect, useMemo, useState } from "react";
 import {
-  addDoc,
-  collection,
-  deleteDoc,
-  doc,
-  getDocs,
-  Timestamp,
-  updateDoc,
-} from "firebase/firestore";
-import { Pencil, Plus, Shield, Trash2, Users } from "lucide-react";
+  Eye,
+  KeyRound,
+  Link2,
+  Pencil,
+  Plus,
+  Shield,
+  Trash2,
+  Users,
+} from "lucide-react";
 
-import { db } from "@/lib/firebase/firebaseClient";
 import {
-  ADMIN_ROLES_COLLECTION,
-  ADMIN_USERS_COLLECTION,
   getMergedAdminRoleNames,
   toRoleOptions,
 } from "@/lib/admin/adminRoles";
@@ -26,6 +23,7 @@ import Card from "@/components/ui/Card";
 import ConfirmModal from "@/components/ui/ConfirmModal";
 import FormField from "@/components/ui/FormField";
 import Input from "@/components/ui/Input";
+import Modal from "@/components/ui/Modal";
 import Select from "@/components/ui/Select";
 import Text from "@/components/ui/Text";
 import { useToast } from "@/components/ui/ToastProvider";
@@ -43,15 +41,141 @@ function createEmptyUserForm(defaultRole = "Admin") {
   };
 }
 
-function validateUserForm(userForm) {
+function normalizeEmail(value) {
+  return String(value || "").trim().toLowerCase();
+}
+
+function isValidEmail(value) {
+  const email = normalizeEmail(value);
+
+  if (!email) return false;
+  if (!/^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/.test(email)) {
+    return false;
+  }
+  if (email.includes("..") || email.startsWith(".") || email.endsWith(".")) {
+    return false;
+  }
+
+  const [, domain = ""] = email.split("@");
+  if (!domain || domain.startsWith("-") || domain.endsWith("-")) {
+    return false;
+  }
+
+  return true;
+}
+
+function validateUserForm(userForm, options = {}) {
+  const { admins = [], ignoreId = "" } = options;
   const nextErrors = {};
 
-  if (!userForm.name.trim()) nextErrors.name = "Name required";
-  if (!userForm.email.trim()) nextErrors.email = "Email required";
-  if (!userForm.role.trim()) nextErrors.role = "Select role";
-  if (!userForm.designation.trim()) nextErrors.designation = "Designation required";
+  if (!String(userForm.name || "").trim()) nextErrors.name = "Name required";
+
+  const email = normalizeEmail(userForm.email);
+
+  if (!email) {
+    nextErrors.email = "Email required";
+  } else if (!isValidEmail(email)) {
+    nextErrors.email = "Valid email required";
+  } else if (
+    admins.some(
+      (admin) =>
+        admin.id !== ignoreId && normalizeEmail(admin.email) === email
+    )
+  ) {
+    nextErrors.email = "Email already exists";
+  }
+
+  if (!String(userForm.role || "").trim()) nextErrors.role = "Select role";
+  if (!String(userForm.designation || "").trim()) {
+    nextErrors.designation = "Designation required";
+  }
 
   return nextErrors;
+}
+
+function toReadableInviteStatus(value) {
+  return value === "pending" ? "Pending setup" : "Active";
+}
+
+function formatDateValue(value) {
+  if (!value) return "Not available";
+
+  const candidate =
+    typeof value?.toDate === "function"
+      ? value.toDate()
+      : typeof value?.seconds === "number"
+      ? new Date(value.seconds * 1000)
+      : typeof value?._seconds === "number"
+      ? new Date(value._seconds * 1000)
+      : value;
+
+  const date = candidate instanceof Date ? candidate : new Date(candidate);
+
+  if (Number.isNaN(date.getTime())) {
+    return "Not available";
+  }
+
+  return new Intl.DateTimeFormat("en-IN", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(date);
+}
+
+function toReadableHistoryType(value) {
+  switch (value) {
+    case "created":
+      return "Created";
+    case "invite_resent":
+      return "Invite Resent";
+    case "activated":
+      return "Activated";
+    case "login":
+      return "Signed In";
+    case "updated":
+      return "Updated";
+    default:
+      return "Activity";
+  }
+}
+
+function StatCard({ icon: Icon, value, label, iconClassName = "text-slate-600" }) {
+  return (
+    <Card className="flex min-h-[96px] items-center gap-4 px-6 py-5 shadow-sm">
+      <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-50">
+        <Icon className={`h-5 w-5 ${iconClassName}`} />
+      </div>
+
+      <div className="space-y-1">
+        <div className="text-2xl font-semibold leading-none text-slate-900">
+          {value}
+        </div>
+        <div className="text-sm font-medium text-slate-500">
+          {label}
+        </div>
+      </div>
+    </Card>
+  );
+}
+
+function DetailInfoCard({ label, value, status = false }) {
+  return (
+    <Card className="h-full rounded-2xl border border-slate-200 px-5 py-4 shadow-sm">
+      <div className="space-y-2">
+        <div className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">
+          {label}
+        </div>
+        {status ? (
+          <div className="inline-flex rounded-full bg-emerald-100 px-3 py-1 text-sm font-semibold text-emerald-700">
+            {value}
+          </div>
+        ) : (
+          <div className="break-words text-sm font-medium leading-6 text-slate-900">
+            {value}
+          </div>
+        )}
+      </div>
+    </Card>
+  );
 }
 
 export default function ManageUsersPage() {
@@ -75,38 +199,39 @@ export default function ManageUsersPage() {
 
   const [deleteId, setDeleteId] = useState(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [inviteLink, setInviteLink] = useState("");
+  const [inviteTargetName, setInviteTargetName] = useState("");
+  const [selectedAdmin, setSelectedAdmin] = useState(null);
+  const [viewOpen, setViewOpen] = useState(false);
 
-  const isSuper =
-    currentAdmin?.role?.trim().toLowerCase() === "super";
+  const isSuper = currentAdmin?.role?.trim().toLowerCase() === "super";
 
   useEffect(() => {
     let mounted = true;
 
     const fetchData = async () => {
       try {
-        const [adminsSnapshot, rolesSnapshot] = await Promise.all([
-          getDocs(collection(db, ADMIN_USERS_COLLECTION)),
-          getDocs(collection(db, ADMIN_ROLES_COLLECTION)),
-        ]);
+        const res = await fetch("/api/admin/users", {
+          credentials: "include",
+        });
+        const data = await res.json().catch(() => ({}));
+
+        if (!res.ok) {
+          throw new Error(data.message || "Failed to load users");
+        }
 
         if (!mounted) {
           return;
         }
 
-        setAdmins(
-          adminsSnapshot.docs.map((snapshot) => ({
-            id: snapshot.id,
-            ...snapshot.data(),
-          }))
-        );
-
+        setAdmins(Array.isArray(data.users) ? data.users : []);
         setRoleNames(
           getMergedAdminRoleNames(
-            rolesSnapshot.docs.map((snapshot) => snapshot.data().name)
+            Array.isArray(data.roleNames) ? data.roleNames : []
           )
         );
-      } catch {
-        toast.error("Failed to load users");
+      } catch (error) {
+        toast.error(error.message || "Failed to load users");
       } finally {
         if (mounted) {
           setLoading(false);
@@ -130,18 +255,14 @@ export default function ManageUsersPage() {
     }
   }, [newUser.role, roleNames]);
 
-  const roleOptions = useMemo(
-    () => toRoleOptions(roleNames),
-    [roleNames]
-  );
+  const roleOptions = useMemo(() => toRoleOptions(roleNames), [roleNames]);
 
   const filteredAdmins = useMemo(() => {
     return admins.filter((admin) => {
       const searchableText = `${admin.name || ""} ${admin.email || ""}`.toLowerCase();
       const matchesSearch =
         !search || searchableText.includes(search.toLowerCase());
-      const matchesRole =
-        !roleFilter || admin.role === roleFilter;
+      const matchesRole = !roleFilter || admin.role === roleFilter;
 
       return matchesSearch && matchesRole;
     });
@@ -149,8 +270,23 @@ export default function ManageUsersPage() {
 
   const totalSuperAdmins = useMemo(
     () =>
+      admins.filter((admin) => admin.role?.trim().toLowerCase() === "super")
+        .length,
+    [admins]
+  );
+
+  const totalActiveAdmins = useMemo(
+    () =>
       admins.filter(
-        (admin) => admin.role?.trim().toLowerCase() === "super"
+        (admin) => String(admin.inviteStatus || "").trim().toLowerCase() === "active"
+      ).length,
+    [admins]
+  );
+
+  const totalInactiveAdmins = useMemo(
+    () =>
+      admins.filter(
+        (admin) => String(admin.inviteStatus || "").trim().toLowerCase() !== "active"
       ).length,
     [admins]
   );
@@ -161,8 +297,26 @@ export default function ManageUsersPage() {
     setShowAddForm(false);
   };
 
+  const handleCopyInvite = async (link = inviteLink) => {
+    if (!link) return;
+
+    try {
+      if (navigator?.clipboard?.writeText) {
+        await navigator.clipboard.writeText(link);
+        toast.success("Invite link copied");
+      }
+    } catch {
+      toast.error("Unable to copy invite link");
+    }
+  };
+
   const handleAddUser = async () => {
-    const validationErrors = validateUserForm(newUser);
+    if (!isSuper) {
+      toast.error("Only Super Admin can invite users");
+      return;
+    }
+
+    const validationErrors = validateUserForm(newUser, { admins });
 
     if (Object.keys(validationErrors).length > 0) {
       setNewUserErrors(validationErrors);
@@ -172,28 +326,32 @@ export default function ManageUsersPage() {
     setSubmitting(true);
 
     try {
-      const payload = {
-        name: newUser.name.trim(),
-        email: newUser.email.trim(),
-        role: newUser.role.trim(),
-        designation: newUser.designation.trim(),
-        createdAt: Timestamp.now(),
-      };
+      const res = await fetch("/api/admin/users", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        credentials: "include",
+        body: JSON.stringify({
+          name: String(newUser.name || "").trim(),
+          email: String(newUser.email || "").trim(),
+          role: String(newUser.role || "").trim(),
+          designation: String(newUser.designation || "").trim(),
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
 
-      const createdDoc = await addDoc(
-        collection(db, ADMIN_USERS_COLLECTION),
-        payload
-      );
+      if (!res.ok) {
+        throw new Error(data.message || "Failed to invite user");
+      }
 
-      setAdmins((previous) => [
-        ...previous,
-        { id: createdDoc.id, ...payload },
-      ]);
-
-      toast.success("User added successfully");
+      setAdmins((previous) => [...previous, data.user]);
+      setInviteLink(data.inviteLink || "");
+      setInviteTargetName(data.user?.name || "Invited admin");
+      toast.success("Admin invited successfully");
       resetAddForm();
-    } catch {
-      toast.error("Failed to add user");
+    } catch (error) {
+      toast.error(error.message || "Failed to invite user");
     } finally {
       setSubmitting(false);
     }
@@ -205,7 +363,10 @@ export default function ManageUsersPage() {
       return;
     }
 
-    const validationErrors = validateUserForm(editData);
+    const validationErrors = validateUserForm(editData, {
+      admins,
+      ignoreId: editingId,
+    });
 
     if (Object.keys(validationErrors).length > 0) {
       toast.error("Please complete all required fields");
@@ -213,26 +374,93 @@ export default function ManageUsersPage() {
     }
 
     try {
-      const payload = {
-        name: editData.name.trim(),
-        email: editData.email.trim(),
-        role: editData.role.trim(),
-        designation: editData.designation.trim(),
-      };
+      const res = await fetch("/api/admin/users", {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        credentials: "include",
+        body: JSON.stringify({
+          id: editingId,
+          name: String(editData.name || "").trim(),
+          email: String(editData.email || "").trim(),
+          role: String(editData.role || "").trim(),
+          designation: String(editData.designation || "").trim(),
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
 
-      await updateDoc(doc(db, ADMIN_USERS_COLLECTION, editingId), payload);
+      if (!res.ok) {
+        throw new Error(data.message || "Failed to update user");
+      }
 
       setAdmins((previous) =>
         previous.map((admin) =>
-          admin.id === editingId ? { ...admin, ...payload } : admin
+          admin.id === editingId ? { ...admin, ...data.user } : admin
         )
+      );
+      setSelectedAdmin((previous) =>
+        previous && previous.id === editingId ? { ...previous, ...data.user } : previous
       );
 
       setEditingId(null);
       setEditData({});
       toast.success("User updated successfully");
-    } catch {
-      toast.error("Failed to update user");
+    } catch (error) {
+      toast.error(error.message || "Failed to update user");
+    }
+  };
+
+  const handleResendInvite = async (admin) => {
+    if (!isSuper) {
+      toast.error("Only Super Admin can resend invite links");
+      return;
+    }
+
+    try {
+      const res = await fetch("/api/admin/users", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        credentials: "include",
+        body: JSON.stringify({
+          action: "resend_invite",
+          id: admin.id,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        throw new Error(data.message || "Failed to generate invite link");
+      }
+
+      setInviteLink(data.inviteLink || "");
+      setInviteTargetName(admin.name || "Admin");
+      await handleCopyInvite(data.inviteLink || "");
+
+      setAdmins((previous) =>
+        previous.map((item) =>
+          item.id === admin.id
+            ? {
+                ...item,
+                inviteStatus: "pending",
+                inviteLinkGeneratedAt: new Date().toISOString(),
+              }
+            : item
+        )
+      );
+      setSelectedAdmin((previous) =>
+        previous && previous.id === admin.id
+          ? {
+              ...previous,
+              inviteStatus: "pending",
+              inviteLinkGeneratedAt: new Date().toISOString(),
+            }
+          : previous
+      );
+    } catch (error) {
+      toast.error(error.message || "Failed to generate invite link");
     }
   };
 
@@ -252,15 +480,20 @@ export default function ManageUsersPage() {
     }
 
     try {
-      await deleteDoc(doc(db, ADMIN_USERS_COLLECTION, deleteId));
+      const res = await fetch(`/api/admin/users?id=${encodeURIComponent(deleteId)}`, {
+        method: "DELETE",
+        credentials: "include",
+      });
+      const data = await res.json().catch(() => ({}));
 
-      setAdmins((previous) =>
-        previous.filter((admin) => admin.id !== deleteId)
-      );
+      if (!res.ok) {
+        throw new Error(data.message || "Failed to delete user");
+      }
 
+      setAdmins((previous) => previous.filter((admin) => admin.id !== deleteId));
       toast.success("User deleted successfully");
-    } catch {
-      toast.error("Failed to delete user");
+    } catch (error) {
+      toast.error(error.message || "Failed to delete user");
     } finally {
       setDeleteId(null);
       setConfirmOpen(false);
@@ -273,18 +506,22 @@ export default function ManageUsersPage() {
     { label: "Email", key: "email" },
     { label: "Role", key: "role" },
     { label: "Designation", key: "designation" },
+    { label: "Invite", key: "invite" },
     { label: "Actions", key: "actions" },
   ];
+
+  const openViewModal = (admin) => {
+    setSelectedAdmin(admin);
+    setViewOpen(true);
+  };
 
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div>
-          <Text as="h1" variant="h1">
-            Manage User
-          </Text>
+          
           <Text variant="muted">
-            Add, edit, and organize admin users from one place.
+            Invite, authorize, and manage user access from one place.
           </Text>
         </div>
 
@@ -293,35 +530,29 @@ export default function ManageUsersPage() {
           onClick={() => setShowAddForm((previous) => !previous)}
         >
           <Plus className="h-4 w-4" />
-          {showAddForm ? "Close" : "Add User"}
+          {showAddForm ? "Close" : "Invite Admin"}
         </Button>
       </div>
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-        <Card className="p-4">
-          <div className="flex items-center gap-3">
-            <Users className="h-5 w-5 text-blue-600" />
-            <div>
-              <Text variant="h3">Total Users</Text>
-              <Text>{admins.length}</Text>
-            </div>
-          </div>
-        </Card>
+        <StatCard
+          icon={Users}
+          value={totalActiveAdmins}
+          label="Active Users"
+          iconClassName="text-blue-600"
+        />
 
-        <Card className="p-4">
-          <div className="flex items-center gap-3">
-            <Shield className="h-5 w-5 text-slate-600" />
-            <div>
-              <Text variant="h3">Super Users</Text>
-              <Text>{totalSuperAdmins}</Text>
-            </div>
-          </div>
-        </Card>
+        <StatCard
+          icon={Shield}
+          value={totalSuperAdmins}
+          label="Super Users"
+        />
 
-        <Card className="p-4">
-          <Text variant="h3">Available Roles</Text>
-          <Text>{roleNames.length}</Text>
-        </Card>
+        <StatCard
+          icon={Shield}
+          value={totalInactiveAdmins}
+          label="Inactive Users"
+        />
       </div>
 
       {showAddForm ? (
@@ -329,10 +560,10 @@ export default function ManageUsersPage() {
           <div className="space-y-6">
             <div>
               <Text as="h2" variant="h2">
-                Add User
+                Invite Admin
               </Text>
               <Text variant="muted">
-                New roles created under Manage Role will appear here automatically.
+                This creates the Firebase Authentication account, adds the admin authorization record, and prepares a secure password setup link.
               </Text>
             </div>
 
@@ -352,12 +583,28 @@ export default function ManageUsersPage() {
 
               <FormField label="Email" error={newUserErrors.email} required>
                 <Input
+                  type="email"
                   value={newUser.email}
                   onChange={(event) => {
-                    setNewUserErrors((previous) => ({ ...previous, email: "" }));
+                    const nextEmail = event.target.value;
+                    setNewUserErrors((previous) => ({
+                      ...previous,
+                      email: "",
+                    }));
                     setNewUser((previous) => ({
                       ...previous,
-                      email: event.target.value,
+                      email: nextEmail,
+                    }));
+                  }}
+                  onBlur={(event) => {
+                    const emailError = validateUserForm(
+                      { ...newUser, email: event.target.value },
+                      { admins }
+                    ).email;
+
+                    setNewUserErrors((previous) => ({
+                      ...previous,
+                      email: emailError || "",
                     }));
                   }}
                 />
@@ -403,9 +650,36 @@ export default function ManageUsersPage() {
                 Cancel
               </Button>
               <Button loading={submitting} onClick={handleAddUser}>
-                Save User
+                Invite Admin
               </Button>
             </div>
+          </div>
+        </Card>
+      ) : null}
+
+      {inviteLink ? (
+        <Card className="border-emerald-200 bg-emerald-50/70 p-5">
+          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+            <div>
+              <Text variant="h3">Invite Link Ready</Text>
+              <Text variant="muted">
+                Share this password setup link with {inviteTargetName || "the invited admin"}.
+              </Text>
+            </div>
+
+            <div className="flex gap-2">
+              <Button variant="secondary" className="gap-2" onClick={() => handleCopyInvite()}>
+                <Link2 className="h-4 w-4" />
+                Copy Invite Link
+              </Button>
+              <Button variant="ghost" onClick={() => setInviteLink("")}>
+                Dismiss
+              </Button>
+            </div>
+          </div>
+
+          <div className="mt-4 break-all rounded-xl border border-emerald-200 bg-white px-4 py-3 text-sm text-slate-700">
+            {inviteLink}
           </div>
         </Card>
       ) : null}
@@ -424,10 +698,7 @@ export default function ManageUsersPage() {
             <Select
               value={roleFilter}
               onChange={setRoleFilter}
-              options={[
-                { label: "All Roles", value: "" },
-                ...roleOptions,
-              ]}
+              options={[{ label: "All Roles", value: "" }, ...roleOptions]}
             />
           </div>
 
@@ -443,9 +714,7 @@ export default function ManageUsersPage() {
         </div>
       </Card>
 
-      <Text variant="muted">
-        Showing {filteredAdmins.length} users
-      </Text>
+      <Text variant="muted">Showing {filteredAdmins.length} users</Text>
 
       <Card className="p-0">
         {loading ? (
@@ -487,6 +756,7 @@ export default function ManageUsersPage() {
                       <td className="px-4 py-3">
                         {isEditing ? (
                           <Input
+                            type="email"
                             value={editData.email}
                             onChange={(event) =>
                               setEditData((previous) => ({
@@ -534,6 +804,26 @@ export default function ManageUsersPage() {
                       </td>
 
                       <td className="px-4 py-3">
+                        <div className="flex items-center gap-2">
+                          <span
+                            className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${
+                              admin.inviteStatus === "pending"
+                                ? "bg-amber-100 text-amber-700"
+                                : "bg-emerald-100 text-emerald-700"
+                            }`}
+                          >
+                            {toReadableInviteStatus(admin.inviteStatus)}
+                          </span>
+                          <ActionButton
+                            icon={KeyRound}
+                            label="Invite"
+                            variant="ghost"
+                            onClick={() => handleResendInvite(admin)}
+                          />
+                        </div>
+                      </td>
+
+                      <td className="px-4 py-3">
                         {isEditing ? (
                           <div className="flex gap-2">
                             <Button onClick={handleUpdateUser}>Save</Button>
@@ -549,6 +839,13 @@ export default function ManageUsersPage() {
                           </div>
                         ) : (
                           <div className="flex gap-2">
+                            <ActionButton
+                              icon={Eye}
+                              label="View"
+                              variant="ghost"
+                              onClick={() => openViewModal(admin)}
+                            />
+
                             <ActionButton
                               icon={Pencil}
                               label="Edit"
@@ -590,10 +887,116 @@ export default function ManageUsersPage() {
       <ConfirmModal
         open={confirmOpen}
         title="Delete User?"
-        description="This action cannot be undone."
+        description="This removes both the admin authorization record and the linked Firebase login account."
         onConfirm={confirmDelete}
         onClose={() => setConfirmOpen(false)}
       />
+
+      <Modal
+        open={viewOpen}
+        onClose={() => {
+          setViewOpen(false);
+          setSelectedAdmin(null);
+        }}
+        title="Admin User Details"
+        size="lg"
+      >
+        {selectedAdmin ? (
+          <div className="space-y-6">
+            <div className="rounded-3xl border border-slate-200 bg-slate-50/70 p-4">
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <DetailInfoCard
+                  label="Name"
+                  value={selectedAdmin.name || "Not available"}
+                />
+                <DetailInfoCard
+                  label="Status"
+                  value={toReadableInviteStatus(selectedAdmin.inviteStatus)}
+                  status
+                />
+                <DetailInfoCard
+                  label="Email"
+                  value={selectedAdmin.email || "Not available"}
+                />
+                <DetailInfoCard
+                  label="Role"
+                  value={selectedAdmin.role || "Not available"}
+                />
+                <DetailInfoCard
+                  label="Designation"
+                  value={selectedAdmin.designation || "Not available"}
+                />
+                <DetailInfoCard
+                  label="UID"
+                  value={selectedAdmin.uid || selectedAdmin.id || "Not available"}
+                />
+                <DetailInfoCard
+                  label="Created"
+                  value={formatDateValue(selectedAdmin.createdAt)}
+                />
+                <DetailInfoCard
+                  label="Last Active"
+                  value={formatDateValue(selectedAdmin.lastLoginAt)}
+                />
+                <DetailInfoCard
+                  label="Last Updated"
+                  value={formatDateValue(selectedAdmin.updatedAt)}
+                />
+                <DetailInfoCard
+                  label="Invite Link Generated"
+                  value={formatDateValue(selectedAdmin.inviteLinkGeneratedAt)}
+                />
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <Text as="h3" variant="h3" className="block">
+                User History
+              </Text>
+
+              {Array.isArray(selectedAdmin.history) && selectedAdmin.history.length > 0 ? (
+                <div className="space-y-3">
+                  {[...selectedAdmin.history]
+                    .slice()
+                    .reverse()
+                    .map((item, index) => (
+                      <Card
+                        key={`${item.type || "history"}-${index}`}
+                        className="rounded-2xl border border-slate-200 p-4 shadow-sm"
+                      >
+                        <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+                          <div>
+                            <Text as="div" variant="h3" className="block">
+                              {toReadableHistoryType(item.type)}
+                            </Text>
+                            <Text as="div" className="mt-1 block">
+                              {item.description || "Activity recorded."}
+                            </Text>
+                            <Text as="div" variant="muted" className="mt-1 block">
+                              {item.actorName || item.actorEmail
+                                ? `By ${item.actorName || item.actorEmail}`
+                                : "System activity"}
+                            </Text>
+                          </div>
+
+                          <Text as="div" variant="muted" className="block whitespace-nowrap">
+                            {formatDateValue(item.timestamp)}
+                          </Text>
+                        </div>
+                      </Card>
+                    ))}
+                </div>
+              ) : (
+                <Card className="rounded-2xl border border-slate-200 p-4 shadow-sm">
+                  <Text as="div" variant="muted" className="block">
+                    No user history available yet.
+                  </Text>
+                </Card>
+              )}
+            </div>
+          </div>
+        ) : null}
+      </Modal>
     </div>
   );
 }

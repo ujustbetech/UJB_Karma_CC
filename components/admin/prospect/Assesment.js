@@ -110,11 +110,36 @@ const formatDisplayDate = () =>
 const formatLogDate = (value) => {
   if (!value) return "";
 
-  if (value.seconds) {
-    return new Date(value.seconds * 1000).toLocaleString("en-IN");
+  if (typeof value === "object") {
+    const seconds = value.seconds ?? value._seconds;
+
+    if (typeof seconds === "number") {
+      const fromSeconds = new Date(seconds * 1000);
+
+      if (!Number.isNaN(fromSeconds.getTime())) {
+        return fromSeconds.toLocaleString("en-IN");
+      }
+    }
+
+    if (typeof value.toDate === "function") {
+      const fromTimestamp = value.toDate();
+
+      if (!Number.isNaN(fromTimestamp.getTime())) {
+        return fromTimestamp.toLocaleString("en-IN");
+      }
+    }
   }
 
-  return new Date(value).toLocaleString("en-IN");
+  if (typeof value === "number") {
+    const numericDate = new Date(value);
+    return Number.isNaN(numericDate.getTime())
+      ? ""
+      : numericDate.toLocaleString("en-IN");
+  }
+
+  const parsed = new Date(value);
+
+  return Number.isNaN(parsed.getTime()) ? "" : parsed.toLocaleString("en-IN");
 };
 
 const Assessment = ({ id, fetchData }) => {

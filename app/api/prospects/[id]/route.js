@@ -1,10 +1,13 @@
 import { NextResponse } from "next/server";
+import jwt from "jsonwebtoken";
 import {
   adminDb,
   getFirebaseAdminInitError,
 } from "@/lib/firebase/firebaseAdmin";
+import { USER_COOKIE_NAME } from "@/lib/auth/accessControl";
 import { publicEnv } from "@/lib/config/publicEnv";
 import { serverEnv } from "@/lib/config/serverEnv";
+import { validateUserSessionRecord } from "@/lib/auth/userSessionWorkflow.mjs";
 
 const prospectCollectionName = publicEnv.collections.prospect;
 const userCollectionName = publicEnv.collections.userDetail;
@@ -57,6 +60,59 @@ function getAdminDbOrError() {
   }
 
   return { ok: true, adminDb };
+}
+
+async function validateProspectMentorAccess(req, db, prospect) {
+  const token = req.cookies.get(USER_COOKIE_NAME)?.value;
+
+  if (!token) {
+    return {
+      ok: false,
+      response: NextResponse.json({ message: "Unauthorized" }, { status: 401 }),
+    };
+  }
+
+  try {
+    const decoded = jwt.verify(token, serverEnv.jwtSecret);
+    const sessionSnap = await db.collection("user_sessions").doc(decoded.sessionId).get();
+
+    if (!sessionSnap.exists) {
+      return {
+        ok: false,
+        response: NextResponse.json({ message: "Session not found" }, { status: 401 }),
+      };
+    }
+
+    const session = sessionSnap.data();
+    const validation = validateUserSessionRecord(session, Date.now());
+
+    if (!validation.ok) {
+      return {
+        ok: false,
+        response: NextResponse.json({ message: "Unauthorized" }, { status: 401 }),
+      };
+    }
+
+    const sessionPhone = normalizePhone(session?.phone);
+    const mentorPhone = normalizePhone(prospect?.orbiterContact);
+
+    if (!sessionPhone || !mentorPhone || sessionPhone !== mentorPhone) {
+      return {
+        ok: false,
+        response: NextResponse.json(
+          { message: "Only the assigned MentOrbiter can access this assessment form." },
+          { status: 403 }
+        ),
+      };
+    }
+
+    return { ok: true, session };
+  } catch {
+    return {
+      ok: false,
+      response: NextResponse.json({ message: "Unauthorized" }, { status: 401 }),
+    };
+  }
 }
 
 async function ensureCpBoardUser(db, orbiter) {
@@ -296,6 +352,21 @@ export async function GET(req, { params }) {
       );
     }
 
+    const prospect = {
+      id: prospectSnap.id,
+      ...prospectSnap.data(),
+    };
+
+    const accessResult = await validateProspectMentorAccess(
+      req,
+      dbResult.adminDb,
+      prospect
+    );
+
+    if (!accessResult.ok) {
+      return accessResult.response;
+    }
+
     const formSnap = await dbResult.adminDb
       .collection(prospectCollectionName)
       .doc(id)
@@ -304,10 +375,7 @@ export async function GET(req, { params }) {
       .get();
 
     return NextResponse.json({
-      prospect: {
-        id: prospectSnap.id,
-        ...prospectSnap.data(),
-      },
+      prospect,
       isSubmitted: !formSnap.empty,
     });
   } catch (error) {
@@ -341,6 +409,33 @@ export async function POST(req, { params }) {
         { message: "Missing prospect id" },
         { status: 400 }
       );
+    }
+
+    const prospectSnap = await dbResult.adminDb
+      .collection(prospectCollectionName)
+      .doc(id)
+      .get();
+
+    if (!prospectSnap.exists) {
+      return NextResponse.json(
+        { message: "Prospect not found" },
+        { status: 404 }
+      );
+    }
+
+    const prospect = {
+      id: prospectSnap.id,
+      ...prospectSnap.data(),
+    };
+
+    const accessResult = await validateProspectMentorAccess(
+      req,
+      dbResult.adminDb,
+      prospect
+    );
+
+    if (!accessResult.ok) {
+      return accessResult.response;
     }
 
     const payload = await req.json();

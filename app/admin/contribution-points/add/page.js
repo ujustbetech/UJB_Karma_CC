@@ -108,7 +108,7 @@ export default function ContributionPointAddPage() {
   return (
     <div className="space-y-6">
       <div>
-        <Text as="h1" variant="h1">Add CP Activity</Text>
+
         <Text variant="muted">
           Assign an active contribution point activity to a member.
         </Text>

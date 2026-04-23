@@ -1,20 +1,35 @@
 "use client";
 
 import { useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import MobileHeader from "@/components/mobile/MobileHeader";
 import MobileBottomNav from "@/components/mobile/MobileBottomNav";
 import { useAuth } from "@/context/authContext";
 
 export default function UserLayout({ children }) {
   const router = useRouter();
+  const pathname = usePathname();
   const { loading, user } = useAuth();
+  const isPublicProspectFlow =
+    /^\/user\/prospects\/[^/]+(?:\/feedback|\/completed)$/.test(pathname || "");
 
   useEffect(() => {
-    if (!loading && !user) {
-      router.replace("/login");
+    if (!loading && !user && !isPublicProspectFlow) {
+      const next = pathname ? `/login?redirect=${encodeURIComponent(pathname)}` : "/login";
+      router.replace(next);
     }
-  }, [loading, router, user]);
+  }, [isPublicProspectFlow, loading, router, user]);
+
+  if (isPublicProspectFlow) {
+    return (
+      <div
+        className="min-h-screen bg-cover bg-center bg-no-repeat"
+        style={{ backgroundImage: "url('/space.jpeg')" }}
+      >
+        <main>{children}</main>
+      </div>
+    );
+  }
 
   if (loading || !user) return null;
 

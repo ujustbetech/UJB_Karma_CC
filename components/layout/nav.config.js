@@ -19,12 +19,21 @@ export const NAV_ITEMS = [
     icon: LayoutGrid,
   },
   {
+    label: "Prospect",
+    icon: UserSearch,
+    children: [
+      { label: "Prospect Dashboard", href: "/admin/prospect" },
+      { label: "Manage Prospect", href: "/admin/prospect/manage" },
+
+    ],
+  },
+  {
     label: "Orbiters",
     icon: Orbit,
     children: [
       { label: "Orbiter Dashboard", href: "/admin/orbiters/" },
       { label: "Orbiter List", href: "/admin/orbiters/list/" },
-      { label: "Add Orbiter", href: "/admin/orbiters/add" },
+    
     ],
   },
   {
@@ -33,25 +42,17 @@ export const NAV_ITEMS = [
     children: [
       { label: "Referral Dashboard", href: "/admin/referral" },
       { label: "Manage Referral", href: "/admin/referral/manage" },
-      { label: "Add Referral", href: "/admin/referral/add" },
+    
     ],
   },
-  {
-    label: "Prospect",
-    icon: UserSearch,
-    children: [
-      { label: "Prospect Dashboard", href: "/admin/prospect" },
-      { label: "Manage Prospect", href: "/admin/prospect/manage" },
-      { label: "Add Prospect", href: "/admin/prospect/add" },
-    ],
-  },
+  
   {
     label: "Monthly Meeting",
     icon: CalendarDays,
     children: [
       { label: "Dashboard", href: "/admin/monthlymeeting" },
       { label: "Meeting List", href: "/admin/monthlymeeting/list" },
-      { label: "Add Meeting", href: "/admin/monthlymeeting/add" },
+    
     ],
   },
   {
@@ -60,7 +61,6 @@ export const NAV_ITEMS = [
     children: [
       { label: "Dashboard", href: "/admin/conclave" },
       { label: "Meeting List", href: "/admin/conclave/list" },
-      { label: "Add Meeting", href: "/admin/conclave/add" },
     ],
   },
   {

@@ -16,6 +16,27 @@ import {
   setAdminSessionCookie,
 } from "@/lib/auth/adminSession";
 
+function buildHistoryEntry({
+  type,
+  actorEmail = "",
+  actorName = "",
+  description = "",
+}) {
+  return {
+    type: String(type || "").trim() || "login",
+    actorEmail: String(actorEmail || "").trim(),
+    actorName: String(actorName || "").trim(),
+    description: String(description || "").trim(),
+    timestamp: new Date(),
+  };
+}
+
+function appendHistory(existingHistory, entry) {
+  const nextHistory = Array.isArray(existingHistory) ? [...existingHistory] : [];
+  nextHistory.push(entry);
+  return nextHistory.slice(-25);
+}
+
 export async function POST(req) {
   try {
     const firebaseAdminInitError = getFirebaseAdminInitError();
@@ -82,6 +103,40 @@ export async function POST(req) {
     }
 
     const sessionPayload = buildAdminSessionPayload(adminMatch.adminData, decoded);
+    const adminDocRef = adminMatch.adminDocId
+      ? adminUsersCollection.doc(adminMatch.adminDocId)
+      : null;
+
+    if (adminDocRef) {
+      const nextHistory = appendHistory(
+        adminMatch.adminData.history,
+        buildHistoryEntry({
+          type:
+            String(adminMatch.adminData.inviteStatus || "").trim().toLowerCase() === "active"
+              ? "login"
+              : "activated",
+          actorEmail: decoded.email || "",
+          actorName: adminMatch.adminData.name || decoded.name || "",
+          description:
+            String(adminMatch.adminData.inviteStatus || "").trim().toLowerCase() === "active"
+              ? "Admin signed in successfully."
+              : "Admin completed setup and became active.",
+        })
+      );
+
+      await adminDocRef.set(
+        {
+          inviteStatus: "active",
+          lastLoginAt: new Date(),
+          uid: adminMatch.adminData.uid || decoded.uid || "",
+          photo: adminMatch.adminData.photo || decoded.picture || null,
+          updatedAt: new Date(),
+          history: nextHistory,
+        },
+        { merge: true }
+      );
+    }
+
     const response = NextResponse.json({
       success: true,
       admin: sessionPayload,

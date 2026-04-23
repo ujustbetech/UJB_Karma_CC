@@ -276,7 +276,7 @@ export default function ManageReferralsPage() {
         <>
             <div className="p-6 space-y-6">
                 {/* Header */}
-                <Text as="h1">Manage Referrals</Text>
+    
 
                 {/* ================= STAT CARDS ================= */}
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4">

@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { useEffect, useState, useRef } from "react";
 import clsx from "clsx";
@@ -69,12 +70,33 @@ export default function Sidebar({ collapsed, setCollapsed }) {
       )}
     >
       {/* Brand */}
-      <div className="h-14 flex items-center px-4 border-b  border-slate-200">
-        {!collapsed && (
-          <span className="text-sm font-semibold">
-            U Just Be
-          </span>
+      <div
+        className={clsx(
+          "h-14 border-b border-slate-200",
+          collapsed ? "flex items-center justify-center px-2" : "flex items-center px-4"
         )}
+      >
+        <Link
+          href="/admin/orbiters"
+          className={clsx(
+            "flex items-center",
+            collapsed ? "justify-center" : "gap-3"
+          )}
+        >
+          <Image
+            src="/ujustlogo.png"
+            alt="UJustBe logo"
+            width={collapsed ? 28 : 36}
+            height={collapsed ? 28 : 36}
+            className="rounded-md object-contain"
+            priority
+          />
+          {!collapsed && (
+            <span className="text-sm font-semibold text-slate-900">
+            
+            </span>
+          )}
+        </Link>
       </div>
 
       {/* Navigation */}

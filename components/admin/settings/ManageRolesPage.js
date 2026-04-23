@@ -261,9 +261,7 @@ export default function ManageRolesPage() {
   return (
     <div className="space-y-6">
       <div>
-        <Text as="h1" variant="h1">
-          Manage Role
-        </Text>
+       
         <Text variant="muted">
           Create role names for admin users. New roles become available in add and edit user flows automatically.
         </Text>

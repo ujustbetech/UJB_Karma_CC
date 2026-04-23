@@ -8,6 +8,10 @@ import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
 import Select from "@/components/ui/Select";
 import FormField from "@/components/ui/FormField";
+import {
+  PROSPECT_OCCASION_OPTIONS,
+  PROSPECT_OCCUPATION_OPTIONS,
+} from "@/lib/prospectFormOptions";
 
 import Swal from "sweetalert2";
 import emailjs from "@emailjs/browser";
@@ -208,13 +212,9 @@ UJustBe Team
       nextErrors.occupation = "Occupation is required";
     }
 
-    if (!hobbies.trim()) {
-      nextErrors.hobbies = "Hobbies are required";
-    }
-
-    if (!type) {
-      nextErrors.type = "Occasion is required";
-    }
+      if (!type) {
+        nextErrors.type = "Occasion is required";
+      }
 
     setErrors(nextErrors);
     return Object.keys(nextErrors).length === 0;
@@ -320,7 +320,7 @@ UJustBe Team
 
   return (
     <>
-      <Text variant="h1">Add New Prospect</Text>
+    
 
       <Card>
         <form onSubmit={handleSubmit} className="space-y-6">
@@ -455,22 +455,14 @@ UJustBe Team
                   setErrors((prev) => ({ ...prev, occupation: "" }));
                   setOccupation(v);
                 }}
-                options={[
-                  { label: "Select an option", value: "" },
-                  { label: "Service", value: "Service" },
-                  { label: "Student", value: "Student" },
-                  { label: "Business", value: "Business" },
-                  { label: "Professional", value: "Professional" },
-                  { label: "Housewife", value: "Housewife" },
-                  { label: "Retired", value: "Retired" },
-                ]}
+                options={PROSPECT_OCCUPATION_OPTIONS}
               />
             </FormField>
 
-            <FormField label="Hobbies" required error={errors.hobbies}>
-              <Input
-                value={hobbies}
-                onChange={(e) => {
+            <FormField label="Hobbies" error={errors.hobbies}>
+                <Input
+                  value={hobbies}
+                  onChange={(e) => {
                   setErrors((prev) => ({ ...prev, hobbies: "" }));
                   setHobbies(e.target.value);
                 }}
@@ -485,13 +477,7 @@ UJustBe Team
                 setErrors((prev) => ({ ...prev, type: "" }));
                 setType(v);
               }}
-              options={[
-                { label: "Select an option", value: "" },
-                { label: "Support Call", value: "support_call" },
-                { label: "Orbiter Connection", value: "orbiter_connection" },
-                { label: "Monthly Meeting", value: "monthly_meeting" },
-                { label: "E2A Interaction", value: "e2a_interactions" },
-              ]}
+              options={PROSPECT_OCCASION_OPTIONS}
             />
           </FormField>
 

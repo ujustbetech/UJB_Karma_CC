@@ -144,7 +144,7 @@ export default function ContributionPointActivityManagePage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between gap-4">
         <div>
-          <Text as="h1" variant="h1">CP Activity Management</Text>
+      
           <Text variant="muted">
             Create, update, activate, and retire contribution point activities.
           </Text>

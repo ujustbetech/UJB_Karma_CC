@@ -38,6 +38,7 @@ import {
     User,
     Users,
     Clock,
+    Plus,
     Pencil,
     Trash2,
 } from 'lucide-react';
@@ -275,9 +276,8 @@ export default function ManageReferralsPage() {
     return (
         <>
             <div className="p-6 space-y-6">
-                {/* Header */}
-                <Text as="h1">Manage Referrals</Text>
-
+                
+                
                 {/* ================= STAT CARDS ================= */}
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                     <Card
@@ -343,6 +343,10 @@ export default function ManageReferralsPage() {
 
                             {/* LEFT: Export */}
                             <div className="flex items-center">
+                               <Button onClick={() => (window.location.href = "/admin/referral/add")}>
+                                                            <Plus size={16} /> Add Referral
+                                                        </Button>
+                            
                                 <ReferralExportButton />
                             </div>
 
@@ -543,4 +547,3 @@ export default function ManageReferralsPage() {
         </>
     );
 }
-

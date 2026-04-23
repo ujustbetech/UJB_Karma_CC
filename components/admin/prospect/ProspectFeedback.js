@@ -61,6 +61,7 @@ const withRequirement = (label, required = false) => (
 const ProspectFeedback = ({ id }) => {
   const [forms, setForms] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [editMode, setEditMode] = useState(false);
   const [editingId, setEditingId] = useState(null);
@@ -68,6 +69,7 @@ const ProspectFeedback = ({ id }) => {
 
   const fetchForms = async () => {
     try {
+      setFetchError("");
       const res = await fetch(
         `/api/admin/prospects?id=${id}&section=prospectfeedbackform`,
         { credentials: "include" }
@@ -75,7 +77,15 @@ const ProspectFeedback = ({ id }) => {
       const responseData = await res.json().catch(() => ({}));
 
       if (!res.ok) {
-        throw new Error(responseData.message || "Failed to fetch feedback form");
+        setForms([]);
+        setShowForm(false);
+        setFetchError(
+          responseData.message ||
+            (res.status === 401
+              ? "Your admin session has expired. Please sign in again."
+              : "Failed to fetch feedback form.")
+        );
+        return;
       }
 
       const data = Array.isArray(responseData.forms) ? responseData.forms : [];
@@ -101,6 +111,9 @@ const ProspectFeedback = ({ id }) => {
       }
     } catch (error) {
       console.error("Error fetching feedback form:", error);
+      setForms([]);
+      setShowForm(false);
+      setFetchError("Failed to fetch feedback form.");
     } finally {
       setLoading(false);
     }
@@ -193,6 +206,17 @@ const ProspectFeedback = ({ id }) => {
   };
 
   if (loading) return <Text>Loading...</Text>;
+
+  if (fetchError) {
+    return (
+      <>
+        <Text variant="h1">Prospect Feedback</Text>
+        <Card>
+          <Text className="text-red-600">{fetchError}</Text>
+        </Card>
+      </>
+    );
+  }
 
   return (
     <>

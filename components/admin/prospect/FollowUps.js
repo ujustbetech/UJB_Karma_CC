@@ -203,6 +203,51 @@ const addCpForMeetingScheduled = async (
     return `${day} ${month} ${year} at ${hours}.${minutes} ${ampm}`;
   };
 
+  const formatLogTimestamp = (value) => {
+    if (!value) return '';
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? '' : formatReadableDate(parsed.toISOString());
+  };
+
+  const getScheduleHistory = (meeting) => {
+    if (!meeting) return [];
+
+    const history = [];
+
+    history.push({
+      id: `scheduled-${meeting.id ?? meeting.dateISO ?? meeting.date ?? 'meeting'}`,
+      type: 'Scheduled',
+      happenedAt: meeting.createdAt || meeting.dateISO || meeting.date,
+      details: [
+        meeting.date ? `Meeting date: ${meeting.date}` : '',
+        meeting.mode ? `Mode: ${meeting.mode}` : '',
+        meeting.mode === 'online' && meeting.zoomLink ? `Zoom: ${meeting.zoomLink}` : '',
+        meeting.mode === 'offline' && meeting.venue ? `Venue: ${meeting.venue}` : '',
+      ].filter(Boolean),
+    });
+
+    (meeting.rescheduleHistory || []).forEach((entry, index) => {
+      history.push({
+        id: `rescheduled-${meeting.id ?? index}-${index}`,
+        type: 'Rescheduled',
+        happenedAt: entry.rescheduledAt || entry.newDateISO,
+        details: [
+          entry.previousDateISO
+            ? `Previous date: ${formatReadableDate(entry.previousDateISO)}`
+            : '',
+          entry.newDateISO
+            ? `New date: ${formatReadableDate(entry.newDateISO)}`
+            : '',
+          entry.previousMode ? `Previous mode: ${entry.previousMode}` : '',
+          entry.newMode ? `New mode: ${entry.newMode}` : '',
+          entry.reason ? `Reason: ${entry.reason}` : '',
+        ].filter(Boolean),
+      });
+    });
+
+    return history;
+  };
+
   // === NEW ===
   const localToISO = (localValue) => {
     // input from datetime-local (YYYY-MM-DDTHH:MM)
@@ -916,6 +961,31 @@ Done
 </button>
 </div>
 
+{getScheduleHistory(latestMeeting).length > 0 && (
+<div className="mt-6 border-t pt-4">
+<h5 className="font-semibold mb-3">Schedule Activity</h5>
+<div className="space-y-3">
+{getScheduleHistory(latestMeeting).map((log) => (
+<div key={log.id} className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
+<p className="font-medium text-slate-900">
+{log.type}
+</p>
+{log.happenedAt && (
+<p className="text-sm text-slate-500 mt-1">
+Logged on {formatLogTimestamp(log.happenedAt)}
+</p>
+)}
+<div className="mt-2 space-y-1 text-sm text-slate-700">
+{log.details.map((detail) => (
+<p key={detail}>{detail}</p>
+))}
+</div>
+</div>
+))}
+</div>
+</div>
+)}
+
 </div>
 )}
 
@@ -1153,6 +1223,31 @@ className="border px-4 py-2 rounded"
 >
 Close
 </button>
+</div>
+</div>
+)}
+
+{getScheduleHistory(ev).length > 0 && (
+<div className="mt-4 border-t pt-4">
+<h5 className="font-semibold mb-3">Schedule Activity</h5>
+<div className="space-y-3">
+{getScheduleHistory(ev).map((log) => (
+<div key={log.id} className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
+<p className="font-medium text-slate-900">
+{log.type}
+</p>
+{log.happenedAt && (
+<p className="text-sm text-slate-500 mt-1">
+Logged on {formatLogTimestamp(log.happenedAt)}
+</p>
+)}
+<div className="mt-2 space-y-1 text-sm text-slate-700">
+{log.details.map((detail) => (
+<p key={detail}>{detail}</p>
+))}
+</div>
+</div>
+))}
 </div>
 </div>
 )}

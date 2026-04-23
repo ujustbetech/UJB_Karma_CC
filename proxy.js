@@ -5,13 +5,21 @@ import {
 } from "@/lib/auth/accessControl";
 
 export function proxy(req) {
-  const { pathname } = req.nextUrl;
+  const { pathname, search } = req.nextUrl;
+  const isPublicProspectFlow =
+    /^\/user\/prospects\/[^/]+(?:\/feedback|\/completed)$/.test(pathname);
 
   if (pathname.startsWith("/user")) {
+    if (isPublicProspectFlow) {
+      return NextResponse.next();
+    }
+
     const token = req.cookies.get(USER_COOKIE_NAME)?.value;
 
     if (!token) {
-      return NextResponse.redirect(new URL("/login", req.url));
+      const loginUrl = new URL("/login", req.url);
+      loginUrl.searchParams.set("redirect", `${pathname}${search || ""}`);
+      return NextResponse.redirect(loginUrl);
     }
   }
 

@@ -163,18 +163,7 @@ export default function AdminAddRedeemPage() {
 
   return (
     <main className="space-y-6">
-      <div className="rounded-3xl bg-white p-8 shadow-sm border border-slate-200">
-        <div className="flex items-center gap-3">
-          <PlusCircle className="h-6 w-6 text-orange-500" />
-          <div>
-            <h1 className="text-2xl font-bold text-slate-800">Add Redeem Deal</h1>
-            <p className="mt-1 text-sm text-slate-500">
-              Create an approved CC redeem deal for a member.
-            </p>
-          </div>
-        </div>
-      </div>
-
+  
       <div className="rounded-3xl bg-white p-8 shadow-sm border border-slate-200 space-y-6">
         <EditableField
           label="Search Member"

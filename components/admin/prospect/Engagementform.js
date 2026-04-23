@@ -71,7 +71,7 @@ function validateEngagementForm(formData, userList, entries = []) {
   if (!callDate) {
     nextErrors.callDate = "Date of calling is required.";
   } else if (callDate < today) {
-    nextErrors.callDate = "Date of calling must be today's date.";
+    nextErrors.callDate = "Date of calling cannot be a past date.";
   } else if (callDate > today) {
     nextErrors.callDate = "Date of calling cannot be in the future.";
   } else if (latestSavedCallDate && callDate < latestSavedCallDate) {
@@ -105,6 +105,8 @@ function validateEngagementForm(formData, userList, entries = []) {
 
   if (!nextFollowupDate) {
     nextErrors.nextFollowupDate = "Next follow-up date is required.";
+  } else if (nextFollowupDate < today) {
+    nextErrors.nextFollowupDate = "Next follow-up date cannot be a past date.";
   } else if (callDate && nextFollowupDate < callDate) {
     nextErrors.nextFollowupDate =
       "Next follow-up date cannot be earlier than the call date.";
@@ -132,6 +134,11 @@ const EngagementForm = ({ id }) => {
       }),
     [entries]
   );
+  const today = normalizeDateOnly(new Date().toISOString());
+  const minFollowupDate =
+    formData.callDate && normalizeDateOnly(formData.callDate) > today
+      ? normalizeDateOnly(formData.callDate)
+      : today;
 
   const fetchTabData = async () => {
     if (!id) return;
@@ -311,7 +318,7 @@ const EngagementForm = ({ id }) => {
             >
               <DateInput
                 value={formData.nextFollowupDate}
-                min={normalizeDateOnly(formData.callDate)}
+                min={minFollowupDate}
                 onChange={(e) => handleChange("nextFollowupDate", e.target.value)}
               />
             </FormField>

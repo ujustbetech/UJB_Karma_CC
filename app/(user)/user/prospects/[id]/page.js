@@ -158,7 +158,11 @@ export default function ProspectForm() {
           setCities(Array.isArray(cityData.data) ? cityData.data : []);
         }
       } catch (error) {
-        Swal.fire("Error", "Unable to load prospect details", "error");
+        Swal.fire(
+          "Error",
+          error?.message || "Unable to load prospect details",
+          "error"
+        );
       } finally {
         setLoading(false);
       }

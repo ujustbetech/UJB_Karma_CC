@@ -124,7 +124,7 @@ const AditionalInfo = ({ id, data = { sections: [] } }) => {
         typeof window !== "undefined"
           ? window.location.origin
           : "https://ujustbe.vercel.app";
-      const formLink = `${origin}/user/prospects/${id}`;
+      const formLink = `${origin}/user/prospects/${id}/feedback`;
 
       const orbiterName = data.orbiterName || "Orbiter";
       const prospectEmail = data.email || "orbiter@example.com";
@@ -136,7 +136,7 @@ Dear ${prospectName},
 
 It was a pleasure connecting with you and introducing UJustBe!
 
-Please take a few minutes to fill out this assessment form: ${formLink}
+Please take a few minutes to fill out this feedback form: ${formLink}
 
 Thank you!
 `;
@@ -202,7 +202,7 @@ Thank you!
     const templateParams = {
       prospect_name: prospectName,
       to_email: prospectEmail,
-      body: `Please fill feedback form ${formLink}`,
+      body: `Please fill the prospect feedback form ${formLink}`,
       orbiter_name: orbiterName,
     };
 

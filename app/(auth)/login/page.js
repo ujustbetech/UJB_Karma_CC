@@ -2,7 +2,7 @@
 
 import { forum } from "@/app/fonts";
 import { useState, useEffect, useRef } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/context/authContext";
 import {
   Phone,
@@ -14,7 +14,13 @@ import Card from "@/components/user-ui/Card";
 
 export default function LoginPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { refreshSession } = useAuth();
+  const requestedRedirect = searchParams.get("redirect");
+  const safeRedirect =
+    requestedRedirect && requestedRedirect.startsWith("/") && !requestedRedirect.startsWith("//")
+      ? requestedRedirect
+      : "/user";
 
   const [phone, setPhone] = useState("");
   const [step, setStep] = useState(1);
@@ -32,7 +38,7 @@ export default function LoginPage() {
       : "";
 useEffect(() => {
 
-  const checkSession = async () => {
+const checkSession = async () => {
 
     try {
 
@@ -41,7 +47,7 @@ const res = await fetch("/api/session/validate", {
   credentials: "include",
 });
       if (res.status === 200) {
-        router.replace("/user");
+        router.replace(safeRedirect);
       }
 
     } catch (err) {
@@ -52,7 +58,7 @@ const res = await fetch("/api/session/validate", {
 
   checkSession();
 
-}, []);
+}, [router, safeRedirect]);
   /* ⏳ Countdown */
   useEffect(() => {
     if (countdown <= 0) return;
@@ -153,7 +159,7 @@ const res = await fetch("/api/session/validate", {
       }
 
       await refreshSession();
-      router.replace("/user");
+      router.replace(safeRedirect);
     } catch (err) {
       setError("Verification failed");
     } finally {

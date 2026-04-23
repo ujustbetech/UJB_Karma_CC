@@ -132,43 +132,56 @@ const icons = [
 export default function EditAdminEvent() {
   const params = useParams();
   const id = Array.isArray(params?.id) ? params.id[0] : params?.id;
+  const AUTHENTIC_CHOICE_TAB_INDEX = 5;
 
   const [activeTab, setActiveTab] = useState(0);
   const [eventData, setEventData] = useState(null);
   const [loading, setLoading] = useState(true);
 
+  const fetchEvent = async () => {
+    if (!id) {
+      setLoading(false);
+      return;
+    }
+
+    try {
+      const res = await fetch(`/api/admin/prospects?id=${id}`, {
+        credentials: "include",
+      });
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        throw new Error(data.message || "Failed to fetch prospect");
+      }
+
+      if (data.prospect) {
+        setEventData(data.prospect);
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    const fetchEvent = async () => {
-      if (!id) {
-        setLoading(false);
-        return;
-      }
-
-      try {
-        const res = await fetch(`/api/admin/prospects?id=${id}`, {
-          credentials: "include",
-        });
-        const data = await res.json().catch(() => ({}));
-
-        if (!res.ok) {
-          throw new Error(data.message || "Failed to fetch prospect");
-        }
-
-        if (data.prospect) {
-          setEventData(data.prospect);
-        }
-      } catch (err) {
-        console.error(err);
-      } finally {
-        setLoading(false);
-      }
-    };
-
     fetchEvent();
   }, [id]);
 
+  const isDeclinedByUJustBe = eventData?.status === "Decline by UJustBe";
+  const isLockedTab = (index) =>
+    isDeclinedByUJustBe && index > AUTHENTIC_CHOICE_TAB_INDEX;
+
+  useEffect(() => {
+    if (isLockedTab(activeTab)) {
+      setActiveTab(AUTHENTIC_CHOICE_TAB_INDEX);
+    }
+  }, [activeTab, isDeclinedByUJustBe]);
+
   const nextTab = () => {
-    if (activeTab < tabs.length - 1) {
+    const nextIndex = activeTab + 1;
+
+    if (activeTab < tabs.length - 1 && !isLockedTab(nextIndex)) {
       setActiveTab(activeTab + 1);
       window.scrollTo({ top: 0, behavior: "smooth" });
     }
@@ -212,7 +225,7 @@ export default function EditAdminEvent() {
       case 4:
         return <ProspectFeedback data={eventData} id={id} />;
       case 5:
-        return <Assesment data={eventData} id={id} />;
+        return <Assesment data={eventData} id={id} fetchData={fetchEvent} />;
       case 6:
         return <EnrollmentStage data={eventData} id={id} />;
       case 7:
@@ -272,14 +285,22 @@ export default function EditAdminEvent() {
             {tabs.map((tab, index) => {
               const Icon = icons[index] || FileText;
               const isActive = activeTab === index;
+              const isDisabled = isLockedTab(index);
 
               return (
                 <button
                   key={index}
-                  onClick={() => setActiveTab(index)}
+                  onClick={() => {
+                    if (!isDisabled) {
+                      setActiveTab(index);
+                    }
+                  }}
+                  disabled={isDisabled}
                   className={`w-full rounded-lg px-3 py-2 text-left text-sm transition ${
                     isActive
                       ? "bg-brand-primary/10 font-medium text-brand-primary"
+                      : isDisabled
+                      ? "cursor-not-allowed text-slate-400 opacity-60"
                       : "text-slate-700 hover:bg-slate-50"
                   }`}
                 >
@@ -321,7 +342,12 @@ export default function EditAdminEvent() {
               </Button>
 
               {activeTab < tabs.length - 1 && (
-                <Button onClick={nextTab}>Next</Button>
+                <Button
+                  onClick={nextTab}
+                  disabled={isLockedTab(activeTab + 1)}
+                >
+                  Next
+                </Button>
               )}
             </div>
           </>

@@ -13,9 +13,11 @@ import { publicEnv } from "@/lib/config/publicEnv";
 import { serverEnv } from "@/lib/config/serverEnv";
 
 const prospectCollectionName = publicEnv.collections.prospect;
+const userCollectionName = publicEnv.collections.userDetail;
 const INDIA_DIAL_CODE = "+91";
 const INDIAN_MOBILE_REGEX = /^\+91[6-9]\d{9}$/;
 const EMAIL_REGEX = /^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/;
+const UJB_SEED_START = 10122000000001;
 const FINAL_AUTHENTIC_CHOICE_STATUSES = new Set([
   "Choose to enroll",
   "Decline by UJustBe",
@@ -102,13 +104,170 @@ function validateAdminRequest(req) {
   return { ok: true, admin: validation.admin };
 }
 
+function extractUjbSequence(value) {
+  const normalized = String(value || "").trim().toUpperCase();
+  const match =
+    normalized.match(/^UJB0*([1-9]\d*)$/) || normalized.match(/^UJB(0+)$/);
+
+  if (!match) {
+    return null;
+  }
+
+  if (match[1]) {
+    return parseInt(match[1], 10);
+  }
+
+  return 0;
+}
+
+async function getNextUjbCode(db) {
+  const snapshot = await db.collection(userCollectionName).get();
+  let maxNumber = 0;
+
+  snapshot.forEach((docSnap) => {
+    const data = docSnap.data() || {};
+    const code = data.UJBCode || data.ujbCode || docSnap.id;
+    const num = extractUjbSequence(code);
+
+    if (num !== null && num > maxNumber) {
+      maxNumber = num;
+    }
+  });
+
+  const nextNumber =
+    maxNumber > 0 ? Math.max(maxNumber + 1, UJB_SEED_START) : UJB_SEED_START;
+
+  return `UJB${String(nextNumber)}`;
+}
+
+function normalizeUserDetailPhone(value) {
+  const digits = String(value || "").replace(/\D/g, "");
+
+  if (digits.length >= 10) {
+    return digits.slice(-10);
+  }
+
+  return digits;
+}
+
+function getProspectField(prospect, keys = []) {
+  for (const key of keys) {
+    const value = prospect?.[key];
+    if (value != null && String(value).trim() !== "") {
+      return String(value).trim();
+    }
+  }
+
+  return "";
+}
+
+async function createOrbiterOnEnrollmentCompletion(db, prospect) {
+  const prospectName = getProspectField(prospect, [
+    "prospectName",
+    "ProspectName",
+    "name",
+    "Name",
+  ]);
+  const rawProspectPhone = getProspectField(prospect, [
+    "prospectPhone",
+    "ProspectPhone",
+    "phone",
+    "Phone",
+    "phoneNumber",
+    "PhoneNumber",
+  ]);
+  const prospectPhone = normalizeUserDetailPhone(rawProspectPhone);
+
+  if (!prospectPhone || !prospectName) {
+    return {
+      status: "missing_fields",
+      missingFields: [
+        !prospectName ? "prospectName" : null,
+        !prospectPhone ? "prospectPhone" : null,
+      ].filter(Boolean),
+    };
+  }
+
+  const userSnapshot = await db.collection(userCollectionName).get();
+  let existingByPhone = null;
+  let mentorData = {
+    name: "",
+    phone: "",
+    ujbCode: "",
+  };
+  const mentorPhone = normalizeUserDetailPhone(
+    getProspectField(prospect, [
+      "orbiterContact",
+      "OrbiterContact",
+      "mentorPhone",
+      "MentorPhone",
+    ])
+  );
+
+  userSnapshot.forEach((docSnap) => {
+    const data = docSnap.data() || {};
+    const normalizedMobile = normalizeUserDetailPhone(data.MobileNo || data["Mobile no"]);
+
+    if (!existingByPhone && normalizedMobile && normalizedMobile === prospectPhone) {
+      existingByPhone = docSnap;
+    }
+
+    if (!mentorData.ujbCode && mentorPhone && normalizedMobile === mentorPhone) {
+      mentorData = {
+        name:
+          data.Name ||
+          getProspectField(prospect, ["orbiterName", "OrbiterName"]) ||
+          "",
+        phone: data.MobileNo || data["Mobile no"] || mentorPhone,
+        ujbCode: data.UJBCode || data.ujbCode || docSnap.id,
+      };
+    }
+  });
+
+  if (existingByPhone) {
+    const existingData = existingByPhone.data() || {};
+    const existingCode = existingData.UJBCode || existingByPhone.id;
+
+    return {
+      ujbCode: existingCode,
+      status: "already_orbiter",
+    };
+  }
+
+  const nextUjbCode = await getNextUjbCode(db);
+
+  const parsedDob = normalizeDateOnly(prospect?.dob);
+  const formattedDob = parsedDob ? parsedDob.split("-").reverse().join("/") : "";
+
+  await db.collection(userCollectionName).doc(nextUjbCode).set({
+    Name: prospectName,
+    MobileNo: prospectPhone,
+    "Mobile no": prospectPhone,
+    Category: "Orbiter",
+    DOB: formattedDob,
+    Email: getProspectField(prospect, ["email", "Email"]),
+    Gender: getProspectField(prospect, ["gender", "Gender"]),
+    UJBCode: nextUjbCode,
+    MentorName: mentorData.name,
+    MentorPhone: mentorData.phone,
+    MentorUJBCode: mentorData.ujbCode,
+    ProfileStatus: "incomplete",
+    SourceProspectId: prospect.id || "",
+    CreatedFromEnrollment: true,
+  });
+
+  return {
+    ujbCode: nextUjbCode,
+    status: "created",
+  };
+}
+
 function validateProspectPayload(body) {
   const {
     userType,
     prospectName,
     prospectPhone,
     occupation,
-    hobbies,
     email,
     dob,
     orbiterName,
@@ -122,7 +281,6 @@ function validateProspectPayload(body) {
     !prospectName ||
     !prospectPhone ||
     !occupation ||
-    !hobbies ||
     !email ||
     !dob ||
     !orbiterName ||
@@ -208,7 +366,7 @@ function validateEngagementEntry(entry, userList = [], existingEntries = []) {
   }
 
   if (callDate < today) {
-    return "Date of calling must be today's date";
+    return "Date of calling cannot be a past date";
   }
 
   if (callDate > today) {
@@ -266,6 +424,10 @@ function validateEngagementEntry(entry, userList = [], existingEntries = []) {
 
   if (!nextFollowupValue) {
     return "Next follow-up date is invalid";
+  }
+
+  if (nextFollowupDate < today) {
+    return "Next follow-up date cannot be a past date";
   }
 
   if (nextFollowupValue < callDateValue) {
@@ -991,10 +1153,58 @@ export async function PATCH(req) {
         label: String(logMeta.label || targetLabel || "").trim(),
       };
 
+      const completionRow = rows.find(
+        (row) => row?.label === "Enrollments Completion Status"
+      );
+
+      let enrolledOrbiterUjbCode =
+        existingData.enrolledOrbiterUjbCode || existingData.UJBCode || "";
+      let orbiterConversion = null;
+
+      if (
+        completionRow?.checked &&
+        completionRow?.status === "Enrollment completed"
+      ) {
+        if (enrolledOrbiterUjbCode) {
+          orbiterConversion = {
+            ujbCode: enrolledOrbiterUjbCode,
+            status: "already_orbiter",
+          };
+        } else {
+          orbiterConversion = await createOrbiterOnEnrollmentCompletion(
+            dbResult.adminDb,
+            {
+              id,
+              ...existingData,
+            }
+          );
+          enrolledOrbiterUjbCode = orbiterConversion?.ujbCode || "";
+        }
+
+        if (!enrolledOrbiterUjbCode) {
+          const missingFields = Array.isArray(orbiterConversion?.missingFields)
+            ? orbiterConversion.missingFields.join(", ")
+            : "";
+
+          return NextResponse.json(
+            {
+              message: missingFields
+                ? `Unable to create orbiter. Missing required prospect fields: ${missingFields}`
+                : "Unable to create orbiter when enrollment is completed",
+            },
+            { status: 400 }
+          );
+        }
+      }
+
       await prospectRef.set(
         {
           enrollmentStages: rows,
           enrollmentStageLogs: [...existingLogs, nextLog],
+          enrolledOrbiterUjbCode,
+          userType: enrolledOrbiterUjbCode
+            ? "orbiter"
+            : existingData.userType || "prospect",
           updatedAt: new Date(),
         },
         { merge: true }
@@ -1004,6 +1214,7 @@ export async function PATCH(req) {
 
       return NextResponse.json({
         success: true,
+        orbiterConversion,
         prospect: {
           id: updatedSnap.id,
           ...updatedSnap.data(),

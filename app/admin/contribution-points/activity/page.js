@@ -56,7 +56,7 @@ export default function ContributionPointActivityImportPage() {
   return (
     <div className="space-y-6">
       <div>
-        <Text as="h1" variant="h1">Contribution Point Activity Import</Text>
+        
         <Text variant="muted">
           Upload the CP activity workbook and preview rows before import.
         </Text>

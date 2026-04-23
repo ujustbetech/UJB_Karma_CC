@@ -9,6 +9,10 @@ import Input from "@/components/ui/Input";
 import Select from "@/components/ui/Select";
 import FormField from "@/components/ui/FormField";
 import { useToast } from "@/components/ui/ToastProvider";
+import {
+  PROSPECT_OCCASION_OPTIONS,
+  PROSPECT_OCCUPATION_OPTIONS,
+} from "@/lib/prospectFormOptions";
 
 const INDIA_DIAL_CODE = "+91";
 const INDIAN_MOBILE_REGEX = /^(?:\+91)?[6-9]\d{9}$/;
@@ -56,6 +60,8 @@ export default function EditProspect({ id, data }) {
   });
 
   useEffect(() => {
+    let isMounted = true;
+
     const fetchUsers = async () => {
       try {
         const res = await fetch("/api/admin/orbiters", {
@@ -76,15 +82,23 @@ export default function EditProspect({ id, data }) {
             }))
           : [];
 
-        setUserList(list);
+        if (isMounted) {
+          setUserList(list);
+        }
       } catch (error) {
         console.error(error);
-        toast.error("Unable to load orbiters");
+        if (isMounted) {
+          toast.error("Unable to load orbiters");
+        }
       }
     };
 
     fetchUsers();
-  }, [toast]);
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   const handleSearchUser = (value) => {
     setUserSearch(value);
@@ -156,10 +170,6 @@ export default function EditProspect({ id, data }) {
 
     if (!String(form.occupation || "").trim()) {
       nextErrors.occupation = "Occupation is required.";
-    }
-
-    if (!String(form.hobbies || "").trim()) {
-      nextErrors.hobbies = "Hobbies are required.";
     }
 
     if (!EMAIL_REGEX.test(String(form.email || "").trim())) {
@@ -302,16 +312,17 @@ export default function EditProspect({ id, data }) {
             </FormField>
 
             <FormField label="Occupation" required error={errors.occupation}>
-              <Input
+              <Select
                 value={form.occupation}
-                onChange={(e) => handleFieldChange("occupation", e.target.value)}
+                onChange={(value) => handleFieldChange("occupation", value)}
+                options={PROSPECT_OCCUPATION_OPTIONS}
               />
             </FormField>
 
-            <FormField label="Hobbies" required error={errors.hobbies}>
-              <Input
-                value={form.hobbies}
-                onChange={(e) => handleFieldChange("hobbies", e.target.value)}
+            <FormField label="Hobbies" error={errors.hobbies}>
+                <Input
+                  value={form.hobbies}
+                  onChange={(e) => handleFieldChange("hobbies", e.target.value)}
               />
             </FormField>
           </div>
@@ -320,20 +331,7 @@ export default function EditProspect({ id, data }) {
             <Select
               value={form.type}
               onChange={(v) => handleFieldChange("type", v)}
-              options={[
-                { label: "Support Team Call", value: "support_call" },
-                { label: "Orbiter Connect", value: "orbiter_connection" },
-                { label: "Doorstep Service", value: "doorstep_service" },
-                { label: "Monthly Meeting", value: "monthly_meeting" },
-                { label: "E2A Interaction", value: "e2a_interactions" },
-                {
-                  label: "Unniversary Interaction",
-                  value: "unniversary_interactions",
-                },
-                { label: "Support", value: "support" },
-                { label: "NT", value: "nt" },
-                { label: "Management", value: "management" },
-              ]}
+              options={PROSPECT_OCCASION_OPTIONS}
             />
           </FormField>
 

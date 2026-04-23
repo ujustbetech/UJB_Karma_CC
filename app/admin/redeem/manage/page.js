@@ -128,12 +128,7 @@ export default function AdminManageRedeemPage() {
 
   return (
     <main className="space-y-6">
-      <div className="rounded-3xl bg-white p-8 shadow-sm border border-slate-200">
-        <h1 className="text-2xl font-bold text-slate-800">Manage Redeem Deals</h1>
-        <p className="mt-1 text-sm text-slate-500">
-          Review, approve, reject, and edit CC redemption deals.
-        </p>
-      </div>
+  QQQQQQQQQQQQQQQQQQQQQQQQQQQqQqQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQqqqqqqqqqqqQ
 
       <div className="rounded-3xl bg-white p-8 shadow-sm border border-slate-200 space-y-6">
         <div className="grid gap-4 md:grid-cols-2">

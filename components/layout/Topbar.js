@@ -69,18 +69,7 @@ export default function Topbar() {
         <div className="flex-1" />
 
         <div className="flex items-center gap-3">
-          <button className="flex h-10 w-10 items-center justify-center rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-100">
-            <Plus className="h-4 w-4" />
-          </button>
-
-          <div className="relative">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
-            <input
-              type="text"
-              placeholder="Search"
-              className="h-10 w-[260px] rounded-lg border border-slate-300 bg-white pl-9 pr-3 text-sm focus:outline-none"
-            />
-          </div>
+          
 
           <div title="Logout" onClick={handleLogout} className="cursor-pointer">
             {loading ? (

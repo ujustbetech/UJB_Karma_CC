@@ -1,15 +1,90 @@
 "use client";
 
-import Button from "@/components/ui/Button";
-import Card from "@/components/ui/Card";
-import { auth, microsoftProvider } from "@/lib/firebase/firebaseClient";
-import { signInWithPopup } from "firebase/auth";
+import { useEffect, useMemo, useState } from "react";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import {
+  ArrowLeft,
+  LockKeyhole,
+  Mail,
+  ShieldCheck,
+  Sparkles,
+} from "lucide-react";
+import Button from "@/components/ui/Button";
+import {
+  auth,
+  googleProvider,
+  microsoftProvider,
+} from "@/lib/firebase/firebaseClient";
+import {
+  sendPasswordResetEmail,
+  signInWithEmailAndPassword,
+  signInWithPopup,
+  signOut,
+} from "firebase/auth";
+
+function ProviderButton({
+  label,
+  onClick,
+  disabled,
+  loading,
+  icon,
+  className = "",
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled || loading}
+      className={`flex w-full items-center justify-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 transition hover:border-slate-300 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60 ${className}`}
+    >
+      <span className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-100 text-slate-700">
+        {icon}
+      </span>
+      <span>{loading ? "Please wait..." : label}</span>
+    </button>
+  );
+}
+
+function validateEmail(value) {
+  return /^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/.test(
+    String(value || "").trim()
+  );
+}
+
+function GoogleMark() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
+      <path
+        fill="#EA4335"
+        d="M12 10.2v3.9h5.5c-.2 1.3-1.5 3.9-5.5 3.9-3.3 0-6-2.7-6-6s2.7-6 6-6c1.9 0 3.2.8 3.9 1.5l2.7-2.6C16.8 3.2 14.6 2.3 12 2.3 6.7 2.3 2.3 6.7 2.3 12S6.7 21.7 12 21.7c6.9 0 9.6-4.8 9.6-7.3 0-.5-.1-.9-.1-1.2H12Z"
+      />
+    </svg>
+  );
+}
+
+function MicrosoftMark() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
+      <rect x="3" y="3" width="8" height="8" fill="#F25022" />
+      <rect x="13" y="3" width="8" height="8" fill="#7FBA00" />
+      <rect x="3" y="13" width="8" height="8" fill="#00A4EF" />
+      <rect x="13" y="13" width="8" height="8" fill="#FFB900" />
+    </svg>
+  );
+}
 
 export default function LoginPage() {
   const router = useRouter();
-  const [loading, setLoading] = useState(false);
+  const [loadingProvider, setLoadingProvider] = useState("");
+  const [passwordSubmitting, setPasswordSubmitting] = useState(false);
+  const [resetSubmitting, setResetSubmitting] = useState(false);
+  const [forgotMode, setForgotMode] = useState(false);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [resetEmail, setResetEmail] = useState("");
+  const [fieldErrors, setFieldErrors] = useState({});
+  const [status, setStatus] = useState({ type: "", message: "" });
 
   useEffect(() => {
     const checkAdminSession = async () => {
@@ -29,39 +104,46 @@ export default function LoginPage() {
     checkAdminSession();
   }, [router]);
 
-  const handleMicrosoftLogin = async () => {
-    if (loading) return;
-    setLoading(true);
+  const anyBusy = useMemo(
+    () => Boolean(loadingProvider || passwordSubmitting || resetSubmitting),
+    [loadingProvider, passwordSubmitting, resetSubmitting]
+  );
+
+  const finishAdminLogin = async (user) => {
+    const idToken = await user.getIdToken();
+    const res = await fetch("/api/admin/session/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ idToken }),
+    });
+    const data = await res.json().catch(() => ({}));
+
+    if (!res.ok || !data?.success) {
+      await signOut(auth).catch(() => {});
+      throw new Error(
+        data?.message ||
+          "Admin login failed. Please verify your access configuration."
+      );
+    }
+
+    router.replace("/admin/orbiters");
+  };
+
+  const clearMessages = () => {
+    setStatus({ type: "", message: "" });
+    setFieldErrors({});
+  };
+
+  const handleProviderLogin = async (providerName, provider) => {
+    if (anyBusy) return;
+
+    clearMessages();
+    setLoadingProvider(providerName);
 
     try {
-      const result = await signInWithPopup(auth, microsoftProvider);
-      const idToken = await result.user.getIdToken();
-
-      const res = await fetch("/api/admin/session/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ idToken }),
-      });
-
-      const rawBody = await res.text();
-      let data = null;
-
-      try {
-        data = rawBody ? JSON.parse(rawBody) : null;
-      } catch {
-        data = null;
-      }
-
-      if (!res.ok || !data?.success) {
-        alert(
-          data?.message ||
-            "Admin login failed. Please check the server configuration."
-        );
-        return;
-      }
-
-      router.replace("/admin/orbiters");
+      const result = await signInWithPopup(auth, provider);
+      await finishAdminLogin(result.user);
     } catch (error) {
       const errorCode = error?.code || "";
 
@@ -73,35 +155,412 @@ export default function LoginPage() {
       }
 
       if (errorCode === "auth/configuration-not-found") {
-        alert(
-          "Microsoft sign-in is not configured for the current Firebase project. Enable the Microsoft provider in Firebase Authentication for the ujustbedev project to use admin login."
-        );
+        setStatus({
+          type: "error",
+          message: `${providerName} sign-in is not configured in Firebase Authentication for this project.`,
+        });
         return;
       }
 
-      console.error(error);
-      alert("Login failed");
+      if (errorCode === "auth/account-exists-with-different-credential") {
+        setStatus({
+          type: "error",
+          message:
+            "This email is linked to a different sign-in method. Please use the original provider or reset the account credentials.",
+        });
+        return;
+      }
+
+      setStatus({
+        type: "error",
+        message: error?.message || `${providerName} login failed.`,
+      });
     } finally {
-      setLoading(false);
+      setLoadingProvider("");
+    }
+  };
+
+  const handlePasswordLogin = async (e) => {
+    e.preventDefault();
+    if (anyBusy) return;
+
+    clearMessages();
+
+    const nextErrors = {};
+    const trimmedEmail = String(email || "").trim();
+
+    if (!trimmedEmail) {
+      nextErrors.email = "Email is required.";
+    } else if (!validateEmail(trimmedEmail)) {
+      nextErrors.email = "Enter a valid email address.";
+    }
+
+    if (!password) {
+      nextErrors.password = "Password is required.";
+    } else if (password.length < 8) {
+      nextErrors.password = "Password must be at least 8 characters.";
+    }
+
+    if (Object.keys(nextErrors).length > 0) {
+      setFieldErrors(nextErrors);
+      return;
+    }
+
+    setPasswordSubmitting(true);
+
+    try {
+      const credential = await signInWithEmailAndPassword(
+        auth,
+        trimmedEmail,
+        password
+      );
+      await finishAdminLogin(credential.user);
+    } catch (error) {
+      const errorCode = error?.code || "";
+
+      if (
+        errorCode === "auth/invalid-credential" ||
+        errorCode === "auth/wrong-password" ||
+        errorCode === "auth/user-not-found"
+      ) {
+        setStatus({
+          type: "error",
+          message: "Invalid email or password.",
+        });
+      } else if (errorCode === "auth/too-many-requests") {
+        setStatus({
+          type: "error",
+          message:
+            "Too many failed attempts. Please wait a moment or use Forgot password.",
+        });
+      } else {
+        setStatus({
+          type: "error",
+          message: error?.message || "Email login failed.",
+        });
+      }
+
+      setPassword("");
+    } finally {
+      setPasswordSubmitting(false);
+    }
+  };
+
+  const handlePasswordReset = async (e) => {
+    e.preventDefault();
+    if (anyBusy) return;
+
+    clearMessages();
+
+    const trimmedEmail = String(resetEmail || "").trim();
+
+    if (!trimmedEmail) {
+      setFieldErrors({ resetEmail: "Email is required for password reset." });
+      return;
+    }
+
+    if (!validateEmail(trimmedEmail)) {
+      setFieldErrors({ resetEmail: "Enter a valid email address." });
+      return;
+    }
+
+    setResetSubmitting(true);
+
+    try {
+      await sendPasswordResetEmail(auth, trimmedEmail);
+      setStatus({
+        type: "success",
+        message:
+          "Password reset email sent. Please check your inbox and follow the secure reset link.",
+      });
+    } catch (error) {
+      const errorCode = error?.code || "";
+
+      if (errorCode === "auth/user-not-found") {
+        setStatus({
+          type: "error",
+          message: "No account exists for that email address.",
+        });
+      } else {
+        setStatus({
+          type: "error",
+          message: error?.message || "Unable to send reset email.",
+        });
+      }
+    } finally {
+      setResetSubmitting(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-neutral-100 flex items-center justify-center">
-      <Card className="w-96 p-6">
-        <h1 className="mb-6 text-center text-lg font-semibold text-neutral-700">
-          Admin Login
-        </h1>
+    <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(37,99,235,0.18),_transparent_32%),radial-gradient(circle_at_bottom_right,_rgba(15,118,110,0.16),_transparent_28%),linear-gradient(135deg,#f8fafc_0%,#e2e8f0_48%,#f8fafc_100%)]">
+      <div className="mx-auto flex min-h-screen w-full max-w-7xl items-center px-6 py-10 lg:px-10">
+        <div className="grid w-full gap-8 lg:grid-cols-[1.15fr_0.95fr]">
+          <section className="relative overflow-hidden rounded-[34px] border border-white/70 bg-slate-950 px-8 py-10 text-white shadow-[0_28px_80px_rgba(15,23,42,0.26)] lg:px-10 lg:py-12">
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,_rgba(96,165,250,0.32),_transparent_28%),radial-gradient(circle_at_bottom_left,_rgba(45,212,191,0.22),_transparent_30%)]" />
+            <div className="relative">
+              <div className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.24em] text-sky-100">
+                <ShieldCheck size={14} />
+                UJustBe Admin Access
+              </div>
 
-        <Button
-          className="flex w-full items-center justify-center gap-2"
-          onClick={handleMicrosoftLogin}
-          disabled={loading}
-          loading={loading}
-        >
-          Sign in with Microsoft
-        </Button>
-      </Card>
+              <div className="mt-8 flex items-center gap-5">
+                <div className="rounded-[28px] bg-white/10 p-3 ring-1 ring-white/15 backdrop-blur">
+                  <Image
+                    src="/ujustbe-logo.svg"
+                    alt="UJustBe logo"
+                    width={110}
+                    height={110}
+                    priority
+                    className="h-24 w-24 rounded-[22px] object-cover"
+                  />
+                </div>
+
+                <div>
+                  <p className="text-sm font-medium uppercase tracking-[0.26em] text-sky-100/80">
+                    UJustBe Universe
+                  </p>
+                  <h1 className="mt-3 max-w-xl text-4xl font-semibold leading-tight text-white lg:text-5xl">
+                    Secure sign-in for your admin workspace.
+                  </h1>
+                </div>
+              </div>
+
+              <p className="mt-8 max-w-2xl text-base leading-7 text-slate-200">
+                Manage prospect journeys, orbiters, referrals, and meetings from a
+                polished, secure access point with modern provider login and
+                password recovery support.
+              </p>
+
+              <div className="mt-10 grid gap-4 md:grid-cols-3">
+                {[
+                  "Microsoft and Google SSO support",
+                  "Secure email and password sign-in",
+                  "Password reset and input validation",
+                ].map((item) => (
+                  <div
+                    key={item}
+                    className="rounded-2xl border border-white/12 bg-white/8 p-4 backdrop-blur"
+                  >
+                    <div className="mb-3 inline-flex rounded-full bg-white/12 p-2 text-sky-100">
+                      <Sparkles size={16} />
+                    </div>
+                    <p className="text-sm leading-6 text-slate-100">{item}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </section>
+
+          <section className="rounded-[34px] border border-slate-200/80 bg-white/92 p-6 shadow-[0_20px_60px_rgba(15,23,42,0.08)] backdrop-blur lg:p-8">
+            <div className="mb-8">
+              <p className="text-sm font-semibold uppercase tracking-[0.2em] text-sky-700">
+                Welcome Back
+              </p>
+              <h2 className="mt-3 text-3xl font-semibold text-slate-900">
+                Admin Login
+              </h2>
+              <p className="mt-3 text-sm leading-6 text-slate-600">
+                Sign in with your approved admin account. OAuth and email/password
+                methods both route through the existing admin authorization system.
+              </p>
+            </div>
+
+            {status.message ? (
+              <div
+                className={`mb-6 rounded-2xl border px-4 py-3 text-sm ${
+                  status.type === "success"
+                    ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                    : "border-rose-200 bg-rose-50 text-rose-700"
+                }`}
+              >
+                {status.message}
+              </div>
+            ) : null}
+
+            <div className="space-y-3">
+              <ProviderButton
+                label="Sign in with Microsoft"
+                onClick={() =>
+                  handleProviderLogin("Microsoft", microsoftProvider)
+                }
+                disabled={anyBusy}
+                loading={loadingProvider === "Microsoft"}
+                icon={<MicrosoftMark />}
+              />
+              <ProviderButton
+                label="Sign in with Google"
+                onClick={() => handleProviderLogin("Google", googleProvider)}
+                disabled={anyBusy}
+                loading={loadingProvider === "Google"}
+                icon={<GoogleMark />}
+              />
+            </div>
+
+            <div className="my-6 flex items-center gap-4">
+              <div className="h-px flex-1 bg-slate-200" />
+              <span className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
+                Or use email
+              </span>
+              <div className="h-px flex-1 bg-slate-200" />
+            </div>
+
+            {!forgotMode ? (
+              <form className="space-y-4" onSubmit={handlePasswordLogin}>
+                <div>
+                  <label
+                    htmlFor="admin-email"
+                    className="mb-2 block text-sm font-medium text-slate-700"
+                  >
+                    Email address
+                  </label>
+                  <div className="relative">
+                    <Mail
+                      size={18}
+                      className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
+                    />
+                    <input
+                      id="admin-email"
+                      type="email"
+                      autoComplete="username"
+                      value={email}
+                      onChange={(e) => {
+                        setEmail(e.target.value);
+                        setFieldErrors((prev) => ({ ...prev, email: "" }));
+                      }}
+                      className="w-full rounded-2xl border border-slate-200 bg-white px-12 py-3 text-sm text-slate-900 outline-none transition focus:border-sky-500 focus:ring-4 focus:ring-sky-100"
+                      placeholder="admin@ujustbe.com"
+                    />
+                  </div>
+                  {fieldErrors.email ? (
+                    <p className="mt-2 text-xs text-rose-600">{fieldErrors.email}</p>
+                  ) : null}
+                </div>
+
+                <div>
+                  <label
+                    htmlFor="admin-password"
+                    className="mb-2 block text-sm font-medium text-slate-700"
+                  >
+                    Password
+                  </label>
+                  <div className="relative">
+                    <LockKeyhole
+                      size={18}
+                      className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
+                    />
+                    <input
+                      id="admin-password"
+                      type="password"
+                      autoComplete="current-password"
+                      value={password}
+                      onChange={(e) => {
+                        setPassword(e.target.value);
+                        setFieldErrors((prev) => ({ ...prev, password: "" }));
+                      }}
+                      className="w-full rounded-2xl border border-slate-200 bg-white px-12 py-3 text-sm text-slate-900 outline-none transition focus:border-sky-500 focus:ring-4 focus:ring-sky-100"
+                      placeholder="Enter your password"
+                    />
+                  </div>
+                  {fieldErrors.password ? (
+                    <p className="mt-2 text-xs text-rose-600">
+                      {fieldErrors.password}
+                    </p>
+                  ) : null}
+                </div>
+
+                <div className="flex items-center justify-between gap-4 pt-1">
+                  <p className="text-xs leading-5 text-slate-500">
+                    Passwords are verified through Firebase Authentication and are
+                    never stored in app code or plain text.
+                  </p>
+
+                  <button
+                    type="button"
+                    className="shrink-0 text-sm font-medium text-sky-700 transition hover:text-sky-800"
+                    onClick={() => {
+                      clearMessages();
+                      setForgotMode(true);
+                      setResetEmail(email);
+                    }}
+                  >
+                    Forgot password?
+                  </button>
+                </div>
+
+                <Button
+                  type="submit"
+                  className="mt-2 w-full justify-center"
+                  disabled={anyBusy}
+                  loading={passwordSubmitting}
+                >
+                  Sign in with Email
+                </Button>
+              </form>
+            ) : (
+              <form className="space-y-4" onSubmit={handlePasswordReset}>
+                <div className="rounded-2xl border border-sky-100 bg-sky-50 px-4 py-3 text-sm text-sky-800">
+                  Send a secure reset link to your admin email. Once you update the
+                  password, come back here and sign in normally.
+                </div>
+
+                <div>
+                  <label
+                    htmlFor="reset-email"
+                    className="mb-2 block text-sm font-medium text-slate-700"
+                  >
+                    Reset email
+                  </label>
+                  <div className="relative">
+                    <Mail
+                      size={18}
+                      className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
+                    />
+                    <input
+                      id="reset-email"
+                      type="email"
+                      autoComplete="email"
+                      value={resetEmail}
+                      onChange={(e) => {
+                        setResetEmail(e.target.value);
+                        setFieldErrors((prev) => ({ ...prev, resetEmail: "" }));
+                      }}
+                      className="w-full rounded-2xl border border-slate-200 bg-white px-12 py-3 text-sm text-slate-900 outline-none transition focus:border-sky-500 focus:ring-4 focus:ring-sky-100"
+                      placeholder="admin@ujustbe.com"
+                    />
+                  </div>
+                  {fieldErrors.resetEmail ? (
+                    <p className="mt-2 text-xs text-rose-600">
+                      {fieldErrors.resetEmail}
+                    </p>
+                  ) : null}
+                </div>
+
+                <Button
+                  type="submit"
+                  className="w-full justify-center"
+                  disabled={anyBusy}
+                  loading={resetSubmitting}
+                >
+                  Send Reset Link
+                </Button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    clearMessages();
+                    setForgotMode(false);
+                  }}
+                  className="inline-flex items-center gap-2 text-sm font-medium text-slate-600 transition hover:text-slate-900"
+                >
+                  <ArrowLeft size={16} />
+                  Back to sign in
+                </button>
+              </form>
+            )}
+          </section>
+        </div>
+      </div>
     </div>
   );
 }
