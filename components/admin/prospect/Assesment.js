@@ -3,6 +3,7 @@ import Swal from "sweetalert2";
 import emailjs from "@emailjs/browser";
 
 import { sendWhatsAppTemplateRequest } from "@/utils/whatsappClient";
+import { formatDate, formatDateTime } from "@/lib/utils/dateFormat";
 
 const STATUS_CONFIG = {
   "Choose to enroll": {
@@ -100,47 +101,9 @@ const FINAL_STATUSES = new Set([
 const sanitizeText = (text) =>
   String(text || "").replace(/[^a-zA-Z0-9 .,!?'"@#&()\-]/g, " ");
 
-const formatDisplayDate = () =>
-  new Date().toLocaleDateString("en-IN", {
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-  });
+const formatDisplayDate = () => formatDate(new Date(), "");
 
-const formatLogDate = (value) => {
-  if (!value) return "";
-
-  if (typeof value === "object") {
-    const seconds = value.seconds ?? value._seconds;
-
-    if (typeof seconds === "number") {
-      const fromSeconds = new Date(seconds * 1000);
-
-      if (!Number.isNaN(fromSeconds.getTime())) {
-        return fromSeconds.toLocaleString("en-IN");
-      }
-    }
-
-    if (typeof value.toDate === "function") {
-      const fromTimestamp = value.toDate();
-
-      if (!Number.isNaN(fromTimestamp.getTime())) {
-        return fromTimestamp.toLocaleString("en-IN");
-      }
-    }
-  }
-
-  if (typeof value === "number") {
-    const numericDate = new Date(value);
-    return Number.isNaN(numericDate.getTime())
-      ? ""
-      : numericDate.toLocaleString("en-IN");
-  }
-
-  const parsed = new Date(value);
-
-  return Number.isNaN(parsed.getTime()) ? "" : parsed.toLocaleString("en-IN");
-};
+const formatLogDate = (value) => formatDateTime(value, "");
 
 const Assessment = ({ id, fetchData }) => {
   const [loading, setLoading] = useState(false);

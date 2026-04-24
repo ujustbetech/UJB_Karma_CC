@@ -28,6 +28,7 @@ import Select from "@/components/ui/Select";
 import Text from "@/components/ui/Text";
 import { useToast } from "@/components/ui/ToastProvider";
 import { useAdminSession } from "@/hooks/useAdminSession";
+import { formatDateTime } from "@/lib/utils/dateFormat";
 import Table from "@/components/table/Table";
 import TableHeader from "@/components/table/TableHeader";
 import TableRow from "@/components/table/TableRow";
@@ -98,27 +99,7 @@ function toReadableInviteStatus(value) {
 }
 
 function formatDateValue(value) {
-  if (!value) return "Not available";
-
-  const candidate =
-    typeof value?.toDate === "function"
-      ? value.toDate()
-      : typeof value?.seconds === "number"
-      ? new Date(value.seconds * 1000)
-      : typeof value?._seconds === "number"
-      ? new Date(value._seconds * 1000)
-      : value;
-
-  const date = candidate instanceof Date ? candidate : new Date(candidate);
-
-  if (Number.isNaN(date.getTime())) {
-    return "Not available";
-  }
-
-  return new Intl.DateTimeFormat("en-IN", {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(date);
+  return formatDateTime(value, "Not available");
 }
 
 function toReadableHistoryType(value) {

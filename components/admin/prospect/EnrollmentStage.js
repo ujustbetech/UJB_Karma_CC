@@ -3,6 +3,7 @@ import emailjs from "@emailjs/browser";
 import Swal from "sweetalert2";
 
 import { sendWhatsAppTemplateRequest } from "@/utils/whatsappClient";
+import { formatDate, formatDateTime, normalizeDateForStorage } from "@/lib/utils/dateFormat";
 
 const STAGE_OPTIONS = [
   {
@@ -44,23 +45,7 @@ const sanitizeText = (text) =>
     .trim();
 
 const formatLogDate = (value) => {
-  if (!value) return "";
-
-  if (typeof value === "string") {
-    const parsed = new Date(value);
-    return Number.isNaN(parsed.getTime())
-      ? value
-      : parsed.toLocaleString("en-IN");
-  }
-
-  if (value?.seconds) {
-    return new Date(value.seconds * 1000).toLocaleString("en-IN");
-  }
-
-  const parsed = new Date(value);
-  return Number.isNaN(parsed.getTime())
-    ? ""
-    : parsed.toLocaleString("en-IN");
+  return formatDateTime(value, "");
 };
 
 const stringifyValue = (value) => {
@@ -82,57 +67,11 @@ const stringifyValue = (value) => {
 };
 
 const formatStageDate = (value) => {
-  if (!value) return "";
-
-  if (typeof value === "string") {
-    if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
-      const parsed = new Date(`${value}T00:00:00`);
-      return Number.isNaN(parsed.getTime())
-        ? value
-        : parsed.toLocaleDateString("en-IN");
-    }
-
-    const parsed = new Date(value);
-    return Number.isNaN(parsed.getTime())
-      ? value
-      : parsed.toLocaleDateString("en-IN");
-  }
-
-  if (value?.seconds) {
-    return new Date(value.seconds * 1000).toLocaleDateString("en-IN");
-  }
-
-  const parsed = new Date(value);
-  return Number.isNaN(parsed.getTime())
-    ? ""
-    : parsed.toLocaleDateString("en-IN");
+  return formatDate(value, "");
 };
 
 const normalizeDateValue = (value) => {
-  if (!value) return "";
-
-  if (typeof value === "string") {
-    if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
-      return value;
-    }
-
-    if (/^\d{2}\/\d{2}\/\d{4}$/.test(value)) {
-      const [month, day, year] = value.split("/");
-      return `${year}-${month}-${day}`;
-    }
-
-    const parsed = new Date(value);
-    if (!Number.isNaN(parsed.getTime())) {
-      return parsed.toISOString().split("T")[0];
-    }
-  }
-
-  if (value?.seconds) {
-    return new Date(value.seconds * 1000).toISOString().split("T")[0];
-  }
-
-  const parsed = new Date(value);
-  return Number.isNaN(parsed.getTime()) ? "" : parsed.toISOString().split("T")[0];
+  return normalizeDateForStorage(value);
 };
 
 const getLogKey = (log, index) => {

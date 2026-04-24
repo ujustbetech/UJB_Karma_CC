@@ -4,7 +4,9 @@ import React, { useState, useEffect } from "react";
 import "react-quill-new/dist/quill.snow.css";
 import emailjs from "@emailjs/browser";
 import dynamic from "next/dynamic";
+import { useRouter, useSearchParams } from "next/navigation";
 import { sendWhatsAppTemplateRequest } from "@/utils/whatsappClient";
+import { formatDate, formatDateTime } from "@/lib/utils/dateFormat";
 
 const ReactQuill = dynamic(() => import("react-quill-new"), {
   ssr: false,
@@ -19,6 +21,8 @@ const requiredHeading = (label) => (
 );
 
 const AditionalInfo = ({ id, data = { sections: [] } }) => {
+  const router = useRouter();
+  const searchParams = useSearchParams();
 
   const [section, setSection] = useState({
     lived: "",
@@ -36,6 +40,7 @@ const AditionalInfo = ({ id, data = { sections: [] } }) => {
 
   const [hasData, setHasData] = useState(false);
   const [editMode, setEditMode] = useState(false);
+  const [auditLogs, setAuditLogs] = useState([]);
 
   useEffect(() => {
     setMounted(true);
@@ -47,6 +52,16 @@ const AditionalInfo = ({ id, data = { sections: [] } }) => {
       setHasData(true);
       setEditMode(false);
     }
+
+    setAuditLogs(
+      Array.isArray(data.formAuditLogs)
+        ? data.formAuditLogs.filter(
+            (log) =>
+              log?.formName === "UJB Enrollment Form" ||
+              log?.formName === "Feedback Form"
+          )
+        : []
+    );
   }, [data]);
 
   const handleInputChange = (value, field) => {
@@ -117,6 +132,12 @@ const AditionalInfo = ({ id, data = { sections: [] } }) => {
         throw new Error(responseData.message || "Failed to save pre-enrollment form");
       }
 
+      setAuditLogs(Array.isArray(responseData.auditLogs) ? responseData.auditLogs.filter(
+        (log) =>
+          log?.formName === "UJB Enrollment Form" ||
+          log?.formName === "Feedback Form"
+      ) : []);
+
       setHasData(true);
       setEditMode(false);
 
@@ -154,6 +175,33 @@ Thank you!
         emailBody,
         phone
       );
+
+      const sendAuditRes = await fetch(
+        `/api/admin/prospects?id=${id}&section=additionalinfo`,
+        {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          credentials: "include",
+          body: JSON.stringify({
+            auditAction: "sent",
+          }),
+        }
+      );
+      const sendAuditData = await sendAuditRes.json().catch(() => ({}));
+      if (sendAuditRes.ok) {
+        setAuditLogs(Array.isArray(sendAuditData.auditLogs) ? sendAuditData.auditLogs.filter(
+          (log) =>
+            log?.formName === "UJB Enrollment Form" ||
+            log?.formName === "Feedback Form"
+        ) : []);
+      }
+
+      const returnTab = searchParams.get("returnTab");
+      if (returnTab && id) {
+        router.push(`/admin/prospect/edit/${id}?tab=${returnTab}`);
+      }
 
     } catch (error) {
 
@@ -326,6 +374,41 @@ Thank you!
             </button>
           )}
 
+        </div>
+
+        <div className="mt-8">
+          <h3 className="text-xl font-semibold mb-3">Audit Log</h3>
+          <div className="space-y-3">
+            {auditLogs.length === 0 ? (
+              <p className="text-sm text-slate-500">No audit activity recorded yet.</p>
+            ) : (
+              [...auditLogs].reverse().map((log) => (
+                <div
+                  key={log.id}
+                  className="rounded-lg border border-slate-200 bg-slate-50 p-4"
+                >
+                  <p className="font-medium">
+                    {log.formName} - {log.actionType}
+                  </p>
+                  <p className="text-sm text-slate-600">
+                    {log.performedBy} ({log.userRole}) {log.userIdentity ? `- ${log.userIdentity}` : ""}
+                  </p>
+                  <p className="text-sm text-slate-600">
+                    {formatDateTime(log.timestamp, "")}
+                  </p>
+                  {Array.isArray(log.changedFields) && log.changedFields.length > 0 ? (
+                    <div className="mt-2 space-y-1">
+                      {log.changedFields.map((fieldChange, index) => (
+                        <p key={`${log.id}-${fieldChange.field}-${index}`} className="text-sm text-slate-600">
+                          {fieldChange.field}: {formatDate(fieldChange.before, fieldChange.before || "empty") || fieldChange.before || "empty"} -&gt; {formatDate(fieldChange.after, fieldChange.after || "empty") || fieldChange.after || "empty"}
+                        </p>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+              ))
+            )}
+          </div>
         </div>
 
       </div>

@@ -11,6 +11,12 @@ import { hasAdminAccess } from "@/lib/auth/accessControl";
 import { validateAdminSessionAccess } from "@/lib/auth/adminAccessWorkflow.mjs";
 import { publicEnv } from "@/lib/config/publicEnv";
 import { serverEnv } from "@/lib/config/serverEnv";
+import {
+  appendFormAuditLogs,
+  buildFormAuditEntry,
+  diffChangedFields,
+  getFormAuditLogs,
+} from "@/lib/prospectFormAudit";
 
 const prospectCollectionName = publicEnv.collections.prospect;
 const userCollectionName = publicEnv.collections.userDetail;
@@ -102,6 +108,88 @@ function validateAdminRequest(req) {
   }
 
   return { ok: true, admin: validation.admin };
+}
+
+function getAdminDisplayName(admin) {
+  return String(admin?.name || admin?.email || "Admin").trim();
+}
+
+function getAdminAuditIdentity(admin) {
+  return String(admin?.email || admin?.name || "Admin").trim();
+}
+
+function normalizeMeetingEvent(event, admin) {
+  if (!event || typeof event !== "object") {
+    return event;
+  }
+
+  const normalizedEvent = {
+    ...event,
+    mode: String(event.mode || "").trim().toLowerCase() || "online",
+    status: String(event.status || "").trim() || "Scheduled",
+    recordingLink: String(event.recordingLink || "").trim(),
+    noRecordingReason: String(event.noRecordingReason || "").trim(),
+    loggedBy: String(event.loggedBy || "").trim(),
+  };
+
+  if (normalizedEvent.status === "Done" && !normalizedEvent.loggedBy) {
+    normalizedEvent.loggedBy = `Logged by ${getAdminDisplayName(admin)}`;
+  }
+
+  return normalizedEvent;
+}
+
+function getMeetingIdentity(event, index) {
+  return [
+    String(event?.id ?? "no-id"),
+    String(event?.dateISO ?? "no-date"),
+    String(event?.createdAt ?? "no-created-at"),
+    String(index),
+  ].join("::");
+}
+
+function validateMeetingCompletion(nextEvents = [], previousEvents = []) {
+  const previousEventMap = new Map(
+    previousEvents.map((event, index) => [
+      getMeetingIdentity(event, index),
+      event,
+    ])
+  );
+
+  const invalidDoneMeeting = nextEvents.find((event, index) => {
+    if (!event || event.status !== "Done") {
+      return false;
+    }
+
+    const previousEvent = previousEventMap.get(getMeetingIdentity(event, index));
+    const wasPreviouslyDone = previousEvent?.status === "Done";
+    const previousRecording = String(previousEvent?.recordingLink || "").trim();
+    const previousReason = String(previousEvent?.noRecordingReason || "").trim();
+    const currentRecording = String(event.recordingLink || "").trim();
+    const currentReason = String(event.noRecordingReason || "").trim();
+    const hasRecording = Boolean(currentRecording);
+    const hasReason = currentReason.length >= 10;
+    const completionDetailsChanged =
+      previousRecording !== currentRecording || previousReason !== currentReason;
+
+    if (wasPreviouslyDone && !completionDetailsChanged) {
+      return false;
+    }
+
+    return !hasRecording && !hasReason;
+  });
+
+  if (!invalidDoneMeeting) {
+    return null;
+  }
+
+  return NextResponse.json(
+    {
+      message:
+        "Completed meetings require either a recording link/reference or a valid no-recording reason.",
+    },
+    { status: 400 }
+  );
 }
 
 function extractUjbSequence(value) {
@@ -262,7 +350,8 @@ async function createOrbiterOnEnrollmentCompletion(db, prospect) {
   };
 }
 
-function validateProspectPayload(body) {
+function validateProspectPayload(body, options = {}) {
+  const { requireSource = false } = options;
   const {
     userType,
     prospectName,
@@ -273,6 +362,7 @@ function validateProspectPayload(body) {
     orbiterName,
     orbiterContact,
     orbiterEmail,
+    source,
     type,
   } = body || {};
 
@@ -285,6 +375,7 @@ function validateProspectPayload(body) {
     !dob ||
     !orbiterName ||
     !orbiterContact ||
+    (requireSource && !source) ||
     !type
   ) {
     return "Missing required prospect fields";
@@ -544,7 +635,9 @@ export async function POST(req) {
     }
 
     const body = await req.json();
-    const validationError = validateProspectPayload(body);
+    const validationError = validateProspectPayload(body, {
+      requireSource: true,
+    });
 
     if (validationError) {
       return NextResponse.json(
@@ -564,6 +657,7 @@ export async function POST(req) {
       orbiterName: String(body.orbiterName).trim(),
       orbiterContact: String(body.orbiterContact).trim(),
       orbiterEmail: String(body.orbiterEmail || "").trim(),
+      source: String(body.source || "").trim(),
       type: String(body.type).trim(),
       registeredAt: new Date(),
     });
@@ -636,6 +730,7 @@ export async function GET(req) {
             id: formDoc.id,
             ...formDoc.data(),
           })),
+          auditLogs: getFormAuditLogs(prospect, "Form Assessment"),
         });
       }
 
@@ -646,6 +741,7 @@ export async function GET(req) {
 
         return NextResponse.json({
           prospect,
+          admin: authResult.admin,
           users: userSnapshot.docs.map((userDoc) => {
             const userData = userDoc.data() || {};
 
@@ -672,6 +768,7 @@ export async function GET(req) {
             id: formDoc.id,
             ...formDoc.data(),
           })),
+          auditLogs: getFormAuditLogs(prospect, "Feedback Form"),
         });
       }
 
@@ -723,6 +820,15 @@ export async function GET(req) {
           enrollmentStageLogs: Array.isArray(prospect.enrollmentStageLogs)
             ? prospect.enrollmentStageLogs
             : [],
+          auditLogs: getFormAuditLogs(prospect, "UJB Enrollment Form"),
+        });
+      }
+
+      if (section === "additionalinfo") {
+        return NextResponse.json({
+          prospect,
+          sections: Array.isArray(prospect.sections) ? prospect.sections : [],
+          auditLogs: getFormAuditLogs(prospect, "UJB Enrollment Form"),
         });
       }
 
@@ -866,15 +972,27 @@ export async function PATCH(req) {
 
     if (section === "prospectform") {
       const forms = Array.isArray(body.forms) ? body.forms : [];
+      const prospectRef = dbResult.adminDb.collection(prospectCollectionName).doc(id);
+      const prospectSnap = await prospectRef.get();
+      const prospectData = prospectSnap.exists ? prospectSnap.data() || {} : {};
+      const existingLogs = Array.isArray(prospectData.formAuditLogs)
+        ? prospectData.formAuditLogs
+        : [];
+      const nextAuditEntries = [];
+      const formCollectionRef = prospectRef.collection("prospectform");
 
       for (const form of forms) {
         const { id: formId, ...formData } = form || {};
+        let previousData = {};
 
         if (formId) {
-          await dbResult.adminDb
-            .collection(prospectCollectionName)
-            .doc(id)
-            .collection("prospectform")
+          const existingFormSnap = await formCollectionRef.doc(formId).get();
+          previousData = existingFormSnap.exists ? existingFormSnap.data() || {} : {};
+        }
+        const changedFields = diffChangedFields(previousData, formData);
+
+        if (formId) {
+          await formCollectionRef
             .doc(formId)
             .set(
               {
@@ -883,28 +1001,96 @@ export async function PATCH(req) {
               },
               { merge: true }
             );
+          if (changedFields.length > 0) {
+            nextAuditEntries.push(
+              buildFormAuditEntry({
+                formName: "Form Assessment",
+                actionType: "edited",
+                performedBy: getAdminDisplayName(authResult.admin),
+                userRole: "Admin user",
+                userIdentity: getAdminAuditIdentity(authResult.admin),
+                changedFields,
+              })
+            );
+          }
         } else {
-          await dbResult.adminDb
-            .collection(prospectCollectionName)
-            .doc(id)
-            .collection("prospectform")
+          await formCollectionRef
             .add({
               ...formData,
               createdAt: new Date(),
               updatedAt: new Date(),
             });
+          nextAuditEntries.push(
+            buildFormAuditEntry({
+              formName: "Form Assessment",
+              actionType: "filled",
+              performedBy: getAdminDisplayName(authResult.admin),
+              userRole: "Admin user",
+              userIdentity: getAdminAuditIdentity(authResult.admin),
+              changedFields: changedFields.length > 0 ? changedFields : diffChangedFields({}, formData),
+            })
+          );
         }
       }
 
-      return NextResponse.json({ success: true });
+      const updatedAuditLogs = appendFormAuditLogs(existingLogs, nextAuditEntries);
+
+      if (nextAuditEntries.length > 0) {
+        await prospectRef.set(
+          {
+            formAuditLogs: updatedAuditLogs,
+            updatedAt: new Date(),
+          },
+          { merge: true }
+        );
+      }
+
+      return NextResponse.json({
+        success: true,
+        auditLogs: updatedAuditLogs,
+      });
     }
 
     if (section === "followups") {
       const update = body.update && typeof body.update === "object" ? body.update : {};
+      const normalizedUpdate = {
+        ...update,
+      };
+      const existingProspectSnap = await dbResult.adminDb
+        .collection(prospectCollectionName)
+        .doc(id)
+        .get();
+      const existingProspect = existingProspectSnap.exists
+        ? existingProspectSnap.data() || {}
+        : {};
+
+      if (Array.isArray(update.events)) {
+        normalizedUpdate.events = update.events.map((event) =>
+          normalizeMeetingEvent(event, authResult.admin)
+        );
+        const previousEvents = Array.isArray(existingProspect.events)
+          ? existingProspect.events
+          : existingProspect.event
+          ? [existingProspect.event]
+          : [];
+
+        const completionError = validateMeetingCompletion(
+          normalizedUpdate.events,
+          previousEvents
+        );
+
+        if (completionError) {
+          return completionError;
+        }
+      }
+
+      if (update.event && typeof update.event === "object") {
+        normalizedUpdate.event = normalizeMeetingEvent(update.event, authResult.admin);
+      }
 
       await dbResult.adminDb.collection(prospectCollectionName).doc(id).set(
         {
-          ...update,
+          ...normalizedUpdate,
           updatedAt: new Date(),
         },
         { merge: true }
@@ -915,15 +1101,27 @@ export async function PATCH(req) {
 
     if (section === "prospectfeedbackform") {
       const forms = Array.isArray(body.forms) ? body.forms : [];
+      const prospectRef = dbResult.adminDb.collection(prospectCollectionName).doc(id);
+      const prospectSnap = await prospectRef.get();
+      const prospectData = prospectSnap.exists ? prospectSnap.data() || {} : {};
+      const existingLogs = Array.isArray(prospectData.formAuditLogs)
+        ? prospectData.formAuditLogs
+        : [];
+      const nextAuditEntries = [];
+      const formCollectionRef = prospectRef.collection("prospectfeedbackform");
 
       for (const form of forms) {
         const { id: formId, ...formData } = form || {};
+        let previousData = {};
 
         if (formId) {
-          await dbResult.adminDb
-            .collection(prospectCollectionName)
-            .doc(id)
-            .collection("prospectfeedbackform")
+          const existingFormSnap = await formCollectionRef.doc(formId).get();
+          previousData = existingFormSnap.exists ? existingFormSnap.data() || {} : {};
+        }
+        const changedFields = diffChangedFields(previousData, formData);
+
+        if (formId) {
+          await formCollectionRef
             .doc(formId)
             .set(
               {
@@ -932,34 +1130,125 @@ export async function PATCH(req) {
               },
               { merge: true }
             );
+          if (changedFields.length > 0) {
+            nextAuditEntries.push(
+              buildFormAuditEntry({
+                formName: "Feedback Form",
+                actionType: "edited",
+                performedBy: getAdminDisplayName(authResult.admin),
+                userRole: "Admin user",
+                userIdentity: getAdminAuditIdentity(authResult.admin),
+                changedFields,
+              })
+            );
+          }
         } else {
-          await dbResult.adminDb
-            .collection(prospectCollectionName)
-            .doc(id)
-            .collection("prospectfeedbackform")
+          await formCollectionRef
             .add({
               ...formData,
               createdAt: new Date(),
               updatedAt: new Date(),
             });
+          nextAuditEntries.push(
+            buildFormAuditEntry({
+              formName: "Feedback Form",
+              actionType: "filled",
+              performedBy: getAdminDisplayName(authResult.admin),
+              userRole: "Admin user",
+              userIdentity: getAdminAuditIdentity(authResult.admin),
+              changedFields: changedFields.length > 0 ? changedFields : diffChangedFields({}, formData),
+            })
+          );
         }
       }
 
-      return NextResponse.json({ success: true });
+      const updatedAuditLogs = appendFormAuditLogs(existingLogs, nextAuditEntries);
+
+      if (nextAuditEntries.length > 0) {
+        await prospectRef.set(
+          {
+            formAuditLogs: updatedAuditLogs,
+            updatedAt: new Date(),
+          },
+          { merge: true }
+        );
+      }
+
+      return NextResponse.json({
+        success: true,
+        auditLogs: updatedAuditLogs,
+      });
     }
 
     if (section === "additionalinfo") {
       const update = body.update && typeof body.update === "object" ? body.update : {};
+      const auditAction = String(body.auditAction || "").trim();
+      const prospectRef = dbResult.adminDb.collection(prospectCollectionName).doc(id);
+      const prospectSnap = await prospectRef.get();
+      const prospectData = prospectSnap.exists ? prospectSnap.data() || {} : {};
+      const existingLogs = Array.isArray(prospectData.formAuditLogs)
+        ? prospectData.formAuditLogs
+        : [];
+      const nextAuditEntries = [];
 
-      await dbResult.adminDb.collection(prospectCollectionName).doc(id).set(
-        {
-          ...update,
-          updatedAt: new Date(),
-        },
-        { merge: true }
-      );
+      if (Object.keys(update).length > 0) {
+        const previousSection = Array.isArray(prospectData.sections)
+          ? prospectData.sections[0] || {}
+          : {};
+        const nextSection = Array.isArray(update.sections)
+          ? update.sections[0] || {}
+          : {};
+        const changedFields = diffChangedFields(previousSection, nextSection);
 
-      return NextResponse.json({ success: true });
+        await prospectRef.set(
+          {
+            ...update,
+            updatedAt: new Date(),
+          },
+          { merge: true }
+        );
+
+        nextAuditEntries.push(
+          buildFormAuditEntry({
+            formName: "UJB Enrollment Form",
+            actionType: Array.isArray(prospectData.sections) && prospectData.sections.length > 0 ? "edited" : "filled",
+            performedBy: getAdminDisplayName(authResult.admin),
+            userRole: "Admin user",
+            userIdentity: getAdminAuditIdentity(authResult.admin),
+            changedFields: changedFields.length > 0 ? changedFields : diffChangedFields({}, nextSection),
+          })
+        );
+      }
+
+      if (auditAction === "sent") {
+        nextAuditEntries.push(
+          buildFormAuditEntry({
+            formName: "Feedback Form",
+            actionType: "sent",
+            performedBy: getAdminDisplayName(authResult.admin),
+            userRole: "Admin user",
+            userIdentity: getAdminAuditIdentity(authResult.admin),
+            changedFields: [],
+          })
+        );
+      }
+
+      const updatedAuditLogs = appendFormAuditLogs(existingLogs, nextAuditEntries);
+
+      if (nextAuditEntries.length > 0) {
+        await prospectRef.set(
+          {
+            formAuditLogs: updatedAuditLogs,
+            updatedAt: new Date(),
+          },
+          { merge: true }
+        );
+      }
+
+      return NextResponse.json({
+        success: true,
+        auditLogs: updatedAuditLogs,
+      });
     }
 
     if (section === "engagementlogs") {
@@ -1231,7 +1520,7 @@ export async function PATCH(req) {
       );
     }
 
-    await dbResult.adminDb.collection(prospectCollectionName).doc(id).update({
+    const updatePayload = {
       userType: String(body.userType).trim(),
       prospectName: String(body.prospectName).trim(),
       prospectPhone: String(body.prospectPhone).trim(),
@@ -1244,7 +1533,16 @@ export async function PATCH(req) {
       orbiterEmail: String(body.orbiterEmail || "").trim(),
       type: String(body.type).trim(),
       updatedAt: new Date(),
-    });
+    };
+
+    if (Object.prototype.hasOwnProperty.call(body, "source")) {
+      updatePayload.source = String(body.source || "").trim();
+    }
+
+    await dbResult.adminDb
+      .collection(prospectCollectionName)
+      .doc(id)
+      .update(updatePayload);
 
     return NextResponse.json({ success: true });
   } catch (error) {

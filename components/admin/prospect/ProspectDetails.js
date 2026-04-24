@@ -11,6 +11,11 @@ import Input from "@/components/ui/Input";
 import Select from "@/components/ui/Select";
 import DateInput from "@/components/ui/DateInput";
 import FormField from "@/components/ui/FormField";
+import {
+  formatDate as formatDisplayDate,
+  formatDateTime,
+  normalizeDateForStorage,
+} from "@/lib/utils/dateFormat";
 
 const withRequirement = (label, required = false) => (
   <>
@@ -38,6 +43,7 @@ const contributionOptions = [
 const ProspectFormDetails = ({ id }) => {
   const [forms, setForms] = useState([]);
   const [originalForms, setOriginalForms] = useState([]);
+  const [auditLogs, setAuditLogs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [editMode, setEditMode] = useState(false);
 
@@ -60,6 +66,7 @@ const ProspectFormDetails = ({ id }) => {
         const fetchedForms = Array.isArray(responseData.forms)
           ? responseData.forms
           : [];
+        setAuditLogs(Array.isArray(responseData.auditLogs) ? responseData.auditLogs : []);
 
         const defaultMentor = {
           mentorName: prospectData.orbiterName || "",
@@ -174,23 +181,15 @@ const ProspectFormDetails = ({ id }) => {
       Swal.fire("Success", "Saved Successfully", "success");
 
       setOriginalForms(forms.map((form) => ({ ...form })));
+      setAuditLogs(Array.isArray(responseData.auditLogs) ? responseData.auditLogs : auditLogs);
       setEditMode(false);
     } catch (err) {
       Swal.fire("Error", "Failed to save", "error");
     }
   };
 
-  const formatDate = (value) => {
-    if (!value) return "";
-
-    if (value?.seconds) {
-      return new Date(value.seconds * 1000)
-        .toISOString()
-        .split("T")[0];
-    }
-
-    const d = new Date(value);
-    return !isNaN(d) ? d.toISOString().split("T")[0] : "";
+  const formatFormDate = (value) => {
+    return normalizeDateForStorage(value);
   };
 
   if (loading) return <Text>Loading...</Text>;
@@ -205,9 +204,6 @@ const ProspectFormDetails = ({ id }) => {
           {/* BASIC DETAILS */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {[
-              { label: "Mentor Name", key: "mentorName", frozen: true, required: true },
-              { label: "Mentor Phone", key: "mentorPhone", frozen: true, required: true },
-              { label: "Mentor Email", key: "mentorEmail", frozen: true, required: true },
               { label: "Assessment Date", key: "assessmentDate", frozen: true, required: true },
               { label: "Prospect Name", key: "fullName", frozen: true, required: true },
               { label: "Phone", key: "phoneNumber", frozen: true, required: true },
@@ -223,7 +219,7 @@ const ProspectFormDetails = ({ id }) => {
                 {key === "assessmentDate" ? (
                   <DateInput
                     type="date"
-                    value={formatDate(form[key])}
+                    value={formatFormDate(form[key])}
                     disabled={frozen || !editMode}
                     onChange={(e) =>
                       handleChange(index, key, e.target.value)
@@ -434,6 +430,41 @@ const ProspectFormDetails = ({ id }) => {
           </>
         )}
       </div>
+
+      <Card className="mt-6">
+        <Text variant="h2">Audit Log</Text>
+        <div className="mt-4 space-y-3">
+          {auditLogs.length === 0 ? (
+            <Text variant="muted">No audit activity recorded yet.</Text>
+          ) : (
+            [...auditLogs].reverse().map((log) => (
+              <div
+                key={log.id}
+                className="rounded-lg border border-slate-200 bg-slate-50 p-4"
+              >
+                <Text as="div" variant="h3">
+                  {log.formName} - {log.actionType}
+                </Text>
+                <Text as="div" variant="muted" className="mt-1">
+                  {log.performedBy} ({log.userRole}) {log.userIdentity ? `- ${log.userIdentity}` : ""}
+                </Text>
+                <Text as="div" variant="muted">
+                  {formatDateTime(log.timestamp, "")}
+                </Text>
+                {Array.isArray(log.changedFields) && log.changedFields.length > 0 ? (
+                  <div className="mt-2 space-y-1">
+                    {log.changedFields.map((fieldChange, changeIndex) => (
+                      <Text key={`${log.id}-${fieldChange.field}-${changeIndex}`} as="div" variant="muted">
+                          {fieldChange.field}: {formatDisplayDate(fieldChange.before, fieldChange.before || "empty") || fieldChange.before || "empty"} {"->"} {formatDisplayDate(fieldChange.after, fieldChange.after || "empty") || fieldChange.after || "empty"}
+                      </Text>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+            ))
+          )}
+        </div>
+      </Card>
     </>
   );
 };

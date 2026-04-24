@@ -11,7 +11,7 @@ export default function UserLayout({ children }) {
   const pathname = usePathname();
   const { loading, user } = useAuth();
   const isPublicProspectFlow =
-    /^\/user\/prospects\/[^/]+(?:\/feedback|\/completed)$/.test(pathname || "");
+    /^\/user\/prospects\/[^/]+(?:\/feedback|\/completed)?$/.test(pathname || "");
 
   useEffect(() => {
     if (!loading && !user && !isPublicProspectFlow) {

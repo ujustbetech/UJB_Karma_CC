@@ -8,6 +8,7 @@ import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
 import Select from "@/components/ui/Select";
 import FormField from "@/components/ui/FormField";
+import { formatDate, formatDateTime } from "@/lib/utils/dateFormat";
 
 const interestOptions = [
   "Space for Personal Growth & Contribution",
@@ -60,6 +61,7 @@ const withRequirement = (label, required = false) => (
 
 const ProspectFeedback = ({ id }) => {
   const [forms, setForms] = useState([]);
+  const [auditLogs, setAuditLogs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState("");
   const [showForm, setShowForm] = useState(false);
@@ -89,6 +91,7 @@ const ProspectFeedback = ({ id }) => {
       }
 
       const data = Array.isArray(responseData.forms) ? responseData.forms : [];
+      setAuditLogs(Array.isArray(responseData.auditLogs) ? responseData.auditLogs : []);
       const prospectData = responseData.prospect || {};
 
       setForms(data);
@@ -163,6 +166,8 @@ const ProspectFeedback = ({ id }) => {
     if (!res.ok) {
       throw new Error(responseData.message || "Failed to save feedback");
     }
+
+    setAuditLogs(Array.isArray(responseData.auditLogs) ? responseData.auditLogs : auditLogs);
   };
 
   const handleSubmit = async (e) => {
@@ -502,6 +507,41 @@ const ProspectFeedback = ({ id }) => {
           </form>
         </Card>
       ))}
+
+      <Card>
+        <Text variant="h2">Audit Log</Text>
+        <div className="mt-4 space-y-3">
+          {auditLogs.length === 0 ? (
+            <Text variant="muted">No audit activity recorded yet.</Text>
+          ) : (
+            [...auditLogs].reverse().map((log) => (
+              <div
+                key={log.id}
+                className="rounded-lg border border-slate-200 bg-slate-50 p-4"
+              >
+                <Text as="div" variant="h3">
+                  {log.formName} - {log.actionType}
+                </Text>
+                <Text as="div" variant="muted" className="mt-1">
+                  {log.performedBy} ({log.userRole}) {log.userIdentity ? `- ${log.userIdentity}` : ""}
+                </Text>
+                <Text as="div" variant="muted">
+                  {formatDateTime(log.timestamp, "")}
+                </Text>
+                {Array.isArray(log.changedFields) && log.changedFields.length > 0 ? (
+                  <div className="mt-2 space-y-1">
+                    {log.changedFields.map((fieldChange, changeIndex) => (
+                      <Text key={`${log.id}-${fieldChange.field}-${changeIndex}`} as="div" variant="muted">
+                        {fieldChange.field}: {formatDate(fieldChange.before, fieldChange.before || "empty") || fieldChange.before || "empty"} {"->"} {formatDate(fieldChange.after, fieldChange.after || "empty") || fieldChange.after || "empty"}
+                      </Text>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+            ))
+          )}
+        </div>
+      </Card>
     </>
   );
 };

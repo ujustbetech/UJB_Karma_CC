@@ -6,6 +6,7 @@ import Text from "@/components/ui/Text";
 import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
+import DateInput from "@/components/ui/DateInput";
 import Select from "@/components/ui/Select";
 import FormField from "@/components/ui/FormField";
 import { useToast } from "@/components/ui/ToastProvider";
@@ -303,12 +304,12 @@ export default function EditProspect({ id, data }) {
             </FormField>
 
             <FormField label="DOB" required error={errors.dob}>
-              <Input
-                type="date"
-                value={form.dob}
-                max={getAdultDobMax()}
-                onChange={(e) => handleFieldChange("dob", e.target.value)}
-              />
+                <DateInput
+                  type="date"
+                  value={form.dob}
+                  max={getAdultDobMax()}
+                  onChange={(e) => handleFieldChange("dob", e.target.value)}
+                />
             </FormField>
 
             <FormField label="Occupation" required error={errors.occupation}>

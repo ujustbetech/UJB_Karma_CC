@@ -1,13 +1,15 @@
 import { NextResponse } from "next/server";
-import jwt from "jsonwebtoken";
 import {
   adminDb,
   getFirebaseAdminInitError,
 } from "@/lib/firebase/firebaseAdmin";
-import { USER_COOKIE_NAME } from "@/lib/auth/accessControl";
 import { publicEnv } from "@/lib/config/publicEnv";
 import { serverEnv } from "@/lib/config/serverEnv";
-import { validateUserSessionRecord } from "@/lib/auth/userSessionWorkflow.mjs";
+import {
+  appendFormAuditLogs,
+  buildFormAuditEntry,
+  diffChangedFields,
+} from "@/lib/prospectFormAudit";
 
 const prospectCollectionName = publicEnv.collections.prospect;
 const userCollectionName = publicEnv.collections.userDetail;
@@ -60,59 +62,6 @@ function getAdminDbOrError() {
   }
 
   return { ok: true, adminDb };
-}
-
-async function validateProspectMentorAccess(req, db, prospect) {
-  const token = req.cookies.get(USER_COOKIE_NAME)?.value;
-
-  if (!token) {
-    return {
-      ok: false,
-      response: NextResponse.json({ message: "Unauthorized" }, { status: 401 }),
-    };
-  }
-
-  try {
-    const decoded = jwt.verify(token, serverEnv.jwtSecret);
-    const sessionSnap = await db.collection("user_sessions").doc(decoded.sessionId).get();
-
-    if (!sessionSnap.exists) {
-      return {
-        ok: false,
-        response: NextResponse.json({ message: "Session not found" }, { status: 401 }),
-      };
-    }
-
-    const session = sessionSnap.data();
-    const validation = validateUserSessionRecord(session, Date.now());
-
-    if (!validation.ok) {
-      return {
-        ok: false,
-        response: NextResponse.json({ message: "Unauthorized" }, { status: 401 }),
-      };
-    }
-
-    const sessionPhone = normalizePhone(session?.phone);
-    const mentorPhone = normalizePhone(prospect?.orbiterContact);
-
-    if (!sessionPhone || !mentorPhone || sessionPhone !== mentorPhone) {
-      return {
-        ok: false,
-        response: NextResponse.json(
-          { message: "Only the assigned MentOrbiter can access this assessment form." },
-          { status: 403 }
-        ),
-      };
-    }
-
-    return { ok: true, session };
-  } catch {
-    return {
-      ok: false,
-      response: NextResponse.json({ message: "Unauthorized" }, { status: 401 }),
-    };
-  }
 }
 
 async function ensureCpBoardUser(db, orbiter) {
@@ -208,6 +157,43 @@ function normalizePhone(value) {
   return String(value || "").trim();
 }
 
+function validateProspectMentorAccessByPhone(prospect, mentorPhoneInput) {
+  const enteredPhone = normalizePhone(mentorPhoneInput);
+  const mentorPhone = normalizePhone(prospect?.orbiterContact);
+
+  if (!enteredPhone) {
+    return {
+      ok: false,
+      response: NextResponse.json(
+        { message: "MentOrbiter mobile number is required." },
+        { status: 400 }
+      ),
+    };
+  }
+
+  if (!PHONE_REGEX.test(enteredPhone.replace(/\s/g, ""))) {
+    return {
+      ok: false,
+      response: NextResponse.json(
+        { message: "Enter a valid MentOrbiter mobile number." },
+        { status: 400 }
+      ),
+    };
+  }
+
+  if (!mentorPhone || enteredPhone !== mentorPhone) {
+    return {
+      ok: false,
+      response: NextResponse.json(
+        { message: "This mobile number is not the assigned MentOrbiter for this prospect." },
+        { status: 403 }
+      ),
+    };
+  }
+
+  return { ok: true, mentorPhone: enteredPhone };
+}
+
 function validateAssessmentPayload(payload) {
   const errors = {};
   const interestAreas = Array.isArray(payload.interestAreas)
@@ -239,18 +225,6 @@ function validateAssessmentPayload(payload) {
 
   if (!String(payload.profession || "").trim()) {
     errors.profession = "Occupation is required.";
-  }
-
-  if (!String(payload.mentorName || "").trim()) {
-    errors.mentorName = "Mentor name is required.";
-  }
-
-  if (!PHONE_REGEX.test(String(payload.mentorPhone || "").replace(/\s/g, ""))) {
-    errors.mentorPhone = "Enter a valid mentor mobile number.";
-  }
-
-  if (!EMAIL_REGEX.test(String(payload.mentorEmail || "").trim())) {
-    errors.mentorEmail = "Enter a valid mentor email address.";
   }
 
   if (!String(payload.assessmentDate || "").trim()) {
@@ -357,10 +331,10 @@ export async function GET(req, { params }) {
       ...prospectSnap.data(),
     };
 
-    const accessResult = await validateProspectMentorAccess(
-      req,
-      dbResult.adminDb,
-      prospect
+    const mentorPhoneInput = req.nextUrl.searchParams.get("mentorPhone");
+    const accessResult = validateProspectMentorAccessByPhone(
+      prospect,
+      mentorPhoneInput
     );
 
     if (!accessResult.ok) {
@@ -428,17 +402,15 @@ export async function POST(req, { params }) {
       ...prospectSnap.data(),
     };
 
-    const accessResult = await validateProspectMentorAccess(
-      req,
-      dbResult.adminDb,
-      prospect
+    const payload = await req.json();
+    const accessResult = validateProspectMentorAccessByPhone(
+      prospect,
+      payload?.mentorAccessPhone
     );
 
     if (!accessResult.ok) {
       return accessResult.response;
     }
-
-    const payload = await req.json();
     const errors = validateAssessmentPayload(payload);
 
     if (Object.keys(errors).length > 0) {
@@ -454,11 +426,8 @@ export async function POST(req, { params }) {
     const normalizedPayload = {
       ...payload,
       phoneNumber: normalizePhone(payload.phoneNumber),
-      mentorPhone: normalizePhone(payload.mentorPhone),
       email: String(payload.email || "").trim(),
-      mentorEmail: String(payload.mentorEmail || "").trim(),
       fullName: String(payload.fullName || "").trim(),
-      mentorName: String(payload.mentorName || "").trim(),
       profession: String(payload.profession || "").trim(),
       country: String(payload.country || "").trim(),
       city: String(payload.city || "").trim(),
@@ -487,7 +456,32 @@ export async function POST(req, { params }) {
 
     await formCollectionRef.add(finalData);
 
-    const mentorPhone = String(normalizedPayload.mentorPhone || "").trim();
+    await dbResult.adminDb
+      .collection(prospectCollectionName)
+      .doc(id)
+      .set(
+        {
+          formAuditLogs: appendFormAuditLogs(prospect.formAuditLogs, [
+            buildFormAuditEntry({
+              formName: "Form Assessment",
+              actionType: "filled",
+              performedBy:
+                String(prospect.orbiterName || "").trim() ||
+                String(accessResult.mentorPhone || "").trim() ||
+                "MentorBiter",
+              userRole: "MentorBiter",
+              userIdentity:
+                String(accessResult.mentorPhone || "").trim() ||
+                String(prospect.orbiterEmail || "").trim(),
+              changedFields: diffChangedFields({}, finalData),
+            }),
+          ]),
+          updatedAt: new Date(),
+        },
+        { merge: true }
+      );
+
+    const mentorPhone = String(accessResult.mentorPhone || "").trim();
 
     if (mentorPhone) {
       const mentorSnap = await dbResult.adminDb

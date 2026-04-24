@@ -7,7 +7,7 @@ import {
 export function proxy(req) {
   const { pathname, search } = req.nextUrl;
   const isPublicProspectFlow =
-    /^\/user\/prospects\/[^/]+(?:\/feedback|\/completed)$/.test(pathname);
+    /^\/user\/prospects\/[^/]+(?:\/feedback|\/completed)?$/.test(pathname);
 
   if (pathname.startsWith("/user")) {
     if (isPublicProspectFlow) {

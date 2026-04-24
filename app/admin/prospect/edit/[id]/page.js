@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 
 import Card from "@/components/ui/Card";
 import Text from "@/components/ui/Text";
@@ -131,6 +131,8 @@ const icons = [
 
 export default function EditAdminEvent() {
   const params = useParams();
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const id = Array.isArray(params?.id) ? params.id[0] : params?.id;
   const AUTHENTIC_CHOICE_TAB_INDEX = 5;
 
@@ -173,23 +175,53 @@ export default function EditAdminEvent() {
     isDeclinedByUJustBe && index > AUTHENTIC_CHOICE_TAB_INDEX;
 
   useEffect(() => {
+    const tabParam = Number.parseInt(searchParams.get("tab") || "", 10);
+
+    if (
+      Number.isInteger(tabParam) &&
+      tabParam >= 0 &&
+      tabParam < tabs.length &&
+      !isLockedTab(tabParam) &&
+      tabParam !== activeTab
+    ) {
+      setActiveTab(tabParam);
+    }
+  }, [activeTab, isDeclinedByUJustBe, searchParams]);
+
+  useEffect(() => {
     if (isLockedTab(activeTab)) {
       setActiveTab(AUTHENTIC_CHOICE_TAB_INDEX);
     }
   }, [activeTab, isDeclinedByUJustBe]);
 
+  const setActiveTabWithQuery = (index) => {
+    if (index < 0 || index >= tabs.length || isLockedTab(index)) {
+      return;
+    }
+
+    setActiveTab(index);
+
+    if (!id) {
+      return;
+    }
+
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("tab", String(index));
+    router.replace(`/admin/prospect/edit/${id}?${params.toString()}`);
+  };
+
   const nextTab = () => {
     const nextIndex = activeTab + 1;
 
     if (activeTab < tabs.length - 1 && !isLockedTab(nextIndex)) {
-      setActiveTab(activeTab + 1);
+      setActiveTabWithQuery(nextIndex);
       window.scrollTo({ top: 0, behavior: "smooth" });
     }
   };
 
   const prevTab = () => {
     if (activeTab > 0) {
-      setActiveTab(activeTab - 1);
+      setActiveTabWithQuery(activeTab - 1);
       window.scrollTo({ top: 0, behavior: "smooth" });
     }
   };
@@ -292,7 +324,7 @@ export default function EditAdminEvent() {
                   key={index}
                   onClick={() => {
                     if (!isDisabled) {
-                      setActiveTab(index);
+                      setActiveTabWithQuery(index);
                     }
                   }}
                   disabled={isDisabled}

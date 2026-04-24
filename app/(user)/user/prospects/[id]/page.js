@@ -3,8 +3,10 @@
 import { useEffect, useState } from "react";
 import Swal from "sweetalert2";
 import { useParams, useRouter } from "next/navigation";
+import { LockKeyhole, Phone } from "lucide-react";
+import Input from "@/components/ui/Input";
 
-const tabs = ["Mentor", "Prospect", "Alignment", "Assessment"];
+const tabs = ["Prospect", "Alignment", "Assessment"];
 const today = new Date().toISOString().split("T")[0];
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PHONE_REGEX = /^(?:\+91)?[6-9]\d{9}$/;
@@ -93,7 +95,11 @@ export default function ProspectForm() {
   const id = params?.id;
 
   const [submitting, setSubmitting] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
+  const [verifyingAccess, setVerifyingAccess] = useState(false);
+  const [accessGranted, setAccessGranted] = useState(false);
+  const [mentorAccessPhone, setMentorAccessPhone] = useState("");
+  const [accessError, setAccessError] = useState("");
   const [countries, setCountries] = useState([]);
   const [cities, setCities] = useState([]);
   const [activeTab, setActiveTab] = useState(0);
@@ -109,78 +115,72 @@ export default function ProspectForm() {
       .catch(() => setCountries([]));
   }, []);
 
-  useEffect(() => {
-    const fetchProspectDetails = async () => {
-      if (!id) return;
+  const fetchProspectDetails = async (accessPhone) => {
+    if (!id) return;
 
-      try {
-        const res = await fetch(`/api/prospects/${id}`);
-        const data = await res.json().catch(() => ({}));
+    try {
+      const res = await fetch(
+        `/api/prospects/${id}?mentorPhone=${encodeURIComponent(accessPhone)}`
+      );
+      const data = await res.json().catch(() => ({}));
 
-        if (!res.ok) {
-          throw new Error(data.message || "Failed to fetch prospect");
-        }
-
-        if (data.isSubmitted) {
-          router.replace(`/user/prospects/${id}/completed`);
-          return;
-        }
-
-        const prospect = data.prospect || {};
-        const nextCountry = prospect.country || "";
-
-        setFormData((prev) => ({
-          ...prev,
-          fullName: prospect.prospectName || "",
-          phoneNumber: prospect.prospectPhone || "",
-          email: prospect.email || "",
-          country: nextCountry,
-          city: prospect.city || "",
-          profession: prospect.occupation || "",
-          companyName: prospect.companyName || "",
-          industry: prospect.industry || "",
-          socialProfile: prospect.socialProfile || "",
-          mentorName: prospect.orbiterName || "",
-          mentorPhone: prospect.orbiterContact || "",
-          mentorEmail: prospect.orbiterEmail || "",
-        }));
-
-        if (nextCountry) {
-          const cityRes = await fetch(
-            "https://countriesnow.space/api/v0.1/countries/cities",
-            {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ country: nextCountry }),
-            }
-          );
-          const cityData = await cityRes.json().catch(() => ({}));
-          setCities(Array.isArray(cityData.data) ? cityData.data : []);
-        }
-      } catch (error) {
-        Swal.fire(
-          "Error",
-          error?.message || "Unable to load prospect details",
-          "error"
-        );
-      } finally {
-        setLoading(false);
+      if (!res.ok) {
+        throw new Error(data.message || "Failed to fetch prospect");
       }
-    };
 
-    fetchProspectDetails();
-  }, [id, router]);
+      if (data.isSubmitted) {
+        router.replace(`/user/prospects/${id}/completed`);
+        return;
+      }
+
+      const prospect = data.prospect || {};
+      const nextCountry = prospect.country || "";
+
+      setFormData((prev) => ({
+        ...prev,
+        fullName: prospect.prospectName || "",
+        phoneNumber: prospect.prospectPhone || "",
+        email: prospect.email || "",
+        country: nextCountry,
+        city: prospect.city || "",
+        profession: prospect.occupation || "",
+        companyName: prospect.companyName || "",
+        industry: prospect.industry || "",
+        socialProfile: prospect.socialProfile || "",
+        mentorName: prospect.orbiterName || "",
+        mentorPhone: prospect.orbiterContact || "",
+        mentorEmail: prospect.orbiterEmail || "",
+      }));
+
+      if (nextCountry) {
+        const cityRes = await fetch(
+          "https://countriesnow.space/api/v0.1/countries/cities",
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ country: nextCountry }),
+          }
+        );
+        const cityData = await cityRes.json().catch(() => ({}));
+        setCities(Array.isArray(cityData.data) ? cityData.data : []);
+      } else {
+        setCities([]);
+      }
+
+      setAccessGranted(true);
+      setAccessError("");
+    } catch (error) {
+      setAccessGranted(false);
+      setAccessError(error?.message || "Unable to verify MentOrbiter number.");
+    } finally {
+      setLoading(false);
+      setVerifyingAccess(false);
+    }
+  };
 
   const validateForm = (data) => {
     const nextErrors = {};
 
-    if (!data.mentorName.trim()) nextErrors.mentorName = "Mentor name is required.";
-    if (!PHONE_REGEX.test(data.mentorPhone.replace(/\s/g, ""))) {
-      nextErrors.mentorPhone = "Enter a valid Indian mobile number.";
-    }
-    if (!EMAIL_REGEX.test(data.mentorEmail.trim())) {
-      nextErrors.mentorEmail = "Enter a valid email address.";
-    }
     if (!data.assessmentDate) {
       nextErrors.assessmentDate = "Assessment date is required.";
     } else {
@@ -305,11 +305,8 @@ export default function ProspectForm() {
     const normalizedData = {
       ...formData,
       phoneNumber: normalizePhone(formData.phoneNumber),
-      mentorPhone: normalizePhone(formData.mentorPhone),
       email: formData.email.trim(),
-      mentorEmail: formData.mentorEmail.trim(),
       fullName: formData.fullName.trim(),
-      mentorName: formData.mentorName.trim(),
       profession: formData.profession.trim(),
       companyName: formData.companyName.trim(),
       industry: formData.industry.trim(),
@@ -337,7 +334,10 @@ export default function ProspectForm() {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(normalizedData),
+        body: JSON.stringify({
+          ...normalizedData,
+          mentorAccessPhone,
+        }),
       });
       const data = await res.json().catch(() => ({}));
 
@@ -373,11 +373,89 @@ export default function ProspectForm() {
 
   const prevTab = () => activeTab > 0 && setActiveTab(activeTab - 1);
 
-  if (loading) {
+  const handleAccessSubmit = async () => {
+    const normalizedPhone = normalizePhone(mentorAccessPhone);
+
+    if (!PHONE_REGEX.test(normalizedPhone.replace(/\s/g, ""))) {
+      setAccessError("Enter a valid MentOrbiter mobile number.");
+      return;
+    }
+
+    setLoading(true);
+    setVerifyingAccess(true);
+    setAccessError("");
+    setMentorAccessPhone(normalizedPhone);
+    await fetchProspectDetails(normalizedPhone);
+  };
+
+  if (loading && !verifyingAccess) {
     return (
       <main className="min-h-screen bg-gray-50 py-10">
         <div className="mx-auto max-w-4xl rounded-2xl bg-white p-8 shadow-lg">
           <p className="text-center text-gray-600">Loading assessment form...</p>
+        </div>
+      </main>
+    );
+  }
+
+  if (!accessGranted) {
+    return (
+      <main className="min-h-screen bg-gray-50 py-10">
+        <div className="mx-auto max-w-2xl rounded-3xl bg-white p-8 shadow-lg md:p-10">
+          <p className="text-sm font-semibold uppercase tracking-[0.25em] text-indigo-600">
+            Assessment Access
+          </p>
+          <h1 className="mt-4 text-3xl font-bold text-slate-900">
+            MentOrbiter Verification
+          </h1>
+          <p className="mt-4 text-base leading-7 text-slate-600">
+            Enter the mobile number of the assigned MentOrbiter to continue to the
+            prospect assessment form.
+          </p>
+
+          {accessError ? (
+            <div className="mt-6 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+              {accessError}
+            </div>
+          ) : null}
+
+          <div className="mt-6 rounded-xl border border-indigo-100 bg-indigo-50 px-4 py-3 text-sm text-indigo-700">
+            No OTP is needed here. We only check whether the entered mobile number matches the mentor assigned to this prospect.
+          </div>
+
+          <div className="mt-8">
+            <FieldLabel label="MentOrbiter Mobile Number" required />
+            <div className="relative">
+              <Phone
+                size={18}
+                className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
+              />
+              <input
+                className={`w-full rounded-lg border bg-white px-12 py-3 ${
+                  accessError ? "border-red-500 focus:border-red-500" : "border-gray-300"
+                }`}
+                value={mentorAccessPhone}
+                onChange={(event) => {
+                  setMentorAccessPhone(event.target.value);
+                  setAccessError("");
+                }}
+                placeholder="Enter mobile number"
+              />
+            </div>
+            <FieldError message={accessError} />
+          </div>
+
+          <div className="mt-8 flex justify-end">
+            <button
+              type="button"
+              onClick={handleAccessSubmit}
+              disabled={verifyingAccess}
+              className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-6 py-3 font-medium text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <LockKeyhole size={18} />
+              {verifyingAccess ? "Verifying..." : "Continue to Assessment"}
+            </button>
+          </div>
         </div>
       </main>
     );
@@ -405,51 +483,11 @@ export default function ProspectForm() {
         <form className="min-h-[500px] space-y-6">
           {activeTab === 0 && (
             <div className="space-y-4">
-              <h3 className="text-lg font-semibold text-gray-700">
-                MentOrbiter Details
-              </h3>
-
-              <div>
-                <FieldLabel label="MentOrbiter Name" required />
-                <input
-                  className={getFieldClass(errors.mentorName)}
-                  name="mentorName"
-                  value={formData.mentorName}
-                  onChange={handleChange}
-                  placeholder="Your Name"
-                />
-                <FieldError message={errors.mentorName} />
-              </div>
-
-              <div>
-                <FieldLabel label="MentOrbiter Contact Number" required />
-                <input
-                  className={getFieldClass(errors.mentorPhone)}
-                  name="mentorPhone"
-                  value={formData.mentorPhone}
-                  onChange={handleChange}
-                  placeholder="Contact Number"
-                />
-                <FieldError message={errors.mentorPhone} />
-              </div>
-
-              <div>
-                <FieldLabel label="MentOrbiter Email Address" required />
-                <input
-                  className={getFieldClass(errors.mentorEmail)}
-                  name="mentorEmail"
-                  value={formData.mentorEmail}
-                  onChange={handleChange}
-                  placeholder="Email Address"
-                />
-                <FieldError message={errors.mentorEmail} />
-              </div>
-
               <div>
                 <FieldLabel label="Assessment Date" required />
-                <input
+                <Input
                   type="date"
-                  className={getFieldClass(errors.assessmentDate)}
+                  error={!!errors.assessmentDate}
                   name="assessmentDate"
                   value={formData.assessmentDate}
                   onChange={handleChange}
@@ -460,7 +498,7 @@ export default function ProspectForm() {
             </div>
           )}
 
-          {activeTab === 1 && (
+          {activeTab === 0 && (
             <div className="space-y-4">
               <h3 className="text-lg font-semibold text-gray-700">
                 Prospect Details
@@ -583,7 +621,7 @@ export default function ProspectForm() {
             </div>
           )}
 
-          {activeTab === 2 && (
+          {activeTab === 1 && (
             <div className="space-y-6">
               <h3 className="text-lg font-semibold text-gray-700">
                 Alignment with UJustBe
@@ -720,7 +758,7 @@ export default function ProspectForm() {
             </div>
           )}
 
-          {activeTab === 3 && (
+          {activeTab === 2 && (
             <div className="space-y-6">
               <h3 className="text-lg font-semibold text-gray-700">
                 Assessment & Recommendation

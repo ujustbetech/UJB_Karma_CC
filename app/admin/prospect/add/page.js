@@ -6,6 +6,7 @@ import Text from "@/components/ui/Text";
 import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
+import DateInput from "@/components/ui/DateInput";
 import Select from "@/components/ui/Select";
 import FormField from "@/components/ui/FormField";
 import {
@@ -20,6 +21,26 @@ import { sendWhatsAppTemplateRequest } from "@/utils/whatsappClient";
 const INDIA_DIAL_CODE = "+91";
 const INDIAN_MOBILE_REGEX = /^[6-9]\d{9}$/;
 const EMAIL_REGEX = /^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/;
+const LETTERS_ONLY_REGEX = /^[A-Za-z\s.'-]+$/;
+const SOURCE_OPTIONS = [
+  { label: "Select a source", value: "" },
+  { label: "Social Media", value: "Social Media" },
+  { label: "Website", value: "Website" },
+  { label: "Orbiter", value: "Orbiter" },
+];
+const SOURCE_DETAIL_OPTIONS = {
+  Orbiter: PROSPECT_OCCASION_OPTIONS,
+  Website: [
+    { label: "Select an option", value: "" },
+    { label: "UJustBe", value: "UJustBe" },
+  ],
+  "Social Media": [
+    { label: "Select an option", value: "" },
+    { label: "Instagram", value: "Instagram" },
+    { label: "Facebook", value: "Facebook" },
+    { label: "YouTube", value: "YouTube" },
+  ],
+};
 
 function getAdultDobMax() {
   const date = new Date();
@@ -57,7 +78,6 @@ function isAdultDob(value) {
 
 export default function Register() {
   const adultDobMax = getAdultDobMax();
-  const [userType, setUserType] = useState("prospect");
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [orbiteremail, setOrbiterEmail] = useState("");
@@ -68,6 +88,7 @@ export default function Register() {
   const [email, setEmail] = useState("");
   const [date, setDate] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [source, setSource] = useState("");
   const [type, setType] = useState("");
   const [errors, setErrors] = useState({});
 
@@ -183,11 +204,13 @@ UJustBe Team
     const nextErrors = {};
 
     if (!selectedOrbiter) {
-      nextErrors.selectedOrbiter = "Please select an Orbiter";
+      nextErrors.selectedOrbiter = "Please select a MentOrbiter";
     }
 
     if (!prospectName.trim()) {
       nextErrors.prospectName = "Prospect name is required";
+    } else if (!LETTERS_ONLY_REGEX.test(prospectName.trim())) {
+      nextErrors.prospectName = "Prospect name cannot contain numbers";
     }
 
     if (!prospectPhone.trim()) {
@@ -212,9 +235,17 @@ UJustBe Team
       nextErrors.occupation = "Occupation is required";
     }
 
-      if (!type) {
-        nextErrors.type = "Occasion is required";
-      }
+    if (hobbies.trim() && !LETTERS_ONLY_REGEX.test(hobbies.trim())) {
+      nextErrors.hobbies = "Hobbies cannot contain numbers";
+    }
+
+    if (!source) {
+      nextErrors.source = "Source is required";
+    }
+
+    if (!type) {
+      nextErrors.type = "Source detail is required";
+    }
 
     setErrors(nextErrors);
     return Object.keys(nextErrors).length === 0;
@@ -239,7 +270,7 @@ UJustBe Team
       const formattedProspectPhone = `${INDIA_DIAL_CODE}${prospectPhone}`;
 
       const data = {
-        userType,
+        userType: "prospect",
         prospectName: trimmedName,
         prospectPhone: formattedProspectPhone,
         occupation,
@@ -249,6 +280,7 @@ UJustBe Team
         orbiterName: name,
         orbiterContact: phone,
         orbiterEmail: orbiteremail,
+        source,
         type,
       };
 
@@ -281,6 +313,7 @@ UJustBe Team
       setEmail("");
       setOccupation("");
       setHobbies("");
+      setSource("");
       setType("");
       setDate("");
       setErrors({});
@@ -324,27 +357,16 @@ UJustBe Team
 
       <Card>
         <form onSubmit={handleSubmit} className="space-y-6">
-          <FormField label="User Type">
-            <Select
-              value={userType}
-              onChange={(v) => setUserType(v)}
-              options={[
-                { label: "Prospect", value: "prospect" },
-                { label: "Orbiter", value: "orbiter" },
-              ]}
-            />
-          </FormField>
-
-          <Text variant="h3">Mentor Orbiter</Text>
+          <Text variant="h3">MentOrbiter</Text>
 
           <FormField
-            label="Search Orbiter"
+            label="Search MentOrbiter"
             required
             error={errors.selectedOrbiter}
           >
             <div className="relative">
               <Input
-                placeholder="Search Orbiter"
+                placeholder="Search MentOrbiter"
                 value={userSearch}
                 onChange={(e) => {
                   setErrors((prev) => ({ ...prev, selectedOrbiter: "" }));
@@ -370,15 +392,15 @@ UJustBe Team
 
           {selectedOrbiter && (
             <div className="grid md:grid-cols-3 gap-4">
-              <FormField label="Orbiter Name">
+              <FormField label="MentOrbiter Name">
                 <Input value={name} disabled />
               </FormField>
 
-              <FormField label="Orbiter Phone">
+              <FormField label="MentOrbiter Phone">
                 <Input value={phone} disabled />
               </FormField>
 
-              <FormField label="Orbiter Email">
+              <FormField label="MentOrbiter Email">
                 <Input value={orbiteremail} disabled />
               </FormField>
             </div>
@@ -392,11 +414,12 @@ UJustBe Team
               required
               error={errors.prospectName}
             >
-              <Input
-                value={prospectName}
-                onChange={(e) => {
+                <Input
+                  value={prospectName}
+                  onChange={(e) => {
+                  const nextValue = e.target.value.replace(/\d/g, "");
                   setErrors((prev) => ({ ...prev, prospectName: "" }));
-                  setProspectName(e.target.value);
+                  setProspectName(nextValue);
                 }}
               />
             </FormField>
@@ -429,23 +452,23 @@ UJustBe Team
             </FormField>
 
             <FormField label="Email" required error={errors.email}>
-              <Input
-                type="email"
-                value={email}
-                onChange={(e) => {
+                <Input
+                  type="email"
+                  value={email}
+                  onChange={(e) => {
                   setErrors((prev) => ({ ...prev, email: "" }));
-                  setEmail(e.target.value);
+                  setEmail(e.target.value.trimStart());
                 }}
               />
             </FormField>
 
             <FormField label="DOB" required error={errors.date}>
-              <Input
-                type="date"
-                value={date}
-                max={adultDobMax}
-                onChange={handleDobChange}
-              />
+                <DateInput
+                  type="date"
+                  value={date}
+                  max={adultDobMax}
+                  onChange={handleDobChange}
+                />
             </FormField>
 
             <FormField label="Occupation" required error={errors.occupation}>
@@ -463,21 +486,50 @@ UJustBe Team
                 <Input
                   value={hobbies}
                   onChange={(e) => {
+                  const nextValue = e.target.value.replace(/\d/g, "");
                   setErrors((prev) => ({ ...prev, hobbies: "" }));
-                  setHobbies(e.target.value);
+                  setHobbies(nextValue);
                 }}
               />
             </FormField>
           </div>
 
-          <FormField label="Occasion" required error={errors.type}>
+          <FormField label="Source" required error={errors.source}>
+            <Select
+              value={source}
+              onChange={(v) => {
+                setErrors((prev) => ({ ...prev, source: "", type: "" }));
+                setSource(v);
+                setType("");
+              }}
+              options={SOURCE_OPTIONS}
+            />
+          </FormField>
+
+          <FormField
+            label={
+              source === "Orbiter"
+                ? "Orbiter Source"
+                : source === "Website"
+                ? "Website Source"
+                : source === "Social Media"
+                ? "Social Media Source"
+                : "Source Detail"
+            }
+            required
+            error={errors.type}
+          >
             <Select
               value={type}
               onChange={(v) => {
                 setErrors((prev) => ({ ...prev, type: "" }));
                 setType(v);
               }}
-              options={PROSPECT_OCCASION_OPTIONS}
+              options={
+                SOURCE_DETAIL_OPTIONS[source] || [
+                  { label: "Select a source first", value: "" },
+                ]
+              }
             />
           </FormField>
 

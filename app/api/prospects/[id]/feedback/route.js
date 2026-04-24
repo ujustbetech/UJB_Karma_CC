@@ -5,6 +5,11 @@ import {
 } from "@/lib/firebase/firebaseAdmin";
 import { publicEnv } from "@/lib/config/publicEnv";
 import { serverEnv } from "@/lib/config/serverEnv";
+import {
+  appendFormAuditLogs,
+  buildFormAuditEntry,
+  diffChangedFields,
+} from "@/lib/prospectFormAudit";
 
 const prospectCollectionName = publicEnv.collections.prospect;
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -231,6 +236,18 @@ export async function POST(req, { params }) {
       .doc(id)
       .collection("prospectfeedbackform");
 
+    const prospectSnap = await dbResult.adminDb
+      .collection(prospectCollectionName)
+      .doc(id)
+      .get();
+
+    const prospect = prospectSnap.exists
+      ? {
+          id: prospectSnap.id,
+          ...prospectSnap.data(),
+        }
+      : null;
+
     const existing = await feedbackCollectionRef.limit(1).get();
 
     if (!existing.empty) {
@@ -260,6 +277,31 @@ export async function POST(req, { params }) {
     };
 
     await feedbackCollectionRef.add(normalizedPayload);
+
+    await dbResult.adminDb
+      .collection(prospectCollectionName)
+      .doc(id)
+      .set(
+        {
+          formAuditLogs: appendFormAuditLogs(prospect?.formAuditLogs, [
+            buildFormAuditEntry({
+              formName: "Feedback Form",
+              actionType: "filled",
+              performedBy:
+                String(prospect?.prospectName || "").trim() ||
+                String(normalizedPayload.fullName || "").trim() ||
+                "Prospect",
+              userRole: "Prospect",
+              userIdentity:
+                String(normalizedPayload.email || "").trim() ||
+                String(normalizedPayload.phoneNumber || "").trim(),
+              changedFields: diffChangedFields({}, normalizedPayload),
+            }),
+          ]),
+          updatedAt: new Date(),
+        },
+        { merge: true }
+      );
 
     return NextResponse.json({ success: true, isSubmitted: true });
   } catch (error) {
