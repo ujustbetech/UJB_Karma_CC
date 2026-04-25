@@ -3,9 +3,18 @@ import { useRouter } from 'next/navigation';
 import emailjs from '@emailjs/browser';
 import Modal from '@/components/ui/Modal';
 import { sendWhatsAppTemplateRequest } from '@/utils/whatsappClient';
+import { getFallbackJourneyEmailTemplate } from '@/lib/journey/journey_email';
+import { getFallbackJourneyWhatsAppTemplate } from '@/lib/journey/journey_whatsapp';
 
 const DEFAULT_EVENT_MODE = 'online';
 const MIN_NO_RECORDING_REASON_LENGTH = 10;
+const MEETING_LOGS_TEMPLATE_ID = 'meeting_logs';
+const DEFAULT_MEETING_LOGS_TEMPLATE = {
+  channels: {
+    email: getFallbackJourneyEmailTemplate(MEETING_LOGS_TEMPLATE_ID),
+    whatsapp: getFallbackJourneyWhatsAppTemplate(MEETING_LOGS_TEMPLATE_ID),
+  },
+};
 
 const emptyAccordionForm = {
   date: '',
@@ -29,6 +38,40 @@ const buildMeetingKey = (meeting, idx) =>
     String(meeting?.createdAt ?? 'no-created-at'),
     String(idx),
   ].join('::');
+
+const applyTemplateVariables = (template = '', values = {}) =>
+  String(template || '').replace(/\{\{\s*(.*?)\s*\}\}/g, (_, key) => {
+    const normalizedKey = String(key || '').trim();
+    return values[normalizedKey] ?? `{{${normalizedKey}}}`;
+  });
+
+const buildScheduleDetails = ({ zoomLink = '', venue = '' }) =>
+  zoomLink
+    ? `Zoom Link: ${zoomLink}`
+    : venue
+    ? `Venue: ${venue}`
+    : 'Details will be shared soon';
+
+const sanitizeText = (text) =>
+  String(text || '').replace(/[^a-zA-Z0-9 .,!?'"@#&()\-:/]/g, ' ');
+
+const fetchMeetingLogsTemplate = async () => {
+  try {
+    const res = await fetch(`/api/admin/journey-templates?id=${MEETING_LOGS_TEMPLATE_ID}`, {
+      credentials: 'include',
+    });
+    const data = await res.json().catch(() => ({}));
+
+    if (!res.ok || !data.template) {
+      throw new Error(data.message || 'Failed to load meeting logs template');
+    }
+
+    return data.template;
+  } catch (error) {
+    console.error('Meeting logs template fetch failed, using fallback:', error);
+    return DEFAULT_MEETING_LOGS_TEMPLATE;
+  }
+};
 
 const Followup = ({ id, data = { comments: [], event: [] } }) => {
   const router = useRouter();
@@ -303,6 +346,9 @@ const Followup = ({ id, data = { comments: [], event: [] } }) => {
   }, [id]);
 
   const sendMeetingEmail = async ({
+    template,
+    variantKey,
+    recipientType = 'prospect',
     recipientName,
     recipientEmail,
     date,
@@ -312,50 +358,40 @@ const Followup = ({ id, data = { comments: [], event: [] } }) => {
     reason = '',
     venue = '',
   }) => {
-    const scheduleDetails = zoomLink
-      ? `Zoom Link: ${zoomLink}`
-      : venue
-      ? `Venue: ${venue}`
-      : 'Details will be shared soon';
-
-    const body = isCancelled
-      ? `Dear ${recipientName},
-
-We need to inform you that the scheduled meeting has been cancelled.
-
-Meeting details:
-
-Date: ${date}
-${scheduleDetails}
-
-Reason: ${reason || 'Scheduling constraints'}
-
-We will reconnect with the next available slot soon.`
-      : isReschedule
-      ? `Dear ${recipientName},
-
-As you are aware, due to ${reason}, we need to reschedule our upcoming call.
-
-We are available for the call on ${date}. Please confirm if this works for you, or let us know a convenient time within the next two working days so we can align accordingly.
-
-${scheduleDetails}`
-      : `Thank you for confirming your availability. We look forward to connecting with you and sharing insights about UJustBe.
-
-Schedule details:
-
-Date: ${date}
-${scheduleDetails}`;
+    const emailChannel =
+      template?.channels?.email || DEFAULT_MEETING_LOGS_TEMPLATE.channels.email;
+    const variant =
+      emailChannel?.variants?.[variantKey] ||
+      DEFAULT_MEETING_LOGS_TEMPLATE.channels.email.variants?.[variantKey];
+    const recipientTemplate =
+      variant?.recipients?.[recipientType] ||
+      variant?.recipients?.prospect ||
+      DEFAULT_MEETING_LOGS_TEMPLATE.channels.email.variants?.[variantKey]?.recipients?.[
+        recipientType
+      ] ||
+      DEFAULT_MEETING_LOGS_TEMPLATE.channels.email.variants?.[variantKey]?.recipients
+        ?.prospect;
+    const scheduleDetails = buildScheduleDetails({ zoomLink, venue });
+    const body = applyTemplateVariables(recipientTemplate?.body, {
+      recipient_name: recipientName,
+      date,
+      schedule_details: scheduleDetails,
+      reason: reason || 'Scheduling constraints',
+    });
 
     try {
       await emailjs.send(
-        'service_acyimrs',
-        'template_cdm3n5x',
+        emailChannel?.serviceId ||
+          DEFAULT_MEETING_LOGS_TEMPLATE.channels.email.serviceId,
+        emailChannel?.templateId ||
+          DEFAULT_MEETING_LOGS_TEMPLATE.channels.email.templateId,
         {
           prospect_name: recipientName,
           to_email: recipientEmail,
           body,
         },
-        'w7YI9DEqR9sdiWX9h'
+        emailChannel?.publicKey ||
+          DEFAULT_MEETING_LOGS_TEMPLATE.channels.email.publicKey
       );
     } catch (error) {
       console.error(`Failed to send email to ${recipientName}:`, error);
@@ -363,6 +399,9 @@ ${scheduleDetails}`;
   };
 
   const sendWhatsAppMessage = async ({
+    template,
+    variantKey,
+    recipientType = 'prospect',
     name,
     phone,
     date,
@@ -371,49 +410,58 @@ ${scheduleDetails}`;
     reason = '',
     venue = '',
   }) => {
+    const whatsappChannel =
+      template?.channels?.whatsapp || DEFAULT_MEETING_LOGS_TEMPLATE.channels.whatsapp;
+    const variant =
+      whatsappChannel?.variants?.[variantKey] ||
+      DEFAULT_MEETING_LOGS_TEMPLATE.channels.whatsapp.variants?.[variantKey];
+    const defaultVariant =
+      DEFAULT_MEETING_LOGS_TEMPLATE.channels.whatsapp.variants?.[variantKey];
+    const selectedRecipientTemplate = variant?.recipients?.[recipientType];
+    const selectedDefaultRecipientTemplate =
+      defaultVariant?.recipients?.[recipientType];
+    const fallbackRecipientTemplate =
+      variant?.recipients?.prospect || defaultVariant?.recipients?.prospect;
+    const resolvedTemplateName =
+      String(
+        selectedRecipientTemplate?.templateName ||
+          selectedDefaultRecipientTemplate?.templateName ||
+          fallbackRecipientTemplate?.templateName ||
+          ''
+      ).trim();
+    const parameterKeys =
+      Array.isArray(selectedRecipientTemplate?.variableKeys) &&
+      selectedRecipientTemplate.variableKeys.length
+        ? selectedRecipientTemplate.variableKeys
+        : Array.isArray(selectedDefaultRecipientTemplate?.variableKeys) &&
+            selectedDefaultRecipientTemplate.variableKeys.length
+          ? selectedDefaultRecipientTemplate.variableKeys
+          : Array.isArray(fallbackRecipientTemplate?.variableKeys) &&
+              fallbackRecipientTemplate.variableKeys.length
+            ? fallbackRecipientTemplate.variableKeys
+            : [];
+    const locationDetails = buildScheduleDetails({ zoomLink, venue });
+    const templateValues = {
+      name: String(name || 'Member').trim(),
+      date: String(date || 'To be confirmed').trim(),
+      reason: String(reason || 'Scheduling constraints').trim(),
+      location_details: String(locationDetails || 'Details will be shared soon').trim(),
+    };
+
     try {
+      if (!resolvedTemplateName || !parameterKeys.length) {
+        throw new Error('WhatsApp template configuration is incomplete');
+      }
+
       await sendWhatsAppTemplateRequest({
         phone,
-        templateName: isReschedule ? 'reschedule_meeting_otc' : 'schedule_message_otc',
-        parameters: isReschedule
-          ? [name, reason, date]
-          : [name, date, zoomLink ? `Zoom Link: ${zoomLink}` : `Venue: ${venue}`],
+        templateName: resolvedTemplateName,
+        parameters: parameterKeys.map((key) =>
+          sanitizeText(templateValues[key] ?? '')
+        ),
       });
     } catch (error) {
       console.error(`Failed to send message to ${name}:`, error?.response?.data || error?.message);
-    }
-  };
-
-  const sendThankYouMessage = async (name, phone) => {
-    try {
-      await sendWhatsAppTemplateRequest({
-        phone,
-        templateName: 'meeeting_done_thankyou_otc',
-        parameters: [name],
-      });
-    } catch (error) {
-      console.error(`Failed to send thank you message to ${name}:`, error?.response?.data || error?.message);
-    }
-  };
-
-  const sendThankYouEmail = async (recipientName, recipientEmail) => {
-    const body = `Dear ${recipientName},
-
-Thank you for taking the time to connect with us. We truly value the time and energy you invested in this conversation.`;
-
-    try {
-      await emailjs.send(
-        'service_acyimrs',
-        'template_cdm3n5x',
-        {
-          prospect_name: recipientName,
-          to_email: recipientEmail,
-          body,
-        },
-        'w7YI9DEqR9sdiWX9h'
-      );
-    } catch (error) {
-      console.error(`Failed to send thank you email to ${recipientName}:`, error);
     }
   };
 
@@ -524,14 +572,17 @@ Thank you for taking the time to connect with us. We truly value the time and en
       }
 
       await persistEventsArray(updatedEvents);
+      const meetingLogsTemplate = await fetchMeetingLogsTemplate();
 
       const recipients = [
         {
+          type: 'prospect',
           name: data.prospectName,
           phone: data.prospectPhone,
           email: data.email,
         },
         {
+          type: 'orbiter',
           name: data.orbiterName,
           phone: data.orbiterContact,
           email: data.orbiterEmail,
@@ -541,6 +592,9 @@ Thank you for taking the time to connect with us. We truly value the time and en
       for (const recipient of recipients) {
         if (recipient.phone) {
           await sendWhatsAppMessage({
+            template: meetingLogsTemplate,
+            variantKey: rescheduleMode ? 'reschedule' : 'schedule',
+            recipientType: recipient.type,
             name: recipient.name,
             phone: recipient.phone,
             date: formattedEventDate,
@@ -557,6 +611,9 @@ Thank you for taking the time to connect with us. We truly value the time and en
           .filter((recipient) => recipient.email)
           .map((recipient) =>
             sendMeetingEmail({
+              template: meetingLogsTemplate,
+              variantKey: rescheduleMode ? 'reschedule' : 'schedule',
+              recipientType: recipient.type,
               recipientName: recipient.name,
               recipientEmail: recipient.email,
               date: formattedEventDate,
@@ -633,13 +690,16 @@ Thank you for taking the time to connect with us. We truly value the time and en
     }
 
     try {
+      const meetingLogsTemplate = await fetchMeetingLogsTemplate();
       const thankYouRecipients = [
         {
+          type: 'prospect',
           name: data.prospectName,
           phone: data.prospectPhone,
           email: data.email,
         },
         {
+          type: 'orbiter',
           name: meeting.NTMemberName || data.orbiterName,
           phone: meeting.NTMemberPhone || data.orbiterContact,
           email: meeting.NTMemberEmail || data.orbiterEmail,
@@ -648,10 +708,22 @@ Thank you for taking the time to connect with us. We truly value the time and en
 
       for (const recipient of thankYouRecipients) {
         if (recipient.phone) {
-          await sendThankYouMessage(recipient.name, recipient.phone);
+          await sendWhatsAppMessage({
+            template: meetingLogsTemplate,
+            variantKey: 'thank_you',
+            recipientType: recipient.type,
+            name: recipient.name,
+            phone: recipient.phone,
+          });
         }
         if (recipient.email) {
-          await sendThankYouEmail(recipient.name, recipient.email);
+          await sendMeetingEmail({
+            template: meetingLogsTemplate,
+            variantKey: 'thank_you',
+            recipientType: recipient.type,
+            recipientName: recipient.name,
+            recipientEmail: recipient.email,
+          });
         }
       }
 

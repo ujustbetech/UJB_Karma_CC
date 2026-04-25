@@ -4,6 +4,8 @@ import Swal from "sweetalert2";
 
 import { sendWhatsAppTemplateRequest } from "@/utils/whatsappClient";
 import { formatDate, formatDateTime, normalizeDateForStorage } from "@/lib/utils/dateFormat";
+import { getFallbackJourneyEmailTemplate } from "@/lib/journey/journey_email";
+import { getFallbackJourneyWhatsAppTemplate } from "@/lib/journey/journey_whatsapp";
 
 const STAGE_OPTIONS = [
   {
@@ -44,6 +46,14 @@ const sanitizeText = (text) =>
     .replace(/ {5,}/g, "    ")
     .trim();
 
+const ENROLLMENT_STATUS_TEMPLATE_ID = "enrollment_status";
+const DEFAULT_ENROLLMENT_STATUS_TEMPLATE = {
+  channels: {
+    email: getFallbackJourneyEmailTemplate(ENROLLMENT_STATUS_TEMPLATE_ID),
+    whatsapp: getFallbackJourneyWhatsAppTemplate(ENROLLMENT_STATUS_TEMPLATE_ID),
+  },
+};
+
 const formatLogDate = (value) => {
   return formatDateTime(value, "");
 };
@@ -72,6 +82,49 @@ const formatStageDate = (value) => {
 
 const normalizeDateValue = (value) => {
   return normalizeDateForStorage(value);
+};
+
+const applyTemplateVariables = (template = "", values = {}) =>
+  String(template || "").replace(/\{\{\s*(.*?)\s*\}\}/g, (_, key) => {
+    const normalizedKey = String(key || "").trim();
+    return values[normalizedKey] ?? `{{${normalizedKey}}}`;
+  });
+
+const toVariantKey = (label, status) =>
+  `${String(label || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_|_$/g, "")}_${String(status || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_|_$/g, "")}`;
+
+const fetchEnrollmentStatusTemplate = async () => {
+  try {
+    const res = await fetch(
+      `/api/admin/journey-templates?id=${ENROLLMENT_STATUS_TEMPLATE_ID}`,
+      {
+        credentials: "include",
+      }
+    );
+    const responseData = await res.json().catch(() => ({}));
+
+    if (!res.ok || !responseData.template) {
+      throw new Error(
+        responseData.message || "Failed to load enrollment status template"
+      );
+    }
+
+    return responseData.template;
+  } catch (error) {
+    console.error(
+      "Enrollment status template fetch failed, using fallback:",
+      error
+    );
+    return DEFAULT_ENROLLMENT_STATUS_TEMPLATE;
+  }
 };
 
 const getLogKey = (log, index) => {
@@ -423,33 +476,83 @@ const EnrollmentStage = ({ id, fetchData }) => {
     try {
       setLoading(true);
 
-      const { emailBody, whatsappBody } = buildStageMessages(
+      const { emailBody: fallbackEmailBody, whatsappBody: fallbackWhatsappBody } = buildStageMessages(
         row.label,
         row.status,
         row.date
       );
+      const template = await fetchEnrollmentStatusTemplate();
+      const variantKey = toVariantKey(row.label, row.status);
+      const emailChannel =
+        template?.channels?.email || DEFAULT_ENROLLMENT_STATUS_TEMPLATE.channels.email;
+      const emailVariant =
+        emailChannel?.variants?.[variantKey] ||
+        DEFAULT_ENROLLMENT_STATUS_TEMPLATE.channels.email.variants?.[variantKey];
+      const emailRecipientTemplate =
+        emailVariant?.recipients?.prospect ||
+        DEFAULT_ENROLLMENT_STATUS_TEMPLATE.channels.email.variants?.[variantKey]
+          ?.recipients?.prospect;
+      const emailBody =
+        applyTemplateVariables(emailRecipientTemplate?.body, {
+          prospect_name: prospectMeta.prospectName || "Prospect",
+          date: row.date,
+        }) || fallbackEmailBody;
+      const whatsappChannel =
+        template?.channels?.whatsapp ||
+        DEFAULT_ENROLLMENT_STATUS_TEMPLATE.channels.whatsapp;
+      const whatsappVariant =
+        whatsappChannel?.variants?.[variantKey] ||
+        DEFAULT_ENROLLMENT_STATUS_TEMPLATE.channels.whatsapp.variants?.[variantKey];
+      const whatsappRecipientTemplate =
+        whatsappVariant?.recipients?.prospect ||
+        DEFAULT_ENROLLMENT_STATUS_TEMPLATE.channels.whatsapp.variants?.[variantKey]
+          ?.recipients?.prospect;
+      const whatsappBody =
+        applyTemplateVariables(whatsappRecipientTemplate?.body, {
+          prospect_name: prospectMeta.prospectName || "Prospect",
+          date: row.date,
+        }) || fallbackWhatsappBody;
 
       if (prospectMeta.email) {
         await emailjs.send(
-          "service_acyimrs",
-          "template_cdm3n5x",
+          emailChannel?.serviceId ||
+            DEFAULT_ENROLLMENT_STATUS_TEMPLATE.channels.email.serviceId,
+          emailChannel?.templateId ||
+            DEFAULT_ENROLLMENT_STATUS_TEMPLATE.channels.email.templateId,
           {
             to_email: prospectMeta.email,
             prospect_name: prospectMeta.prospectName || "Prospect",
             body: emailBody,
           },
-          "w7YI9DEqR9sdiWX9h"
+          emailChannel?.publicKey ||
+            DEFAULT_ENROLLMENT_STATUS_TEMPLATE.channels.email.publicKey
         );
       }
 
       if (prospectMeta.prospectPhone) {
+        const parameterKeys =
+          Array.isArray(whatsappRecipientTemplate?.variableKeys) &&
+          whatsappRecipientTemplate.variableKeys.length
+            ? whatsappRecipientTemplate.variableKeys
+            : DEFAULT_ENROLLMENT_STATUS_TEMPLATE.channels.whatsapp.variants?.[
+                variantKey
+              ]?.recipients?.prospect?.variableKeys || [];
         await sendWhatsAppTemplateRequest({
           phone: prospectMeta.prospectPhone,
-          templateName: "enrollment_journey",
-          parameters: [
-            sanitizeText(whatsappBody),
-            sanitizeText(prospectMeta.orbiterName),
-          ],
+          templateName:
+            whatsappRecipientTemplate?.templateName ||
+            DEFAULT_ENROLLMENT_STATUS_TEMPLATE.channels.whatsapp.variants?.[
+              variantKey
+            ]?.recipients?.prospect?.templateName ||
+            "enrollment_journey",
+          parameters: parameterKeys.map((key) =>
+            sanitizeText(
+              {
+                body_text: whatsappBody,
+                orbiter_name: prospectMeta.orbiterName,
+              }[key] ?? ""
+            )
+          ),
         });
       }
 

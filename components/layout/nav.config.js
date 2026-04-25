@@ -119,6 +119,8 @@ export const NAV_ITEMS = [
     children: [
       { label: "Manage User", href: "/admin/settings/users" },
       { label: "Manage Role", href: "/admin/settings/roles" },
+      { label: "Onbording Template", href: "/admin/settings/onboarding" },
+      { label: "Journey Template", href: "/admin/settings/journey" },
     ],
   },
 ];

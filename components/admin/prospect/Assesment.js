@@ -4,91 +4,45 @@ import emailjs from "@emailjs/browser";
 
 import { sendWhatsAppTemplateRequest } from "@/utils/whatsappClient";
 import { formatDate, formatDateTime } from "@/lib/utils/dateFormat";
+import { getFallbackJourneyEmailTemplate } from "@/lib/journey/journey_email";
+import { getFallbackJourneyWhatsAppTemplate } from "@/lib/journey/journey_whatsapp";
+
+const AUTHENTIC_CHOICE_TEMPLATE_ID = "authentic_choice";
+const DEFAULT_AUTHENTIC_CHOICE_TEMPLATE = {
+  channels: {
+    email: getFallbackJourneyEmailTemplate(AUTHENTIC_CHOICE_TEMPLATE_ID),
+    whatsapp: getFallbackJourneyWhatsAppTemplate(AUTHENTIC_CHOICE_TEMPLATE_ID),
+  },
+};
+
+const STATUS_VARIANT_KEY = {
+  "Choose to enroll": "choose_to_enroll",
+  "Decline by UJustBe": "decline_by_ujussbe",
+  "Decline by Prospect": "decline_by_prospect",
+  "Need some time": "need_some_time",
+  "Awaiting response": "awaiting_response",
+};
 
 const STATUS_CONFIG = {
   "Choose to enroll": {
     noteLabel: "",
     noteRequired: false,
-    emailBody: ({ prospectName }) => `
-Dear ${prospectName},
-
-Subject: Welcome to UJustBe Universe - Ready to Make Your Authentic Choice?
-
-We are happy to inform you that your enrollment into UJustBe has been approved because we find you aligned with the basic contributor criteria of the UJustBe Universe.
-
-Now, we invite you to make your authentic choice:
-To say Yes to this journey.
-To say Yes to discovering, contributing, and growing.
-To say Yes to being part of a community where you just be - and that is more than enough.
-
-If this resonates with you, simply reply to this email with your confirmation as Yes. Once we receive your approval, we will share the details of the next steps in the enrollment process.
-`.trim(),
-    whatsappBody: ({ prospectName }) =>
-      `Congratulations ${prospectName}! We are happy to inform you that your enrollment into UJustBe has been approved. Kindly reply Yes if you would like to proceed.`,
   },
   "Decline by UJustBe": {
     noteLabel: "Reason for declining",
     noteRequired: true,
-    emailBody: ({ prospectName, note }) => `
-Dear ${prospectName},
-
-Thank you for your interest in becoming a part of the UJustBe Universe.
-
-At this time, enrollment is not approved because we do not find the required alignment with the culture and values of UJustBe.
-
-Reason: ${note || "Non-alignment with UJustBe culture and values."}
-
-We appreciate your understanding and wish you all the best on your path ahead.
-`.trim(),
-    whatsappBody: ({ prospectName, note }) =>
-      `Hello ${prospectName}, thank you for your interest in UJustBe. Enrollment is not approved at this time due to non-alignment. Reason: ${note || "Non-alignment with UJustBe culture and values."}`,
   },
   "Decline by Prospect": {
     noteLabel: "Reason shared by prospect",
     noteRequired: true,
-    emailBody: ({ prospectName, note }) => `
-Dear ${prospectName},
-
-Thank you for taking the time to consider being part of the UJustBe Universe.
-
-We truly value your honesty and respect your decision to not move forward at this time.
-
-Reason shared: ${note || "Prospect chose not to proceed at this time."}
-
-Your No is respected, and the door remains open for future consideration whenever you feel ready to re-explore this journey.
-`.trim(),
-    whatsappBody: ({ prospectName, note }) =>
-      `Hello ${prospectName}, thank you for your honest response. We respect your decision not to move forward at this time. ${note ? `Reason: ${note}. ` : ""}The door remains open for future consideration.`,
   },
   "Need some time": {
     noteLabel: "Context / discussion note",
     noteRequired: false,
-    emailBody: ({ prospectName, note }) => `
-Dear ${prospectName},
-
-Thank you for your honest response and we respect that you need some time before making a decision.
-
-Please share your final decision within 5 working days so we can plan the next steps accordingly.
-
-${note ? `Discussion note: ${note}` : ""}
-`.trim(),
-    whatsappBody: ({ prospectName, note }) =>
-      `Hello ${prospectName}, thank you for your honest response. Please share your final decision within 5 working days. ${note || ""}`.trim(),
   },
   "Awaiting response": {
     noteLabel: "Reminder / response note",
     noteRequired: true,
-    emailBody: ({ prospectName, note }) => `
-Dear ${prospectName},
-
-Your enrollment into the UJustBe Universe has been approved, and the only pending part is your reply.
-
-Please respond with your decision, including confirming Yes if you want to proceed, within 2 working days.
-
-${note ? `Reminder note: ${note}` : ""}
-`.trim(),
-    whatsappBody: ({ prospectName, note }) =>
-      `Hello ${prospectName}, your enrollment is approved and we are awaiting your response. Please reply within 2 working days. ${note || ""}`.trim(),
   },
 };
 
@@ -100,6 +54,66 @@ const FINAL_STATUSES = new Set([
 
 const sanitizeText = (text) =>
   String(text || "").replace(/[^a-zA-Z0-9 .,!?'"@#&()\-]/g, " ");
+
+const applyTemplateVariables = (template = "", values = {}) =>
+  String(template || "").replace(/\{\{\s*(.*?)\s*\}\}/g, (_, key) => {
+    const normalizedKey = String(key || "").trim();
+    return values[normalizedKey] ?? `{{${normalizedKey}}}`;
+  });
+
+const buildAuthenticChoiceNote = (selectedStatus, note) => {
+  const trimmedNote = String(note || "").trim();
+
+  if (trimmedNote) {
+    if (selectedStatus === "Need some time") {
+      return `Discussion note: ${trimmedNote}`;
+    }
+
+    if (selectedStatus === "Awaiting response") {
+      return `Reminder note: ${trimmedNote}`;
+    }
+
+    if (selectedStatus === "Decline by Prospect") {
+      return `Reason shared: ${trimmedNote}`;
+    }
+
+    return trimmedNote;
+  }
+
+  if (selectedStatus === "Decline by UJustBe") {
+    return "Non-alignment with UJustBe culture and values.";
+  }
+
+  if (selectedStatus === "Decline by Prospect") {
+    return "Prospect chose not to proceed at this time.";
+  }
+
+  return "";
+};
+
+const fetchAuthenticChoiceTemplate = async () => {
+  try {
+    const res = await fetch(
+      `/api/admin/journey-templates?id=${AUTHENTIC_CHOICE_TEMPLATE_ID}`,
+      { credentials: "include" }
+    );
+    const responseData = await res.json().catch(() => ({}));
+
+    if (!res.ok || !responseData.template) {
+      throw new Error(
+        responseData.message || "Failed to load authentic choice template"
+      );
+    }
+
+    return responseData.template;
+  } catch (error) {
+    console.error(
+      "Authentic choice template fetch failed, using fallback:",
+      error
+    );
+    return DEFAULT_AUTHENTIC_CHOICE_TEMPLATE;
+  }
+};
 
 const formatDisplayDate = () => formatDate(new Date(), "");
 
@@ -166,25 +180,36 @@ const Assessment = ({ id, fetchData }) => {
   const sendAssessmentEmail = async (selectedStatus, note) => {
     if (!prospectMeta.prospectEmail) return;
 
-    const config = STATUS_CONFIG[selectedStatus];
-    const body = config?.emailBody
-      ? config.emailBody({
-          prospectName: prospectMeta.prospectName,
-          note,
-        })
-      : `Status updated: ${selectedStatus}`;
+    const template = await fetchAuthenticChoiceTemplate();
+    const variantKey = STATUS_VARIANT_KEY[selectedStatus];
+    const emailChannel =
+      template?.channels?.email || DEFAULT_AUTHENTIC_CHOICE_TEMPLATE.channels.email;
+    const variant =
+      emailChannel?.variants?.[variantKey] ||
+      DEFAULT_AUTHENTIC_CHOICE_TEMPLATE.channels.email.variants?.[variantKey];
+    const recipientTemplate =
+      variant?.recipients?.prospect ||
+      DEFAULT_AUTHENTIC_CHOICE_TEMPLATE.channels.email.variants?.[variantKey]
+        ?.recipients?.prospect;
+    const body = applyTemplateVariables(recipientTemplate?.body, {
+      prospect_name: prospectMeta.prospectName,
+      note: buildAuthenticChoiceNote(selectedStatus, note),
+    }) || `Status updated: ${selectedStatus}`;
 
     try {
       await emailjs.send(
-        "service_acyimrs",
-        "template_cdm3n5x",
+        emailChannel?.serviceId ||
+          DEFAULT_AUTHENTIC_CHOICE_TEMPLATE.channels.email.serviceId,
+        emailChannel?.templateId ||
+          DEFAULT_AUTHENTIC_CHOICE_TEMPLATE.channels.email.templateId,
         {
           prospect_name: prospectMeta.prospectName,
           to_email: prospectMeta.prospectEmail,
           body,
           orbiter_name: prospectMeta.orbiterName,
         },
-        "w7YI9DEqR9sdiWX9h"
+        emailChannel?.publicKey ||
+          DEFAULT_AUTHENTIC_CHOICE_TEMPLATE.channels.email.publicKey
       );
     } catch (error) {
       console.error("Failed to send status email:", error);
@@ -194,22 +219,46 @@ const Assessment = ({ id, fetchData }) => {
   const sendAssessmentMessage = async (selectedStatus, note) => {
     if (!prospectMeta.prospectPhone) return;
 
-    const config = STATUS_CONFIG[selectedStatus];
-    const bodyText = config?.whatsappBody
-      ? config.whatsappBody({
-          prospectName: prospectMeta.prospectName,
-          note,
-        })
-      : `Status updated: ${selectedStatus}`;
+    const template = await fetchAuthenticChoiceTemplate();
+    const variantKey = STATUS_VARIANT_KEY[selectedStatus];
+    const whatsappChannel =
+      template?.channels?.whatsapp ||
+      DEFAULT_AUTHENTIC_CHOICE_TEMPLATE.channels.whatsapp;
+    const variant =
+      whatsappChannel?.variants?.[variantKey] ||
+      DEFAULT_AUTHENTIC_CHOICE_TEMPLATE.channels.whatsapp.variants?.[variantKey];
+    const recipientTemplate =
+      variant?.recipients?.prospect ||
+      DEFAULT_AUTHENTIC_CHOICE_TEMPLATE.channels.whatsapp.variants?.[variantKey]
+        ?.recipients?.prospect;
+    const bodyText =
+      applyTemplateVariables(recipientTemplate?.body, {
+        prospect_name: prospectMeta.prospectName,
+        note: buildAuthenticChoiceNote(selectedStatus, note),
+      }) || `Status updated: ${selectedStatus}`;
+    const parameterKeys =
+      Array.isArray(recipientTemplate?.variableKeys) &&
+      recipientTemplate.variableKeys.length
+        ? recipientTemplate.variableKeys
+        : DEFAULT_AUTHENTIC_CHOICE_TEMPLATE.channels.whatsapp.variants?.[variantKey]
+            ?.recipients?.prospect?.variableKeys || [];
 
     try {
       await sendWhatsAppTemplateRequest({
         phone: prospectMeta.prospectPhone,
-        templateName: "enrollment_journey",
-        parameters: [
-          sanitizeText(bodyText),
-          sanitizeText(prospectMeta.orbiterName),
-        ],
+        templateName:
+          recipientTemplate?.templateName ||
+          DEFAULT_AUTHENTIC_CHOICE_TEMPLATE.channels.whatsapp.variants?.[variantKey]
+            ?.recipients?.prospect?.templateName ||
+          "enrollment_journey",
+        parameters: parameterKeys.map((key) =>
+          sanitizeText(
+            {
+              body_text: bodyText,
+              orbiter_name: prospectMeta.orbiterName,
+            }[key] ?? ""
+          )
+        ),
       });
     } catch (error) {
       console.error("Failed to send status WhatsApp:", error);

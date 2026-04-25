@@ -17,11 +17,22 @@ import {
 import Swal from "sweetalert2";
 import emailjs from "@emailjs/browser";
 import { sendWhatsAppTemplateRequest } from "@/utils/whatsappClient";
+import { getFallbackOnboardingEmailTemplate } from "@/lib/onboarding/onboarding_email";
+import { getFallbackOnboardingWhatsAppTemplate } from "@/lib/onboarding/onboarding_whatsapp";
 
 const INDIA_DIAL_CODE = "+91";
 const INDIAN_MOBILE_REGEX = /^[6-9]\d{9}$/;
 const EMAIL_REGEX = /^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/;
 const LETTERS_ONLY_REGEX = /^[A-Za-z\s.'-]+$/;
+const PROSPECT_ASSESSMENT_TEMPLATE_ID = "prospect_assessment_request";
+const DEFAULT_PROSPECT_ASSESSMENT_TEMPLATE = {
+  channels: {
+    email: getFallbackOnboardingEmailTemplate("prospect_assessment_request"),
+    whatsapp: getFallbackOnboardingWhatsAppTemplate(
+      "prospect_assessment_request"
+    ),
+  },
+};
 const SOURCE_OPTIONS = [
   { label: "Select a source", value: "" },
   { label: "Social Media", value: "Social Media" },
@@ -74,6 +85,42 @@ function isAdultDob(value) {
   if (!selectedDate || !maxDobDate) return false;
 
   return selectedDate <= maxDobDate;
+}
+
+function applyTemplateVariables(template = "", values = {}) {
+  return String(template || "").replace(/\{\{\s*(.*?)\s*\}\}/g, (_, key) => {
+    const normalizedKey = String(key || "").trim();
+    return values[normalizedKey] ?? `{{${normalizedKey}}}`;
+  });
+}
+
+function buildTemplateValueMap({ orbiterName, prospectNameValue, formLink }) {
+  return {
+    orbiter_name: orbiterName,
+    prospect_name: prospectNameValue,
+    form_link: formLink,
+  };
+}
+
+async function fetchProspectAssessmentTemplate() {
+  try {
+    const res = await fetch(
+      `/api/admin/onboarding-templates?id=${PROSPECT_ASSESSMENT_TEMPLATE_ID}`,
+      {
+        credentials: "include",
+      }
+    );
+    const data = await res.json().catch(() => ({}));
+
+    if (!res.ok || !data.template) {
+      throw new Error(data.message || "Failed to load template");
+    }
+
+    return data.template;
+  } catch (error) {
+    console.error("Template fetch failed, using fallback:", error);
+    return DEFAULT_PROSPECT_ASSESSMENT_TEMPLATE;
+  }
 }
 
 export default function Register() {
@@ -146,54 +193,57 @@ export default function Register() {
     setFilteredUsers([]);
   };
 
-  const sendAssessmentEmail = async (
-    orbiterName,
-    orbiterEmail,
-    prospectNameValue,
-    formLink
-  ) => {
-    const body = `
-Dear ${orbiterName},
-
-Please fill the Prospect Assessment Form for ${prospectNameValue}.
-
-Assessment Form:
-${formLink}
-
-Regards,
-UJustBe Team
-`;
-
+  const sendAssessmentEmail = async (template, values) => {
+    const emailChannel =
+      template?.channels?.email || DEFAULT_PROSPECT_ASSESSMENT_TEMPLATE.channels.email;
+    const emailRecipient =
+      emailChannel?.recipients?.orbiter ||
+      DEFAULT_PROSPECT_ASSESSMENT_TEMPLATE.channels.email.recipients.orbiter;
+    const body = applyTemplateVariables(emailRecipient?.body, values);
     const templateParams = {
-      prospect_name: prospectNameValue,
-      to_email: orbiterEmail,
+      prospect_name: values.prospect_name,
+      to_email: values.orbiter_email,
       body,
-      orbiter_name: orbiterName,
+      orbiter_name: values.orbiter_name,
     };
 
     try {
       await emailjs.send(
-        "service_acyimrs",
-        "template_cdm3n5x",
+        emailChannel.serviceId ||
+          DEFAULT_PROSPECT_ASSESSMENT_TEMPLATE.channels.email.serviceId,
+        emailChannel.templateId ||
+          DEFAULT_PROSPECT_ASSESSMENT_TEMPLATE.channels.email.templateId,
         templateParams,
-        "w7YI9DEqR9sdiWX9h"
+        emailChannel.publicKey ||
+          DEFAULT_PROSPECT_ASSESSMENT_TEMPLATE.channels.email.publicKey
       );
     } catch (error) {
       console.error("Email error:", error);
     }
   };
 
-  const sendAssesmentMessage = async (
-    orbiterName,
-    prospectNameValue,
-    phoneValue,
-    formLink
-  ) => {
+  const sendAssesmentMessage = async (template, values) => {
+    const whatsappChannel =
+      template?.channels?.whatsapp ||
+      DEFAULT_PROSPECT_ASSESSMENT_TEMPLATE.channels.whatsapp;
+    const whatsappRecipient =
+      whatsappChannel?.recipients?.orbiter ||
+      DEFAULT_PROSPECT_ASSESSMENT_TEMPLATE.channels.whatsapp.recipients.orbiter;
+    const parameterKeys =
+      Array.isArray(whatsappRecipient?.variableKeys) &&
+      whatsappRecipient.variableKeys.length
+        ? whatsappRecipient.variableKeys
+        : DEFAULT_PROSPECT_ASSESSMENT_TEMPLATE.channels.whatsapp.recipients.orbiter
+            .variableKeys;
+
     try {
       await sendWhatsAppTemplateRequest({
-        phone: phoneValue,
-        templateName: "mentorbiter_assesment_form",
-        parameters: [orbiterName, prospectNameValue, formLink],
+        phone: values.orbiter_phone,
+        templateName:
+          whatsappRecipient?.templateName ||
+          DEFAULT_PROSPECT_ASSESSMENT_TEMPLATE.channels.whatsapp.recipients.orbiter
+            .templateName,
+        parameters: parameterKeys.map((key) => values[key] ?? ""),
       });
     } catch (error) {
       console.error("WhatsApp error:", error);
@@ -302,9 +352,19 @@ UJustBe Team
 
       const baseUrl = window.location.origin;
       const formLink = `${baseUrl}/user/prospects/${docId}`;
+      const notificationTemplate = await fetchProspectAssessmentTemplate();
+      const templateValues = {
+        ...buildTemplateValueMap({
+          orbiterName: name,
+          prospectNameValue: trimmedName,
+          formLink,
+        }),
+        orbiter_email: orbiteremail,
+        orbiter_phone: phone,
+      };
 
-      await sendAssessmentEmail(name, orbiteremail, trimmedName, formLink);
-      await sendAssesmentMessage(name, trimmedName, phone, formLink);
+      await sendAssessmentEmail(notificationTemplate, templateValues);
+      await sendAssesmentMessage(notificationTemplate, templateValues);
 
       Swal.fire("Success", "Prospect Registered Successfully", "success");
 
@@ -343,7 +403,7 @@ UJustBe Team
         ...prev,
         date: "Prospect must be at least 18 years old",
       }));
-      setDate("");
+      setDate(nextDate);
       return;
     }
 
@@ -467,6 +527,8 @@ UJustBe Team
                   type="date"
                   value={date}
                   max={adultDobMax}
+                  error={Boolean(errors.date)}
+                  required
                   onChange={handleDobChange}
                 />
             </FormField>

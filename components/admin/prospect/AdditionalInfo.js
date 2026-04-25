@@ -7,11 +7,19 @@ import dynamic from "next/dynamic";
 import { useRouter, useSearchParams } from "next/navigation";
 import { sendWhatsAppTemplateRequest } from "@/utils/whatsappClient";
 import { formatDate, formatDateTime } from "@/lib/utils/dateFormat";
+import { getFallbackJourneyEmailTemplate } from "@/lib/journey/journey_email";
 
 const ReactQuill = dynamic(() => import("react-quill-new"), {
   ssr: false,
   loading: () => <p>Loading editor...</p>,
 });
+
+const PRE_ENROLLMENT_TEMPLATE_ID = "pre_enrollment_form";
+const DEFAULT_PRE_ENROLLMENT_EMAIL_TEMPLATE = {
+  channels: {
+    email: getFallbackJourneyEmailTemplate(PRE_ENROLLMENT_TEMPLATE_ID),
+  },
+};
 
 const requiredHeading = (label) => (
   <>
@@ -19,6 +27,40 @@ const requiredHeading = (label) => (
     <span className="text-red-600"> *</span>
   </>
 );
+
+const applyTemplateVariables = (value, replacements) =>
+  String(value || "").replace(/\{\{\s*(.*?)\s*\}\}/g, (_, key) => {
+    const normalizedKey = String(key || "").trim();
+    return Object.prototype.hasOwnProperty.call(replacements, normalizedKey)
+      ? replacements[normalizedKey]
+      : `{{${normalizedKey}}}`;
+  });
+
+const fetchPreEnrollmentEmailTemplate = async () => {
+  try {
+    const res = await fetch(
+      `/api/admin/journey-templates?id=${PRE_ENROLLMENT_TEMPLATE_ID}`,
+      {
+        credentials: "include",
+      }
+    );
+    const responseData = await res.json().catch(() => ({}));
+
+    if (!res.ok || !responseData.template) {
+      throw new Error(
+        responseData.message || "Failed to load pre enrollment email template"
+      );
+    }
+
+    return responseData.template;
+  } catch (error) {
+    console.error(
+      "Pre enrollment email template fetch failed, using fallback:",
+      error
+    );
+    return DEFAULT_PRE_ENROLLMENT_EMAIL_TEMPLATE;
+  }
+};
 
 const AditionalInfo = ({ id, data = { sections: [] } }) => {
   const router = useRouter();
@@ -246,21 +288,38 @@ Thank you!
     prospectName,
     formLink
   ) => {
+    const template = await fetchPreEnrollmentEmailTemplate();
+    const emailChannel =
+      template?.channels?.email ||
+      DEFAULT_PRE_ENROLLMENT_EMAIL_TEMPLATE.channels.email;
+    const variant =
+      emailChannel?.variants?.default ||
+      DEFAULT_PRE_ENROLLMENT_EMAIL_TEMPLATE.channels.email.variants.default;
+    const recipientTemplate =
+      variant?.recipients?.prospect ||
+      DEFAULT_PRE_ENROLLMENT_EMAIL_TEMPLATE.channels.email.variants.default
+        .recipients.prospect;
+    const body = applyTemplateVariables(recipientTemplate?.body || "", {
+      form_link: formLink,
+    });
 
     const templateParams = {
       prospect_name: prospectName,
       to_email: prospectEmail,
-      body: `Please fill the prospect feedback form ${formLink}`,
+      body,
       orbiter_name: orbiterName,
     };
 
     try {
 
       await emailjs.send(
-        "service_acyimrs",
-        "template_cdm3n5x",
+        emailChannel?.serviceId ||
+          DEFAULT_PRE_ENROLLMENT_EMAIL_TEMPLATE.channels.email.serviceId,
+        emailChannel?.templateId ||
+          DEFAULT_PRE_ENROLLMENT_EMAIL_TEMPLATE.channels.email.templateId,
         templateParams,
-        "w7YI9DEqR9sdiWX9h"
+        emailChannel?.publicKey ||
+          DEFAULT_PRE_ENROLLMENT_EMAIL_TEMPLATE.channels.email.publicKey
       );
 
     } catch (error) {
