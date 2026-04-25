@@ -52,6 +52,14 @@ function validateEmail(value) {
   );
 }
 
+function buildAdminSessionApiError(status, message) {
+  if (status === 404) {
+    return "Admin session API is unavailable. Restart the app and verify the current server includes /api/admin/session routes.";
+  }
+
+  return message || "Admin login failed. Please verify your access configuration.";
+}
+
 function GoogleMark() {
   return (
     <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
@@ -95,6 +103,14 @@ export default function LoginPage() {
 
         if (res.ok) {
           router.replace("/admin/orbiters");
+          return;
+        }
+
+        if (res.status === 404) {
+          setStatus({
+            type: "error",
+            message: buildAdminSessionApiError(res.status),
+          });
         }
       } catch {
         // No active admin session.
@@ -121,10 +137,7 @@ export default function LoginPage() {
 
     if (!res.ok || !data?.success) {
       await signOut(auth).catch(() => {});
-      throw new Error(
-        data?.message ||
-          "Admin login failed. Please verify your access configuration."
-      );
+      throw new Error(buildAdminSessionApiError(res.status, data?.message));
     }
 
     router.replace("/admin/orbiters");

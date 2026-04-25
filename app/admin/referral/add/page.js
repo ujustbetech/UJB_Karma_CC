@@ -8,8 +8,6 @@ import {
     doc,
     getDoc,
     query,
-    orderBy,
-    limit,
     where,
     setDoc,
     updateDoc,
@@ -174,38 +172,7 @@ export default function AddReferralPage() {
     };
 
     /* ================= SUBMIT ================= */
-    const generateReferralId = async () => {
-        const now = new Date();
-        const year1 = now.getFullYear() % 100;
-        const year2 = (now.getFullYear() + 1) % 100;
-        const prefix = `Ref/${year1}-${year2}/`;
-
-        const q = query(
-            collection(db, COLLECTIONS.referral),
-            orderBy('referralId', 'desc'),
-            limit(1)
-        );
-
-        const snapshot = await getDocs(q);
-        let lastNum = 2999;
-
-        if (!snapshot.empty) {
-            const lastRef = snapshot.docs[0].data().referralId;
-            const match = lastRef?.match(/\/(\d{8})$/);
-            if (match) lastNum = parseInt(match[1], 10);
-        }
-
-        return `${prefix}${String(lastNum + 1).padStart(8, '0')}`;
-    };
-
-
     /* ================= CP + MENTOR + WHATSAPP HELPERS ================= */
-
-    const fetchMentorByUjbCode = async (ujbCode) => {
-        if (!ujbCode) return null;
-        const snap = await getDoc(doc(db, COLLECTIONS.userDetail, ujbCode));
-        return snap.exists() ? snap.data() : null;
-    };
 
     const ensureCpBoardUser = async (orbiter) => {
         if (!orbiter?.ujbCode) return;
@@ -392,8 +359,6 @@ const resetForm = () => {
         setSaving(true);
 
         try {
-            const referralId = await generateReferralId();
-
             // Fetch FULL data using UJBCode
             const orbiterSnap = await getDoc(
                 doc(db, COLLECTIONS.userDetail, selectedOrbiter.id)
@@ -405,88 +370,42 @@ const resetForm = () => {
             const orbiterData = orbiterSnap.data() || {};
             const cosmoData = cosmoSnap.data() || {};
 
-            // Mentor fetch
-            const orbiterMentor = await fetchMentorByUjbCode(
-                orbiterData.MentorUJBCode
-            );
-            const cosmoMentor = await fetchMentorByUjbCode(
-                cosmoData.MentorUJBCode
-            );
+            const response = await fetch('/api/admin/referrals', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({
+                    selectedOrbiterId: selectedOrbiter.id,
+                    selectedCosmoId: selectedCosmo.id,
+                    selectedItem: selectedService
+                        ? {
+                              type: 'service',
+                              label: selectedService.name || selectedService.serviceName || '',
+                              raw: selectedService,
+                          }
+                        : {
+                              type: 'product',
+                              label: selectedProduct.name || selectedProduct.productName || '',
+                              raw: selectedProduct,
+                          },
+                    leadDescription,
+                    refType,
+                    referralSource,
+                    otherReferralSource,
+                    otherName,
+                    otherPhone,
+                    otherEmail,
+                    dealStatus,
+                }),
+            });
 
-            // Fee adjustment
-            let orbiterFeeAdjustment = 0;
-            if (orbiterData?.payment?.orbiter?.feeType === "adjustment") {
-                orbiterFeeAdjustment = 1000;
+            const responseData = await response.json().catch(() => ({}));
+
+            if (!response.ok || !responseData?.success) {
+                throw new Error(responseData?.message || 'Referral creation failed');
             }
 
-            const data = {
-                referralId,
-
-                orbiter: {
-                    name: orbiterData.Name || "",
-                    email: orbiterData.Email || "",
-                    phone: orbiterData.MobileNo || "",
-                    ujbCode: orbiterData.UJBCode || "",
-                    mentorName: orbiterData.MentorName || "",
-                    mentorPhone: orbiterData.MentorPhone || "",
-                    residentStatus: orbiterData.residentStatus ?? "Resident",
-                    mentorResidentStatus:
-                        orbiterMentor?.residentStatus ?? "Resident",
-                },
-
-                cosmoOrbiter: {
-                    name: cosmoData.Name || "",
-                    email: cosmoData.Email || "",
-                    phone: cosmoData.MobileNo || "",
-                    ujbCode: cosmoData.UJBCode || "",
-
-                    mentorName: cosmoData.MentorName || "",
-                    mentorPhone: cosmoData.MentorPhone || "",
-
-                    residentStatus: cosmoData.residentStatus ?? "Resident",
-                    mentorResidentStatus:
-                        cosmoMentor?.residentStatus ?? "Resident",
-                },
-
-
-                service: selectedService,
-                product: selectedProduct,
-                leadDescription,
-
-                referralType: refType,
-                referralSource:
-                    referralSource === "Other"
-                        ? otherReferralSource
-                        : referralSource,
-
-                orbitersInfo:
-                    refType === "Others"
-                        ? { name: otherName, phone: otherPhone, email: otherEmail }
-                        : null,
-
-                dealStatus,
-                lastUpdated: new Date(),
-                timestamp: new Date(),
-
-                payments: [],
-                dealLogs: [],
-                statusLogs: [
-                    {
-                        status: dealStatus || "Pending",
-                        updatedAt: new Date().toISOString(),
-                    },
-                ],
-
-                agreedTotal: 0,
-                agreedRemaining: 0,
-                ujbBalance: 0,
-                paidToOrbiter: 0,
-                paidToOrbiterMentor: 0,
-                paidToCosmoMentor: 0,
-                orbiterFeeAdjustment,
-            };
-
-            await addDoc(collection(db, COLLECTIONS.referral), data);
+            const referralId = responseData.referralId;
 
             // CP Engine
             const orbiter = {

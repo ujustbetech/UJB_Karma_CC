@@ -6,11 +6,6 @@ import {
     collection,
     query,
     where,
-    orderBy,
-    doc,
-    updateDoc,
-    Timestamp,
-    arrayUnion,
     onSnapshot,
 } from "firebase/firestore";
 import { app } from "@/lib/firebase/firebaseClient";
@@ -20,6 +15,11 @@ import Link from "next/link";
 
 // import Headertop from "../component/Header";
 import { COLLECTIONS } from "@/lib/utility_collection";
+import { updateReferralStatus } from "@/services/referralService";
+import {
+    REFERRAL_STATUS_OPTIONS,
+    REFERRAL_STATUSES,
+} from "@/lib/referrals/referralStates.mjs";
 // import "../src/app/styles/user.scss";
 import { CheckCircle, Inbox, Mail, Phone, Send, X } from "lucide-react";
 import { useAuth } from "@/context/authContext";
@@ -42,6 +42,27 @@ import { sendWhatsAppTemplateRequest } from "@/utils/whatsappClient";
 import UserPageHeader from "@/components/user/UserPageHeader";
 
 const db = getFirestore(app);
+
+function getReferralTimestampValue(referral) {
+    const rawTimestamp = referral?.timestamp;
+
+    if (rawTimestamp?.toMillis) {
+        return rawTimestamp.toMillis();
+    }
+
+    if (rawTimestamp?.seconds) {
+        return rawTimestamp.seconds * 1000;
+    }
+
+    const parsed = new Date(rawTimestamp || 0).getTime();
+    return Number.isNaN(parsed) ? 0 : parsed;
+}
+
+function sortReferralsByLatest(referrals = []) {
+    return [...referrals].sort(
+        (a, b) => getReferralTimestampValue(b) - getReferralTimestampValue(a)
+    );
+}
 
 // Function to get dynamic message
 const getDynamicMessage = (template, referral) => {
@@ -108,19 +129,9 @@ const statusMessages = {
     },
 };
 
-const statusOptions = [
-    "Not Connected",
-    "Called but Not Answered",
-    "Discussion in Progress",
-    "Deal Lost",
-    "Deal Won",
-    "Work in Progress",
-    "Work Completed",
-    "Received Full and Final Payment",
-    "Received Part Payment & Transferred to UJustBe",
-    "Agreed % Transferred to UJustBe",
-    "Hold",
-];
+const statusOptions = REFERRAL_STATUS_OPTIONS.filter(
+    (status) => status !== REFERRAL_STATUSES.PENDING
+);
 
 // WhatsApp sending
 const sendWhatsAppTemplate = async (phone, name, message) => {
@@ -172,14 +183,12 @@ const UserReferrals = () => {
 
         const myQuery = query(
             referralsCol,
-            where("cosmoOrbiter.ujbCode", "==", currentUJB),
-            orderBy("timestamp", "desc")
+            where("cosmoOrbiter.ujbCode", "==", currentUJB)
         );
 
         const passedQuery = query(
             referralsCol,
-            where("orbiter.ujbCode", "==", currentUJB),
-            orderBy("timestamp", "desc")
+            where("orbiter.ujbCode", "==", currentUJB)
         );
 
         let loadedCount = 0;
@@ -189,10 +198,10 @@ const UserReferrals = () => {
         };
 
         const unsubMy = onSnapshot(myQuery, (snapshot) => {
-            const myReferrals = snapshot.docs.map((d) => ({
+            const myReferrals = sortReferralsByLatest(snapshot.docs.map((d) => ({
                 id: d.id,
                 ...d.data(),
-            }));
+            })));
 
             setAllReferrals((prev) => ({ ...prev, my: myReferrals }));
             setNtMeetCount(myReferrals.length);
@@ -200,10 +209,10 @@ const UserReferrals = () => {
         });
 
         const unsubPassed = onSnapshot(passedQuery, (snapshot) => {
-            const passedReferrals = snapshot.docs.map((d) => ({
+            const passedReferrals = sortReferralsByLatest(snapshot.docs.map((d) => ({
                 id: d.id,
                 ...d.data(),
-            }));
+            })));
 
             setAllReferrals((prev) => ({ ...prev, passed: passedReferrals }));
             setMonthlyMetCount(passedReferrals.length);
@@ -220,15 +229,7 @@ const UserReferrals = () => {
     // Handle deal status change (My Referrals)
     const handleStatusChange = async (referral, newStatus) => {
         try {
-            const docRef = doc(db, COLLECTIONS.referral, referral.id);
-            const statusLog = { status: newStatus, updatedAt: Timestamp.now() };
-
-            await updateDoc(docRef, {
-                dealStatus: newStatus,
-                "cosmoOrbiter.dealStatus": newStatus,
-                statusLogs: arrayUnion(statusLog),
-                lastUpdated: Timestamp.now(),
-            });
+            await updateReferralStatus({ id: referral.id, status: newStatus });
 
             // Send WhatsApp messages dynamically if templates exist
             const templates = statusMessages[newStatus];
@@ -341,18 +342,10 @@ const UserReferrals = () => {
                 const reason = result.value;
 
                 try {
-                    const docRef = doc(db, COLLECTIONS.referral, ref.id);
-
-                    await updateDoc(docRef, {
-                        dealStatus: "Rejected",
-                        "cosmoOrbiter.dealStatus": "Rejected",
+                    await updateReferralStatus({
+                        id: ref.id,
+                        status: REFERRAL_STATUSES.REJECTED,
                         rejectReason: reason,
-                        statusLogs: arrayUnion({
-                            status: "Rejected",
-                            reason: reason,
-                            updatedAt: Timestamp.now(),
-                        }),
-                        lastUpdated: Timestamp.now(),
                     });
 
                     const orbiterMsg = `Your referral was rejected.\nReason: ${reason}`;
@@ -429,18 +422,8 @@ const UserReferrals = () => {
         try {
             setActionLoading(true);
 
-            const docRef = doc(db, COLLECTIONS.referral, selectedReferral.id);
-            const newStatus = "Not Connected";
-
-            await updateDoc(docRef, {
-                dealStatus: newStatus,
-                "cosmoOrbiter.dealStatus": newStatus,
-                statusLogs: arrayUnion({
-                    status: newStatus,
-                    updatedAt: Timestamp.now(),
-                }),
-                lastUpdated: Timestamp.now(),
-            });
+            const newStatus = REFERRAL_STATUSES.ACCEPTED;
+            await updateReferralStatus({ id: selectedReferral.id, status: newStatus });
 
             const templates = statusMessages[newStatus];
 
@@ -477,18 +460,10 @@ const UserReferrals = () => {
         try {
             setActionLoading(true);
 
-            const docRef = doc(db, COLLECTIONS.referral, selectedReferral.id);
-
-            await updateDoc(docRef, {
-                dealStatus: "Rejected",
-                "cosmoOrbiter.dealStatus": "Rejected",
-                rejectReason: rejectReason,
-                statusLogs: arrayUnion({
-                    status: "Rejected",
-                    reason: rejectReason,
-                    updatedAt: Timestamp.now(),
-                }),
-                lastUpdated: Timestamp.now(),
+            await updateReferralStatus({
+                id: selectedReferral.id,
+                status: REFERRAL_STATUSES.REJECTED,
+                rejectReason,
             });
 
             const orbiterMsg = `Your referral was rejected.\nReason: ${rejectReason}`;

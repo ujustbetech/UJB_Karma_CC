@@ -7,7 +7,7 @@ import { doc, updateDoc } from "firebase/firestore";
 import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { COLLECTIONS } from "@/lib/utility_collection";
 
-export default function EditHeroSheet({ open, setOpen, user, setUser }) {
+export default function EditHeroSheet({ open, setOpen, user, setUser, ujbCode }) {
 
   const [tagline, setTagline] = useState(user?.TagLine || "");
   const [city, setCity] = useState(user?.City || "");
@@ -32,12 +32,11 @@ export default function EditHeroSheet({ open, setOpen, user, setUser }) {
   const handleImageUpload = async (file) => {
     try {
       const storage = getStorage();
-      const storedUjbCode = localStorage.getItem("mmUJBCode");
       const userDocId = user?.__docId;
 
       const storageRef = ref(
         storage,
-        `profilePhotos/${storedUjbCode}/${Date.now()}`
+        `profilePhotos/${ujbCode || userDocId}/${Date.now()}`
       );
 
       await uploadBytes(storageRef, file);
@@ -69,7 +68,6 @@ export default function EditHeroSheet({ open, setOpen, user, setUser }) {
   const handleSave = async () => {
     try {
       setLoading(true);
-      const storedUjbCode = localStorage.getItem("mmUJBCode");
       const userDocId = user?.__docId;
 
       if (!userDocId) {

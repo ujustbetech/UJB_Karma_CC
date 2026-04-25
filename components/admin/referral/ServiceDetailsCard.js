@@ -1,5 +1,8 @@
 import React, { useMemo, useState, useEffect } from "react";
-import { buildDealDistribution } from "@/utils/referralCalculations";
+import {
+  buildDealDistribution,
+  getReferralRewardDetails,
+} from "@/utils/referralCalculations";
 
 import {
   IndianRupee,
@@ -79,6 +82,12 @@ export default function ServiceDetailsCard({
     return buildDealDistribution(dealValueNum, referralData);
   }, [localDealValue, referralData, isDealLocked, latestDealLog]);
 
+  const rewardDetails = useMemo(() => {
+    const safeDealValue =
+      Number(localDealValue || latestDealLog?.dealValue || referralData?.dealValue || 0);
+    return getReferralRewardDetails(safeDealValue, referralData?.service || referralData?.product);
+  }, [localDealValue, latestDealLog, referralData]);
+
   /* =========================
      💾 SAVE DEAL
   ========================= */
@@ -138,6 +147,20 @@ export default function ServiceDetailsCard({
           </div>
 
           <div className="p-3 rounded border border-slate-200 bg-gray-50">
+            <div className="flex items-center gap-2 mb-2">
+              <Percent size={14} />
+              <Text variant="body">
+                <strong>Reward Type:</strong> {rewardDetails.rewardType}
+              </Text>
+            </div>
+
+            <div className="flex items-center gap-2 mb-2">
+              <Percent size={14} />
+              <Text variant="body">
+                <strong>Reward Value:</strong> {rewardDetails.rewardLabel}
+              </Text>
+            </div>
+
             <div className="flex items-center gap-2 mb-2">
               <Percent size={14} />
               <Text variant="body">

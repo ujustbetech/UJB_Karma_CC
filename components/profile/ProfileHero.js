@@ -27,7 +27,7 @@ function getSafeImageSrc(value) {
   return "/placeholder.jpg";
 }
 
-export default function ProfileHero({ user, setUser }) {
+export default function ProfileHero({ user, setUser, ujbCode }) {
   const [open, setOpen] = useState(false);
   const profilePhotoSrc = getSafeImageSrc(user?.ProfilePhotoURL);
 
@@ -76,6 +76,7 @@ export default function ProfileHero({ user, setUser }) {
         setOpen={setOpen}
         user={user}
         setUser={setUser}
+        ujbCode={ujbCode}
       />
     </>
   );

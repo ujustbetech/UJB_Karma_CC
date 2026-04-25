@@ -2,11 +2,33 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
+  buildReferralDuplicateKey,
+  buildReferralLockId,
   buildReferralId,
   buildReferralNotifications,
   buildReferralWritePayload,
+  isValidReferralEmail,
+  isValidReferralPhone,
   normalizeReferralItem,
+  validateReferralPayload,
 } from "../lib/referrals/referralWorkflow.mjs";
+import {
+  buildReferralStatusUpdatePayload,
+  getAcceptedReferralStatus,
+  getRejectedReferralStatus,
+  validateReferralCreationRequest,
+  validateReferralStatusUpdate,
+} from "../lib/referrals/referralMutationWorkflow.mjs";
+import {
+  REFERRAL_STATUSES,
+  canTransitionReferralStatus,
+  normalizeReferralStatus,
+} from "../lib/referrals/referralStates.mjs";
+import {
+  REFERRAL_REWARD_TYPES,
+  buildDealDistribution,
+  getReferralRewardDetails,
+} from "../utils/referralCalculations.js";
 
 test("referral workflow normalizes legacy percentage items", () => {
   const item = normalizeReferralItem({
@@ -63,4 +85,140 @@ test("referral workflow builds payloads for someone else and notification fanout
   assert.equal(notifications.length, 2);
   assert.match(notifications[0].parameters[1], /Coaching/);
   assert.match(notifications[1].parameters[1], /Coaching/);
+});
+
+test("referral workflow validates self-referral and contact quality", () => {
+  const sharedPayload = {
+    selectedItem: { type: "service", label: "Coaching" },
+    leadDescription: "Warm lead",
+    selectedFor: "self",
+    otherName: "",
+    otherPhone: "",
+    otherEmail: "",
+    cosmoDetails: {
+      ujbCode: "UJB001",
+      name: "Same User",
+      email: "same@example.com",
+      phone: "9999999999",
+    },
+    orbiterDetails: {
+      ujbCode: "UJB001",
+      name: "Same User",
+      email: "same@example.com",
+      phone: "9999999999",
+    },
+  };
+
+  assert.equal(validateReferralPayload(sharedPayload).ok, false);
+  assert.equal(isValidReferralPhone("99999"), false);
+  assert.equal(isValidReferralEmail("bad-email"), false);
+});
+
+test("referral workflow builds stable duplicate lock identities", () => {
+  const duplicateKey = buildReferralDuplicateKey({
+    selectedItem: { type: "service", label: "Coaching" },
+    selectedFor: "someone",
+    otherName: "Lead Name",
+    otherPhone: "+91 88888 88888",
+    otherEmail: "lead@example.com",
+    cosmoDetails: { ujbCode: "COS001", email: "cosmo@example.com", phone: "7777777777" },
+    orbiterDetails: { ujbCode: "ORB001", email: "orbiter@example.com", phone: "6666666666" },
+  });
+
+  assert.match(duplicateKey, /orbiter:ORB001/);
+  assert.match(buildReferralLockId(duplicateKey), /^user-referral-/);
+  assert.equal(
+    validateReferralCreationRequest({
+      payload: {
+        selectedItem: { type: "service", label: "Coaching" },
+        leadDescription: "Warm lead",
+        selectedFor: "self",
+        cosmoDetails: { ujbCode: "COS001", email: "cosmo@example.com", phone: "7777777777" },
+        orbiterDetails: { ujbCode: "ORB001", email: "orbiter@example.com", phone: "6666666666" },
+      },
+      isDuplicate: true,
+    }).ok,
+    false
+  );
+});
+
+test("referral status workflow enforces canonical transitions", () => {
+  assert.equal(normalizeReferralStatus("Reject"), REFERRAL_STATUSES.REJECTED);
+  assert.equal(
+    canTransitionReferralStatus(
+      REFERRAL_STATUSES.PENDING,
+      getAcceptedReferralStatus()
+    ),
+    true
+  );
+  assert.equal(
+    canTransitionReferralStatus(
+      REFERRAL_STATUSES.PENDING,
+      REFERRAL_STATUSES.DEAL_WON
+    ),
+    false
+  );
+
+  assert.equal(
+    validateReferralStatusUpdate({
+      currentStatus: REFERRAL_STATUSES.PENDING,
+      nextStatus: getRejectedReferralStatus(),
+      rejectReason: "",
+    }).ok,
+    false
+  );
+
+  const acceptedPayload = buildReferralStatusUpdatePayload({
+    nextStatus: getAcceptedReferralStatus(),
+    now: new Date("2026-04-03T00:00:00Z"),
+  });
+  assert.equal(acceptedPayload.status, REFERRAL_STATUSES.ACCEPTED);
+
+  const rejectedPayload = buildReferralStatusUpdatePayload({
+    nextStatus: getRejectedReferralStatus(),
+    rejectReason: "Not a fit",
+    now: new Date("2026-04-03T00:00:00Z"),
+  });
+  assert.equal(rejectedPayload.rejectReason, "Not a fit");
+});
+
+test("referral calculations treat percentage rewards as percentages of the deal", () => {
+  const item = {
+    agreedValue: {
+      mode: "single",
+      single: {
+        type: "percentage",
+        value: 10,
+      },
+    },
+  };
+
+  const reward = getReferralRewardDetails(10000, item);
+  const distribution = buildDealDistribution(10000, { service: item });
+
+  assert.equal(reward.rewardType, REFERRAL_REWARD_TYPES.PERCENTAGE);
+  assert.equal(reward.rewardValue, 10);
+  assert.equal(reward.rewardAmount, 1000);
+  assert.equal(distribution.agreedAmount, 1000);
+});
+
+test("referral calculations preserve fixed rewards as rupee amounts", () => {
+  const item = {
+    agreedValue: {
+      mode: "single",
+      single: {
+        type: "fixed",
+        value: 10,
+      },
+    },
+  };
+
+  const reward = getReferralRewardDetails(10000, item);
+  const distribution = buildDealDistribution(10000, { service: item });
+
+  assert.equal(reward.rewardType, REFERRAL_REWARD_TYPES.FIXED);
+  assert.equal(reward.rewardValue, 10);
+  assert.equal(reward.rewardAmount, 10);
+  assert.equal(distribution.agreedAmount, 10);
+  assert.equal(distribution.percentage, 0);
 });

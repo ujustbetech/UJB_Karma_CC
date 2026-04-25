@@ -164,18 +164,17 @@ const handleStatusUpdate = async (newStatus) => {
     // Create safe payload (remove undefined values)
     const payload = {
       dealStatus: finalStatus,
+      status: finalStatus,
       statusLogs: arrayUnion({
         status: finalStatus,
         updatedAt: Timestamp.now(),
       }),
     };
 
-    // Remove anything undefined (Firestore does NOT accept undefined)
     Object.keys(payload).forEach((k) => {
       if (payload[k] === undefined) delete payload[k];
     });
 
-    // Firestore update
     await updateDoc(doc(db, collectionName, id), payload);
 
     // Detect statuses that make dealEverWon = true

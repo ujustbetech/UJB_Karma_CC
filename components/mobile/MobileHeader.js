@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/authContext";
-import { collection, getDocs, doc, getDoc } from "firebase/firestore";
+import { collection, doc, getDoc, onSnapshot } from "firebase/firestore";
 import { db } from "@/lib/firebase/firebaseClient";
 import { Coins, Bell, User, LogOut, Receipt } from "lucide-react";
 import useUserNotifications from "@/hooks/useUserNotifications";
@@ -21,27 +21,56 @@ export default function MobileHeader() {
   useEffect(() => {
     if (!user?.profile?.ujbCode) return;
 
-    const fetchCPPoints = async () => {
-      try {
-        const activitiesRef = collection(
-          doc(db, "CPBoard", user.profile.ujbCode),
-          "activities"
-        );
+    let docTotal = null;
+    let activityTotal = 0;
 
-        const snap = await getDocs(activitiesRef);
-
-        let total = 0;
-        snap.forEach((docSnap) => {
-          total += Number(docSnap.data()?.points) || 0;
-        });
-
-        setCPPoints(total);
-      } catch {
-        setCPPoints(0);
-      }
+    const applyTotal = () => {
+      setCPPoints(docTotal ?? activityTotal);
     };
 
-    fetchCPPoints();
+    const boardRef = doc(db, "CPBoard", user.profile.ujbCode);
+    const activitiesRef = collection(boardRef, "activities");
+
+    const unsubscribeBoard = onSnapshot(
+      boardRef,
+      (snap) => {
+        const totals = snap.data()?.totals;
+        const nextDocTotal =
+          totals && typeof totals === "object"
+            ? Object.values(totals).reduce(
+                (sum, value) => sum + (Number(value) || 0),
+                0
+              )
+            : null;
+
+        docTotal = nextDocTotal;
+        applyTotal();
+      },
+      () => {
+        docTotal = null;
+        applyTotal();
+      }
+    );
+
+    const unsubscribeActivities = onSnapshot(
+      activitiesRef,
+      (snap) => {
+        activityTotal = snap.docs.reduce(
+          (sum, docSnap) => sum + (Number(docSnap.data()?.points) || 0),
+          0
+        );
+        applyTotal();
+      },
+      () => {
+        activityTotal = 0;
+        applyTotal();
+      }
+    );
+
+    return () => {
+      unsubscribeBoard();
+      unsubscribeActivities();
+    };
   }, [user]);
 
   useEffect(() => {
