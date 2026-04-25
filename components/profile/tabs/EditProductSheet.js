@@ -49,6 +49,14 @@ export default function EditProductSheet({
                 description: "",
                 imageURL: "",
                 keywords: [],
+                deliveryTime: "",
+                targetAudience: [],
+                industries: [],
+                useCases: [],
+                clientele: "",
+                experience: "",
+                pastClients: [],
+                proofPoints: [],
                 agreedValue: {
                     mode: "single",
                     single: {
@@ -204,6 +212,30 @@ export default function EditProductSheet({
                                 }
                             />
 
+                            <Input
+                                label="Delivery Time"
+                                value={product.deliveryTime}
+                                onChange={(v) =>
+                                    updateProduct(index, "deliveryTime", v)
+                                }
+                            />
+
+                            <Input
+                                label="Clientele Type"
+                                value={product.clientele}
+                                onChange={(v) =>
+                                    updateProduct(index, "clientele", v)
+                                }
+                            />
+
+                            <Input
+                                label="Experience (Years)"
+                                value={product.experience}
+                                onChange={(v) =>
+                                    updateProduct(index, "experience", v)
+                                }
+                            />
+
                             <div className="grid grid-cols-2 gap-4">
                                 <Select
                                     label="Commission Type"
@@ -250,6 +282,102 @@ export default function EditProductSheet({
                                 onRemove={(k) =>
                                     removeKeyword(index, k)
                                 }
+                                label="Keywords"
+                            />
+
+                            <KeywordInput
+                                keywords={product.targetAudience || []}
+                                onAdd={(k) => {
+                                    const updated = [...products];
+                                    updated[index].targetAudience = [
+                                        ...(updated[index].targetAudience || []),
+                                        k,
+                                    ].filter((item, i, arr) => item && arr.indexOf(item) === i);
+                                    setProducts(updated);
+                                }}
+                                onRemove={(k) => {
+                                    const updated = [...products];
+                                    updated[index].targetAudience =
+                                        (updated[index].targetAudience || []).filter((item) => item !== k);
+                                    setProducts(updated);
+                                }}
+                                label="Target Audience"
+                            />
+
+                            <KeywordInput
+                                keywords={product.industries || []}
+                                onAdd={(k) => {
+                                    const updated = [...products];
+                                    updated[index].industries = [
+                                        ...(updated[index].industries || []),
+                                        k,
+                                    ].filter((item, i, arr) => item && arr.indexOf(item) === i);
+                                    setProducts(updated);
+                                }}
+                                onRemove={(k) => {
+                                    const updated = [...products];
+                                    updated[index].industries =
+                                        (updated[index].industries || []).filter((item) => item !== k);
+                                    setProducts(updated);
+                                }}
+                                label="Industries Served"
+                            />
+
+                            <KeywordInput
+                                keywords={product.useCases || []}
+                                onAdd={(k) => {
+                                    const updated = [...products];
+                                    updated[index].useCases = [
+                                        ...(updated[index].useCases || []),
+                                        k,
+                                    ].filter((item, i, arr) => item && arr.indexOf(item) === i);
+                                    setProducts(updated);
+                                }}
+                                onRemove={(k) => {
+                                    const updated = [...products];
+                                    updated[index].useCases =
+                                        (updated[index].useCases || []).filter((item) => item !== k);
+                                    setProducts(updated);
+                                }}
+                                label="Use Cases"
+                            />
+
+                            <KeywordInput
+                                keywords={product.pastClients || []}
+                                onAdd={(k) => {
+                                    const updated = [...products];
+                                    updated[index].pastClients = [
+                                        ...(updated[index].pastClients || []),
+                                        k,
+                                    ].filter((item, i, arr) => item && arr.indexOf(item) === i);
+                                    setProducts(updated);
+                                }}
+                                onRemove={(k) => {
+                                    const updated = [...products];
+                                    updated[index].pastClients =
+                                        (updated[index].pastClients || []).filter((item) => item !== k);
+                                    setProducts(updated);
+                                }}
+                                label="Past Clients"
+                            />
+
+                            <KeywordInput
+                                keywords={product.proofPoints || []}
+                                onAdd={(k) => {
+                                    const updated = [...products];
+                                    updated[index].proofPoints = [
+                                        ...(updated[index].proofPoints || []),
+                                        k,
+                                    ].filter((item, i, arr) => item && arr.indexOf(item) === i);
+                                    setProducts(updated);
+                                }}
+                                onRemove={(k) => {
+                                    const updated = [...products];
+                                    updated[index].proofPoints =
+                                        (updated[index].proofPoints || []).filter((item) => item !== k);
+                                    setProducts(updated);
+                                }}
+                                label="Proof Points"
                             />
 
                             <button
@@ -338,13 +466,13 @@ function Select({ label, value, options, onChange }) {
     );
 }
 
-function KeywordInput({ keywords, onAdd, onRemove }) {
+function KeywordInput({ keywords, onAdd, onRemove, label = "Keywords" }) {
     const [value, setValue] = useState("");
 
     return (
         <div>
             <label className="text-sm text-gray-500">
-                Keywords
+                {label}
             </label>
 
             <div className="flex gap-2 mt-2">

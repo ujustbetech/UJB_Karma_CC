@@ -2,6 +2,7 @@
 
 import Slider from "react-slick";
 import { ImageOff } from "lucide-react";
+import { getReferralRewardDetails } from "@/utils/referralCalculations";
 import "slick-carousel/slick/slick.css";
 import "slick-carousel/slick/slick-theme.css";
 const OfferingCarousel = ({ items, onSelect }) => {
@@ -21,10 +22,10 @@ const OfferingCarousel = ({ items, onSelect }) => {
   //   return item?.raw?.agreedValue?.single?.value || null;
   // };
 
-  const getCommission = (item) => {
-    const value = item?.raw?.agreedValue?.single?.value;
-    return value ? Number(value) : 0;
-  };
+  const getReward = (item) =>
+    getReferralRewardDetails(0, item?.raw || item);
+
+  const getCommission = (item) => getReward(item).rewardValue;
 
   const highestCommission = Math.max(
     ...items.map((item) => getCommission(item)),
@@ -48,9 +49,9 @@ const OfferingCarousel = ({ items, onSelect }) => {
   `} onClick={() => onSelect(item)}
             >
 
-              {getCommission(item) && (
+              {getCommission(item) > 0 && (
                 <span className="absolute top-2 right-2 bg-green-500 text-white text-xs px-2 py-1 rounded-full">
-                  {getCommission(item)}% Commission
+                  {getReward(item).rewardLabel} Reward
                 </span>
               )}
 
@@ -80,9 +81,9 @@ const OfferingCarousel = ({ items, onSelect }) => {
                 {item.description}
               </p>
 
-              {item.percentage && (
+              {getCommission(item) > 0 && (
                 <p className="mt-2 text-xs text-orange-600 font-medium">
-                  Agreed: {item.percentage}%
+                  Agreed: {getReward(item).rewardLabel}
                 </p>
               )}
             </div>

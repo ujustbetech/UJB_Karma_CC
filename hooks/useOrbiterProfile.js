@@ -40,7 +40,11 @@ async function uploadWithMeta(file, fullPath) {
 
 /* ---------------- MAIN HOOK ---------------- */
 
-export default function useOrbiterProfile(ujbcode, toast) {
+export default function useOrbiterProfile(ujbcode, toast, options = {}) {
+  const {
+    profileEndpoint = '/api/admin/orbiters',
+    includeCredentials = true,
+  } = options;
   const [loading, setLoading] = useState(false);
   const [docId, setDocId] = useState('');
   const [formData, setFormData] = useState({});
@@ -52,6 +56,7 @@ export default function useOrbiterProfile(ujbcode, toast) {
   const [profilePreview, setProfilePreview] = useState('');
 
   const [serviceImagesTemp, setServiceImagesTemp] = useState({});
+  const [productImagesTemp, setProductImagesTemp] = useState({});
 
   /* PERSONAL KYC */
   const [personalKYC, setPersonalKYC] = useState({
@@ -104,10 +109,8 @@ export default function useOrbiterProfile(ujbcode, toast) {
 
       try {
         const res = await fetch(
-          `/api/admin/orbiters?ujbCode=${encodeURIComponent(ujbcode)}`,
-          {
-            credentials: 'include'
-          }
+          `${profileEndpoint}?ujbCode=${encodeURIComponent(ujbcode)}`,
+          includeCredentials ? { credentials: 'include' } : {}
         );
         const payload = await res.json().catch(() => ({}));
 
@@ -187,7 +190,7 @@ if (data.bankDetails) {
     };
 
     fetchUser();
-  }, [ujbcode]);
+  }, [ujbcode, profileEndpoint, includeCredentials]);
 
 
   useEffect(() => {
@@ -284,6 +287,27 @@ if (data.bankDetails) {
     });
   };
 
+  const handleProductImagesChange = (index, files) => {
+    const valid = [...files].slice(0, 5);
+
+    setProductImagesTemp(prev => ({
+      ...prev,
+      [index]: valid
+    }));
+  };
+
+  const removeProductImage = (index, fileIndex) => {
+    setProductImagesTemp(prev => {
+      const updated = [...(prev[index] || [])];
+      updated.splice(fileIndex, 1);
+
+      return {
+        ...prev,
+        [index]: updated
+      };
+    });
+  };
+
 
   const handleBusinessKYCChange = (field, file) => {
     setBusinessKYC(prev => ({ ...prev, [field]: file }));
@@ -323,13 +347,13 @@ const handleBankProofChange = (file) => {
       };
 
       const res = await fetch(
-        `/api/admin/orbiters?ujbCode=${encodeURIComponent(docId || ujbcode)}`,
+        `${profileEndpoint}?ujbCode=${encodeURIComponent(docId || ujbcode)}`,
         {
           method: 'PATCH',
           headers: {
             'Content-Type': 'application/json'
           },
-          credentials: 'include',
+          ...(includeCredentials ? { credentials: 'include' } : {}),
           body: JSON.stringify({
             update: {
               subscription: subscriptionData,
@@ -502,6 +526,40 @@ if (!bankProofFile && formData.bankDetails?.proofFile?.url) {
         })
       );
 
+      const finalProducts = await Promise.all(
+        (formData.products || []).map(async (product, index) => {
+          const tempFiles = productImagesTemp[index] || [];
+          let uploadedImages = product.images || [];
+
+          for (let i = 0; i < tempFiles.length; i++) {
+            const file = tempFiles[i];
+
+            const fileName = generateFileName(
+              ujbcode,
+              'product',
+              `img_${index}_${i}`,
+              file
+            );
+
+            const path = `${basePath}/Products/${fileName}`;
+            const meta = await uploadWithMeta(file, path);
+
+            uploadedImages.push({
+              url: meta.url,
+              name: file.name,
+              size: file.size,
+              type: file.type,
+              isCover: uploadedImages.length === 0
+            });
+          }
+
+          return {
+            ...product,
+            images: uploadedImages
+          };
+        })
+      );
+
 
       /* ---------------- FINAL ACHIEVEMENT SAVE LOGIC ---------------- */
 
@@ -557,17 +615,18 @@ if (!bankProofFile && formData.bankDetails?.proofFile?.url) {
         businessKYC: businessKycData,
         bankDetails: encryptedBankDetails,
         services: finalServices,
+        products: finalProducts,
         achievementCertificates: finalAchievements,
       };
 
       const res = await fetch(
-        `/api/admin/orbiters?ujbCode=${encodeURIComponent(docId || ujbcode)}`,
+        `${profileEndpoint}?ujbCode=${encodeURIComponent(docId || ujbcode)}`,
         {
           method: 'PATCH',
           headers: {
             'Content-Type': 'application/json'
           },
-          credentials: 'include',
+          ...(includeCredentials ? { credentials: 'include' } : {}),
           body: JSON.stringify({
             update: finalData,
           })
@@ -615,6 +674,9 @@ if (!bankProofFile && formData.bankDetails?.proofFile?.url) {
     serviceImagesTemp,
     handleServiceImagesChange,
     removeServiceImage,
+    productImagesTemp,
+    handleProductImagesChange,
+    removeProductImage,
     // 🔥 ADD THESE
     approveBusiness,
     achievementPreviews,

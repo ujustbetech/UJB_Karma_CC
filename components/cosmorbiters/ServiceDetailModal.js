@@ -1,9 +1,12 @@
 "use client";
 
 import { X, Phone, MessageCircle, Percent } from "lucide-react";
+import { getReferralRewardDetails } from "@/utils/referralCalculations";
 
 export default function ServiceDetailModal({ item, onClose }) {
   if (!item) return null;
+
+  const reward = getReferralRewardDetails(0, item.raw || item);
 
   return (
     <div className="fixed inset-0 z-99 flex items-end bg-black/40 backdrop-blur-sm">
@@ -43,10 +46,10 @@ export default function ServiceDetailModal({ item, onClose }) {
         )}
 
         {/* Commission */}
-        {item.raw?.agreedValue?.single?.value && (
+        {reward.rewardValue > 0 && (
           <div className="mb-4 flex items-center gap-2 text-green-600 text-sm font-medium">
             <Percent size={16} />
-            Commission: {item.raw.agreedValue.single.value}%
+            Commission: {reward.rewardLabel}
           </div>
         )}
 

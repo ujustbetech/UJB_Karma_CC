@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 
 import { useAuth } from "@/context/authContext";
@@ -32,12 +32,13 @@ import {
   collection,
   query,
   where,
-  getDocs,
   setDoc,
   deleteDoc,
+  onSnapshot,
 } from "firebase/firestore";
 import { app } from "@/lib/firebase/firebaseClient";
 import { COLLECTIONS } from "@/lib/utility_collection";
+import { buildDuplicateKeyFromReferralRecord } from "@/lib/referrals/referralWorkflow.mjs";
 
 import OfferingCarousel from "@/components/cosmorbiters/OfferingCarousel";
 import ServiceDetailModal from "@/components/cosmorbiters/ServiceDetailModal";
@@ -91,7 +92,7 @@ export default function ReferralDetails() {
   const { id } = useParams();
   const router = useRouter();
 
-  const { submitReferral } = useReferral();
+  const { submitReferral, loading: referralSubmitting } = useReferral();
   const toast = useToast();
   const { user: sessionUser } = useAuth();
   const currentUserUjbCode = sessionUser?.profile?.ujbCode;
@@ -106,6 +107,25 @@ export default function ReferralDetails() {
   const [modalOpen, setModalOpen] = useState(false);
   const [referralCount, setReferralCount] = useState(0);
   const [isFavorite, setIsFavorite] = useState(false);
+  const [existingReferrals, setExistingReferrals] = useState([]);
+  const isSelfReferralBlocked =
+    Boolean(currentUserUjbCode) &&
+    Boolean(userDetails?.ujbCode) &&
+    currentUserUjbCode === userDetails.ujbCode;
+  const canPassReferral =
+    !isSelfReferralBlocked &&
+    !referralSubmitting &&
+    Boolean(orbiterDetails) &&
+    (services.length > 0 || products.length > 0);
+  const existingDuplicateLookup = useMemo(
+    () =>
+      new Set(
+        existingReferrals
+          .map((referral) => referral.duplicateKey || buildDuplicateKeyFromReferralRecord(referral))
+          .filter(Boolean)
+      ),
+    [existingReferrals]
+  );
 
   const normalizeArrayField = (value) => {
     if (!value || value === "-" || value === "aEUR") return [];
@@ -205,6 +225,11 @@ export default function ReferralDetails() {
         return;
       }
 
+      if (isSelfReferralBlocked) {
+        toast.error("You cannot pass a referral to yourself.");
+        return;
+      }
+
       const referralId = await submitReferral({
         ...payload,
         cosmoDetails: userDetails,
@@ -215,7 +240,7 @@ export default function ReferralDetails() {
       setModalOpen(false);
     } catch (error) {
       console.error(error);
-      toast.error("Failed to create referral");
+      toast.error(error?.message || "Failed to create referral");
     }
   };
 
@@ -260,22 +285,51 @@ export default function ReferralDetails() {
   useEffect(() => {
     if (!userDetails?.ujbCode) return;
 
-    const fetchReferralCount = async () => {
-      try {
-        const referralQuery = query(
-          collection(db, COLLECTIONS.referral),
-          where("cosmoUjbCode", "==", userDetails.ujbCode)
-        );
+    const referralQuery = query(
+      collection(db, COLLECTIONS.referral),
+      where("cosmoUjbCode", "==", userDetails.ujbCode)
+    );
 
-        const snapshot = await getDocs(referralQuery);
+    const unsubscribe = onSnapshot(
+      referralQuery,
+      (snapshot) => {
         setReferralCount(snapshot.size);
-      } catch (error) {
+      },
+      (error) => {
         console.error("Error fetching referral count:", error);
       }
-    };
+    );
 
-    fetchReferralCount();
+    return () => unsubscribe();
   }, [userDetails?.ujbCode]);
+
+  useEffect(() => {
+    if (!currentUserUjbCode || !userDetails?.ujbCode) {
+      setExistingReferrals([]);
+      return;
+    }
+
+    const referralQuery = query(
+      collection(db, COLLECTIONS.referral),
+      where("orbiter.ujbCode", "==", currentUserUjbCode)
+    );
+
+    const unsubscribe = onSnapshot(
+      referralQuery,
+      (snapshot) => {
+        const pairReferrals = snapshot.docs
+          .map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }))
+          .filter((referral) => referral.cosmoUjbCode === userDetails.ujbCode);
+
+        setExistingReferrals(pairReferrals);
+      },
+      (error) => {
+        console.error("Error fetching existing referrals:", error);
+      }
+    );
+
+    return () => unsubscribe();
+  }, [currentUserUjbCode, userDetails?.ujbCode]);
 
   const calculateAverageCommission = () => {
     const allItems = [...services, ...products];
@@ -514,7 +568,7 @@ export default function ReferralDetails() {
                 {userDetails.tagline && (
                   <div className="bg-orange-50 p-4 rounded-xl">
                     <p className="text-sm text-orange-600 font-medium text-center">
-                      \"{userDetails.tagline}\"
+                      {userDetails.tagline}
                     </p>
                   </div>
                 )}
@@ -638,18 +692,31 @@ export default function ReferralDetails() {
         <ReferralModal
           services={services}
           products={products}
+          orbiterDetails={orbiterDetails}
           userDetails={userDetails}
+          existingDuplicateLookup={existingDuplicateLookup}
+          loading={referralSubmitting}
           onClose={() => setModalOpen(false)}
           handlePassReferral={handlePassReferral}
         />
       )}
 
       <div className="fixed bottom-20 left-1/2 z-40 w-full max-w-md -translate-x-1/2 px-4">
+        {isSelfReferralBlocked && (
+          <p className="mb-3 rounded-2xl bg-red-50 px-4 py-3 text-center text-sm text-red-600 shadow-sm">
+            You cannot pass a referral to your own profile.
+          </p>
+        )}
         <button
           onClick={() => setModalOpen(true)}
-          className="w-full bg-gradient-to-r from-orange-500 to-orange-600 text-white py-4 rounded-2xl shadow-xl font-semibold active:scale-95 transition-all duration-200 hover:shadow-2xl"
+          disabled={!canPassReferral}
+          className="w-full bg-gradient-to-r from-orange-500 to-orange-600 text-white py-4 rounded-2xl shadow-xl font-semibold active:scale-95 transition-all duration-200 hover:shadow-2xl disabled:cursor-not-allowed disabled:opacity-60"
         >
-          Pass Referral
+          {referralSubmitting
+            ? "Passing..."
+            : isSelfReferralBlocked
+              ? "Unavailable"
+              : "Pass Referral"}
         </button>
       </div>
     </main>

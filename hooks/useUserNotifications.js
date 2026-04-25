@@ -1,11 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   fetchUserNotifications,
   getReadNotificationIds,
   markAllNotificationsAsRead,
   markNotificationAsRead,
+  subscribeUserNotificationSources,
 } from "@/services/notificationService";
 
 export default function useUserNotifications(user) {
@@ -15,8 +16,9 @@ export default function useUserNotifications(user) {
   const ujbCode = user?.profile?.ujbCode;
   const phone = user?.phone;
   const category = user?.profile?.category;
+  const refreshTimeoutRef = useRef(null);
 
-  const refresh = useCallback(async () => {
+  const refresh = useCallback(async ({ silent = false } = {}) => {
     if (!ujbCode) {
       setNotifications([]);
       setLoading(false);
@@ -24,7 +26,10 @@ export default function useUserNotifications(user) {
     }
 
     try {
-      setLoading(true);
+      if (!silent) {
+        setLoading(true);
+      }
+
       const items = await fetchUserNotifications({ ujbCode, phone, category });
       const readIds = new Set(getReadNotificationIds(ujbCode));
 
@@ -44,6 +49,35 @@ export default function useUserNotifications(user) {
   useEffect(() => {
     refresh();
   }, [refresh]);
+
+  useEffect(() => {
+    if (!ujbCode) {
+      return undefined;
+    }
+
+    const scheduleRefresh = () => {
+      if (refreshTimeoutRef.current) {
+        window.clearTimeout(refreshTimeoutRef.current);
+      }
+
+      refreshTimeoutRef.current = window.setTimeout(() => {
+        refresh({ silent: true });
+      }, 120);
+    };
+
+    const unsubscribe = subscribeUserNotificationSources(
+      { ujbCode, phone },
+      scheduleRefresh
+    );
+
+    return () => {
+      if (refreshTimeoutRef.current) {
+        window.clearTimeout(refreshTimeoutRef.current);
+      }
+
+      unsubscribe?.();
+    };
+  }, [phone, refresh, ujbCode]);
 
   const unreadCount = useMemo(
     () => notifications.filter((item) => !item.read).length,

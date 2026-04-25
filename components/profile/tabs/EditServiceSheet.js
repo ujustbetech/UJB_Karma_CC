@@ -48,6 +48,14 @@ export default function EditServiceSheet({
                 description: "",
                 keywords: [],
                 imageURL: "",
+                deliveryTime: "",
+                targetAudience: [],
+                industries: [],
+                useCases: [],
+                clientele: "",
+                experience: "",
+                pastClients: [],
+                proofPoints: [],
                 agreedValue: {
                     mode: "single",
                     single: {
@@ -205,6 +213,24 @@ export default function EditServiceSheet({
                                 onChange={(v) => updateService(index, "description", v)}
                             />
 
+                            <Input
+                                label="Delivery Time"
+                                value={service.deliveryTime}
+                                onChange={(v) => updateService(index, "deliveryTime", v)}
+                            />
+
+                            <Input
+                                label="Clientele Type"
+                                value={service.clientele}
+                                onChange={(v) => updateService(index, "clientele", v)}
+                            />
+
+                            <Input
+                                label="Experience (Years)"
+                                value={service.experience}
+                                onChange={(v) => updateService(index, "experience", v)}
+                            />
+
                             {/* Commission */}
                             <div className="grid grid-cols-2 gap-4">
                                 <Select
@@ -247,6 +273,102 @@ export default function EditServiceSheet({
                                 keywords={service.keywords || []}
                                 onAdd={(k) => addKeyword(index, k)}
                                 onRemove={(k) => removeKeyword(index, k)}
+                                label="Keywords"
+                            />
+
+                            <KeywordInput
+                                keywords={service.targetAudience || []}
+                                onAdd={(k) => {
+                                    const updated = [...services];
+                                    updated[index].targetAudience = [
+                                        ...(updated[index].targetAudience || []),
+                                        k,
+                                    ].filter((item, i, arr) => item && arr.indexOf(item) === i);
+                                    setServices(updated);
+                                }}
+                                onRemove={(k) => {
+                                    const updated = [...services];
+                                    updated[index].targetAudience =
+                                        (updated[index].targetAudience || []).filter((item) => item !== k);
+                                    setServices(updated);
+                                }}
+                                label="Target Audience"
+                            />
+
+                            <KeywordInput
+                                keywords={service.industries || []}
+                                onAdd={(k) => {
+                                    const updated = [...services];
+                                    updated[index].industries = [
+                                        ...(updated[index].industries || []),
+                                        k,
+                                    ].filter((item, i, arr) => item && arr.indexOf(item) === i);
+                                    setServices(updated);
+                                }}
+                                onRemove={(k) => {
+                                    const updated = [...services];
+                                    updated[index].industries =
+                                        (updated[index].industries || []).filter((item) => item !== k);
+                                    setServices(updated);
+                                }}
+                                label="Industries Served"
+                            />
+
+                            <KeywordInput
+                                keywords={service.useCases || []}
+                                onAdd={(k) => {
+                                    const updated = [...services];
+                                    updated[index].useCases = [
+                                        ...(updated[index].useCases || []),
+                                        k,
+                                    ].filter((item, i, arr) => item && arr.indexOf(item) === i);
+                                    setServices(updated);
+                                }}
+                                onRemove={(k) => {
+                                    const updated = [...services];
+                                    updated[index].useCases =
+                                        (updated[index].useCases || []).filter((item) => item !== k);
+                                    setServices(updated);
+                                }}
+                                label="Use Cases"
+                            />
+
+                            <KeywordInput
+                                keywords={service.pastClients || []}
+                                onAdd={(k) => {
+                                    const updated = [...services];
+                                    updated[index].pastClients = [
+                                        ...(updated[index].pastClients || []),
+                                        k,
+                                    ].filter((item, i, arr) => item && arr.indexOf(item) === i);
+                                    setServices(updated);
+                                }}
+                                onRemove={(k) => {
+                                    const updated = [...services];
+                                    updated[index].pastClients =
+                                        (updated[index].pastClients || []).filter((item) => item !== k);
+                                    setServices(updated);
+                                }}
+                                label="Past Clients"
+                            />
+
+                            <KeywordInput
+                                keywords={service.proofPoints || []}
+                                onAdd={(k) => {
+                                    const updated = [...services];
+                                    updated[index].proofPoints = [
+                                        ...(updated[index].proofPoints || []),
+                                        k,
+                                    ].filter((item, i, arr) => item && arr.indexOf(item) === i);
+                                    setServices(updated);
+                                }}
+                                onRemove={(k) => {
+                                    const updated = [...services];
+                                    updated[index].proofPoints =
+                                        (updated[index].proofPoints || []).filter((item) => item !== k);
+                                    setServices(updated);
+                                }}
+                                label="Proof Points"
                             />
 
                             <button
@@ -329,13 +451,13 @@ function Select({ label, value, options, onChange }) {
     );
 }
 
-function KeywordInput({ keywords, onAdd, onRemove }) {
+function KeywordInput({ keywords, onAdd, onRemove, label = "Keywords" }) {
     const [value, setValue] = useState("");
 
     return (
         <div>
             <label className="text-sm text-gray-500">
-                Keywords
+                {label}
             </label>
 
             <div className="flex gap-2 mt-2">

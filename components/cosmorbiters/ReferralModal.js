@@ -1,14 +1,21 @@
 "use client";
 
 import { X, User, Users } from "lucide-react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import {
+  buildReferralDuplicateKey,
+  validateReferralPayload,
+} from "@/lib/referrals/referralWorkflow.mjs";
 
 export default function ReferralModal({
   services,
   products,
   handlePassReferral,
+  orbiterDetails,
   loading,
   onClose,
+  userDetails,
+  existingDuplicateLookup = new Set(),
 }) {
   const [selectedIndex, setSelectedIndex] = useState("");
   const [selectedFor, setSelectedFor] = useState("self");
@@ -16,29 +23,63 @@ export default function ReferralModal({
   const [otherName, setOtherName] = useState("");
   const [otherPhone, setOtherPhone] = useState("");
   const [otherEmail, setOtherEmail] = useState("");
+  const [submitError, setSubmitError] = useState("");
 
   const allItems = [...services, ...products];
 
   const selectedItem =
     selectedIndex !== "" ? allItems[Number(selectedIndex)] : null;
+  const duplicateKey = useMemo(() => {
+    if (!selectedItem || !orbiterDetails || !userDetails) {
+      return "";
+    }
+
+    return buildReferralDuplicateKey({
+      selectedItem,
+      selectedFor,
+      otherName,
+      otherPhone,
+      otherEmail,
+      cosmoDetails: userDetails,
+      orbiterDetails,
+    });
+  }, [
+    selectedItem,
+    selectedFor,
+    otherName,
+    otherPhone,
+    otherEmail,
+    userDetails,
+    orbiterDetails,
+  ]);
+  const duplicateBlocked =
+    Boolean(duplicateKey) && existingDuplicateLookup.has(duplicateKey);
+  const blockingMessage = duplicateBlocked
+    ? "You have already passed this referral."
+    : "";
 
   const submitReferral = async () => {
-    if (!selectedItem) {
-      alert("Please select a service or product.");
+    if (loading || blockingMessage) {
       return;
     }
 
-    if (!leadDescription.trim()) {
-      alert("Please enter lead description.");
+    const validation = validateReferralPayload({
+      selectedItem,
+      leadDescription,
+      selectedFor,
+      otherName,
+      otherPhone,
+      otherEmail,
+      cosmoDetails: userDetails,
+      orbiterDetails,
+    });
+
+    if (!validation.ok) {
+      setSubmitError(validation.message);
       return;
     }
 
-    if (selectedFor === "someone") {
-      if (!otherName.trim() || !otherPhone.trim()) {
-        alert("Please enter name and phone for referred person.");
-        return;
-      }
-    }
+    setSubmitError("");
 
     await handlePassReferral({
       selectedItem,
@@ -70,7 +111,10 @@ export default function ReferralModal({
           <select
             className="w-full mt-2 border rounded-xl p-3 text-sm"
             value={selectedIndex}
-            onChange={(e) => setSelectedIndex(e.target.value)}
+            onChange={(e) => {
+              setSelectedIndex(e.target.value);
+              setSubmitError("");
+            }}
             disabled={loading}
           >
             <option value="">Select option</option>
@@ -87,7 +131,10 @@ export default function ReferralModal({
           <button
             type="button"
             disabled={loading}
-            onClick={() => setSelectedFor("self")}
+            onClick={() => {
+              setSelectedFor("self");
+              setSubmitError("");
+            }}
             className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-xl border transition ${
               selectedFor === "self"
                 ? "bg-orange-50 border-orange-400 text-orange-600"
@@ -101,7 +148,10 @@ export default function ReferralModal({
           <button
             type="button"
             disabled={loading}
-            onClick={() => setSelectedFor("someone")}
+            onClick={() => {
+              setSelectedFor("someone");
+              setSubmitError("");
+            }}
             className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-xl border transition ${
               selectedFor === "someone"
                 ? "bg-orange-50 border-orange-400 text-orange-600"
@@ -123,7 +173,10 @@ export default function ReferralModal({
             className="w-full mt-2 border rounded-xl p-3 text-sm"
             placeholder="Enter short description..."
             value={leadDescription}
-            onChange={(e) => setLeadDescription(e.target.value)}
+            onChange={(e) => {
+              setLeadDescription(e.target.value);
+              setSubmitError("");
+            }}
             disabled={loading}
           />
         </div>
@@ -136,7 +189,10 @@ export default function ReferralModal({
               placeholder="Name *"
               className="w-full border rounded-xl p-3 text-sm"
               value={otherName}
-              onChange={(e) => setOtherName(e.target.value)}
+              onChange={(e) => {
+                setOtherName(e.target.value);
+                setSubmitError("");
+              }}
               disabled={loading}
             />
 
@@ -145,7 +201,10 @@ export default function ReferralModal({
               placeholder="Phone *"
               className="w-full border rounded-xl p-3 text-sm"
               value={otherPhone}
-              onChange={(e) => setOtherPhone(e.target.value)}
+              onChange={(e) => {
+                setOtherPhone(e.target.value);
+                setSubmitError("");
+              }}
               disabled={loading}
             />
 
@@ -154,19 +213,27 @@ export default function ReferralModal({
               placeholder="Email"
               className="w-full border rounded-xl p-3 text-sm"
               value={otherEmail}
-              onChange={(e) => setOtherEmail(e.target.value)}
+              onChange={(e) => {
+                setOtherEmail(e.target.value);
+                setSubmitError("");
+              }}
               disabled={loading}
             />
           </div>
         )}
 
         {/* SUBMIT */}
+        {(blockingMessage || submitError) && (
+          <p className="mb-3 rounded-xl bg-red-50 px-3 py-2 text-sm text-red-600">
+            {blockingMessage || submitError}
+          </p>
+        )}
         <button
           onClick={submitReferral}
-          disabled={loading}
+          disabled={loading || Boolean(blockingMessage)}
           className="w-full bg-orange-500 text-white py-3 rounded-xl font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          {loading ? "Sending..." : "Send Referral"}
+          {loading ? "Passing..." : blockingMessage ? "Already Passed" : "Send Referral"}
         </button>
 
       </div>

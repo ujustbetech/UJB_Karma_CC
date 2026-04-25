@@ -3,6 +3,7 @@ import {
   doc,
   getDoc,
   getDocs,
+  onSnapshot,
   query,
   where,
 } from "firebase/firestore";
@@ -239,6 +240,63 @@ export async function fetchUserNotifications({ ujbCode, phone, category }) {
   return dedupeNotifications([...referrals, ...prospects, ...meetings, ...payments])
     .sort((left, right) => right.createdAt.getTime() - left.createdAt.getTime())
     .slice(0, MAX_NOTIFICATIONS);
+}
+
+export function subscribeUserNotificationSources(
+  { ujbCode, phone },
+  onChange,
+  onError
+) {
+  const subscriptions = [];
+
+  const handleSnapshotChange = () => {
+    if (typeof onChange === "function") {
+      onChange();
+    }
+  };
+
+  const subscribe = (target) => {
+    subscriptions.push(
+      onSnapshot(
+        target,
+        () => {
+          handleSnapshotChange();
+        },
+        (error) => {
+          if (typeof onError === "function") {
+            onError(error);
+          }
+        }
+      )
+    );
+  };
+
+  const referralsRef = collection(db, COLLECTIONS.referral);
+  const ccReferralsRef = collection(db, CC_REFERRAL_COLLECTION);
+  const prospectsRef = collection(db, COLLECTIONS.prospect);
+  const monthlyMeetingRef = collection(db, COLLECTIONS.monthlyMeeting);
+
+  if (ujbCode) {
+    subscribe(query(referralsRef, where("cosmoOrbiter.ujbCode", "==", ujbCode)));
+    subscribe(query(referralsRef, where("orbiter.ujbCode", "==", ujbCode)));
+    subscribe(query(ccReferralsRef, where("cosmoOrbiter.ujbCode", "==", ujbCode)));
+    subscribe(query(ccReferralsRef, where("orbiter.ujbCode", "==", ujbCode)));
+    subscribe(query(prospectsRef, where("mentorUjbCode", "==", ujbCode)));
+  }
+
+  if (phone) {
+    subscribe(query(prospectsRef, where("orbiterContact", "==", phone)));
+  }
+
+  subscribe(monthlyMeetingRef);
+
+  return () => {
+    subscriptions.forEach((unsubscribe) => {
+      try {
+        unsubscribe();
+      } catch {}
+    });
+  };
 }
 
 function getReadStorageKey(ujbCode) {

@@ -12,9 +12,6 @@ import {
   collection,
   query,
   where,
-  orderBy,
-  limit,
-  startAfter,
   getDocs,
 } from "firebase/firestore";
 import { app } from "@/lib/firebase/firebaseClient";
@@ -50,38 +47,21 @@ export default function AllEvents() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("All");
   const [sortBy, setSortBy] = useState("ai");
-  const [lastDoc, setLastDoc] = useState(null);
-  const [hasMore, setHasMore] = useState(true);
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const [showFilters, setShowFilters] = useState(false);
 
   const observerRef = useRef(null);
   const initialFetchDone = useRef(false);
 
   // 🔥 Fetch Businesses
-  const fetchBusinesses = useCallback(
-    async (isLoadMore = false) => {
-      if (isLoadMore && (isFetchingMore || !hasMore)) return;
-
+  const fetchBusinesses = useCallback(async () => {
       try {
-        if (isLoadMore) setIsFetchingMore(true);
-        else setLoading(true);
+        setLoading(true);
 
-        let q = query(
+        const q = query(
           collection(db, COLLECTIONS.userDetail),
-          where("Category", "==", "CosmOrbiter"),
-          orderBy("BusinessName"),
-          limit(PAGE_SIZE)
+          where("Category", "==", "CosmOrbiter")
         );
-
-        if (isLoadMore && lastDoc) {
-          q = query(
-            collection(db, COLLECTIONS.userDetail),
-            where("Category", "==", "CosmOrbiter"),
-            orderBy("BusinessName"),
-            startAfter(lastDoc),
-            limit(PAGE_SIZE)
-          );
-        }
 
         const snapshot = await getDocs(q);
 
@@ -125,46 +105,18 @@ export default function AllEvents() {
           );
           return Array.from(map.values());
         });
-
-        setLastDoc(snapshot.docs.at(-1) || null);
-        setHasMore(snapshot.docs.length === PAGE_SIZE);
       } catch (err) {
         console.error(err);
       } finally {
         setLoading(false);
-        setIsFetchingMore(false);
       }
-    },
-    [lastDoc, isFetchingMore, hasMore]
-  );
+    }, []);
 
   useEffect(() => {
     if (initialFetchDone.current) return;
     initialFetchDone.current = true;
     fetchBusinesses();
   }, [fetchBusinesses]);
-
-  // Infinite Scroll
-  useEffect(() => {
-    const sentinel = observerRef.current;
-    if (!sentinel) return;
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (
-          entries[0].isIntersecting &&
-          hasMore &&
-          !isFetchingMore
-        ) {
-          fetchBusinesses(true);
-        }
-      },
-      { threshold: 1 }
-    );
-
-    observer.observe(sentinel);
-    return () => observer.disconnect();
-  }, [fetchBusinesses, hasMore, isFetchingMore]);
 
   // Categories
   const categories = useMemo(() => {
@@ -213,6 +165,39 @@ export default function AllEvents() {
 
     return list;
   }, [businesses, searchQuery, selectedCategory, sortBy]);
+
+  useEffect(() => {
+    setVisibleCount(PAGE_SIZE);
+  }, [searchQuery, selectedCategory, sortBy]);
+
+  const visibleBusinesses = filteredBusinesses.slice(0, visibleCount);
+  const hasMore = visibleCount < filteredBusinesses.length;
+
+  // Infinite Scroll
+  useEffect(() => {
+    const sentinel = observerRef.current;
+    if (!sentinel) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (
+          entries[0].isIntersecting &&
+          visibleCount < filteredBusinesses.length &&
+          !isFetchingMore
+        ) {
+          setIsFetchingMore(true);
+          window.setTimeout(() => {
+            setVisibleCount((prev) => prev + PAGE_SIZE);
+            setIsFetchingMore(false);
+          }, 200);
+        }
+      },
+      { threshold: 1 }
+    );
+
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [filteredBusinesses.length, visibleCount, isFetchingMore]);
 
   const BusinessSkeleton = () => (
     <div className="rounded-2xl bg-white p-4 border border-gray-100 shadow-sm animate-pulse">
@@ -272,7 +257,7 @@ export default function AllEvents() {
         )}
 
         {/* ✅ DATA LIST */}
-        {!loading && filteredBusinesses.map((b) => (
+        {!loading && visibleBusinesses.map((b) => (
           <Link
             key={b.id}
             href={`cosmorbiters/${b.id}`}

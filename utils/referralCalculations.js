@@ -5,26 +5,41 @@ const toNumber = (v, fallback = 0) => {
   return Number.isNaN(n) ? fallback : n;
 };
 
-/* -------------------------------------------------
-   AGREED VALUE CALCULATION
-------------------------------------------------- */
-export const calculateAgreedFromItem = (dealAmount, item) => {
-  if (!item) return 0;
+export const REFERRAL_REWARD_TYPES = {
+  PERCENTAGE: "percentage",
+  FIXED: "fixed",
+};
 
-  const deal = toNumber(dealAmount);
-  const av = item.agreedValue;
+export const normalizeReferralRewardType = (type) =>
+  type === REFERRAL_REWARD_TYPES.FIXED
+    ? REFERRAL_REWARD_TYPES.FIXED
+    : REFERRAL_REWARD_TYPES.PERCENTAGE;
+
+const formatRewardLabel = (type, value) =>
+  type === REFERRAL_REWARD_TYPES.PERCENTAGE ? `${value}%` : `₹${value}`;
+
+const findMatchingRewardEntry = (deal, item) => {
+  const av = item?.agreedValue;
 
   if (!av) {
-    const pct = toNumber(item.percentage, 0);
-    return (deal * pct) / 100;
+    return {
+      mode: "legacy",
+      type: REFERRAL_REWARD_TYPES.PERCENTAGE,
+      value: toNumber(item?.percentage, 0),
+      source: "item.percentage",
+    };
   }
 
   if (av.mode === "single") {
-    const s = av.single || item.single;
-    if (!s) return 0;
+    const single = av.single || item.single;
+    if (!single) return null;
 
-    const v = toNumber(s.value, 0);
-    return s.type === "percentage" ? (deal * v) / 100 : v;
+    return {
+      mode: "single",
+      type: normalizeReferralRewardType(single.type),
+      value: toNumber(single.value, 0),
+      source: "agreedValue.single",
+    };
   }
 
   if (av.mode === "multiple") {
@@ -33,27 +48,81 @@ export const calculateAgreedFromItem = (dealAmount, item) => {
         ? av.multiple.slabs
         : av.multiple?.itemSlabs || [];
 
-    if (!rawSlabs.length) return 0;
+    if (!rawSlabs.length) return null;
 
     const slabs = rawSlabs.map((s) => ({
       ...s,
       from: toNumber(s.from),
       to: s.to === "" || s.to == null ? Infinity : toNumber(s.to),
       value: toNumber(s.value),
+      type: normalizeReferralRewardType(s.type),
     }));
 
     const match = slabs
       .filter((s) => deal >= s.from && deal <= s.to)
       .sort((a, b) => b.from - a.from)[0];
 
-    if (!match) return 0;
+    if (!match) return null;
 
-    return match.type === "percentage"
-      ? (deal * match.value) / 100
-      : match.value;
+    return {
+      mode: "multiple",
+      type: match.type,
+      value: match.value,
+      slab: match,
+      source: "agreedValue.multiple",
+    };
   }
 
-  return 0;
+  return null;
+};
+
+export const getReferralRewardDetails = (dealAmount, item) => {
+  if (!item) {
+    return {
+      rewardType: REFERRAL_REWARD_TYPES.PERCENTAGE,
+      rewardValue: 0,
+      rewardAmount: 0,
+      rewardLabel: "0%",
+      mode: null,
+      slab: null,
+    };
+  }
+
+  const deal = toNumber(dealAmount);
+  const entry = findMatchingRewardEntry(deal, item);
+
+  if (!entry) {
+    return {
+      rewardType: REFERRAL_REWARD_TYPES.PERCENTAGE,
+      rewardValue: 0,
+      rewardAmount: 0,
+      rewardLabel: "0%",
+      mode: item?.agreedValue?.mode || null,
+      slab: null,
+    };
+  }
+
+  const rewardAmount =
+    entry.type === REFERRAL_REWARD_TYPES.PERCENTAGE
+      ? (deal * entry.value) / 100
+      : entry.value;
+
+  return {
+    rewardType: entry.type,
+    rewardValue: entry.value,
+    rewardAmount,
+    rewardLabel: formatRewardLabel(entry.type, entry.value),
+    mode: entry.mode,
+    slab: entry.slab || null,
+    source: entry.source,
+  };
+};
+
+/* -------------------------------------------------
+   AGREED VALUE CALCULATION
+------------------------------------------------- */
+export const calculateAgreedFromItem = (dealAmount, item) => {
+  return getReferralRewardDetails(dealAmount, item).rewardAmount;
 };
 
 /* -------------------------------------------------
@@ -70,7 +139,8 @@ export const buildDealDistribution = (dealValue, referralData) => {
     referralData?.products?.[0] ||
     null;
 
-  const agreedAmount = calculateAgreedFromItem(deal, item);
+  const reward = getReferralRewardDetails(deal, item);
+  const agreedAmount = reward.rewardAmount;
 
   const r2 = (n) => Math.round(n * 100) / 100;
 
@@ -89,19 +159,15 @@ export const buildDealDistribution = (dealValue, referralData) => {
   const diff = r2(agreedAmount - total);
   if (diff !== 0) ujustbeShare = r2(ujustbeShare + diff);
 
-  let percentage = 0;
-  if (
-    item?.agreedValue?.mode === "single" &&
-    item.agreedValue.single?.type === "percentage"
-  ) {
-    percentage = toNumber(item.agreedValue.single.value);
-  } else {
-    percentage = toNumber(item?.percentage);
-  }
-
   return {
     dealValue: deal,
-    percentage,
+    percentage:
+      reward.rewardType === REFERRAL_REWARD_TYPES.PERCENTAGE
+        ? reward.rewardValue
+        : 0,
+    rewardType: reward.rewardType,
+    rewardValue: reward.rewardValue,
+    rewardLabel: reward.rewardLabel,
     agreedAmount,
     orbiterShare,
     orbiterMentorShare,
@@ -171,4 +237,3 @@ export const applyAdjustmentBeforePayRoleCalc = ({
     logEntry,
   };
 };
-

@@ -9,10 +9,28 @@ import {
   Users,
   Wallet,
   ShieldCheck,
+  HeartPulse,
+  GraduationCap,
+  UserCog,
+  Sparkles,
 } from "lucide-react";
 
-export default function ProfileTabs({ activeTab, setActiveTab }) {
-  const tabs = [
+const ICON_MAP = {
+  User,
+  Briefcase,
+  Layers,
+  Trophy,
+  Users,
+  Wallet,
+  ShieldCheck,
+  HeartPulse,
+  GraduationCap,
+  UserCog,
+  Sparkles,
+};
+
+export default function ProfileTabs({ activeTab, setActiveTab, tabs: customTabs }) {
+  const tabs = customTabs || [
     { key: "about", label: "About", icon: User },
     { key: "business", label: "Business", icon: Briefcase },
     { key: "services", label: "Services", icon: Layers },
@@ -45,7 +63,8 @@ export default function ProfileTabs({ activeTab, setActiveTab }) {
         className="relative flex overflow-x-auto no-scrollbar"
       >
         {tabs.map((tab) => {
-          const Icon = tab.icon;
+          const Icon =
+            typeof tab.icon === "string" ? ICON_MAP[tab.icon] || User : tab.icon;
           const isActive = activeTab === tab.key;
 
           return (

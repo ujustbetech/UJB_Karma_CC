@@ -16,13 +16,16 @@ import {
 
 import InfoCard from "../shared/InfoCard";
 import InfoRow from "../shared/InfoRow";
+import { getReferralRewardDetails } from "@/utils/referralCalculations";
 
 export default function ServiceTab({ referral }) {
 
     const [showCommissionLogic, setShowCommissionLogic] = useState(false);
 
     const latestLog =
-        referral?.dealLogs?.[referral.dealLogs.length - 1];
+        referral?.dealLogs?.length
+            ? referral.dealLogs[referral.dealLogs.length - 1]
+            : null;
 
     const service = referral?.service;
     const product = referral?.product;
@@ -40,18 +43,22 @@ export default function ServiceTab({ referral }) {
         );
     }
 
+    const dealValue = Number(
+        latestLog?.dealValue ?? referral?.dealValue ?? 0
+    );
+    const agreedTotal = Number(
+        latestLog?.agreedAmount ?? referral?.agreedTotal ?? 0
+    );
+    const reward = getReferralRewardDetails(dealValue, item);
     const commissionType =
-        item?.agreedValue?.single?.type || "percentage";
-
+        latestLog?.rewardType || reward.rewardType;
     const commissionValue =
-        latestLog?.percentage ||
-        item?.agreedValue?.single?.value ||
-        0;
+        Number(latestLog?.rewardValue ?? reward.rewardValue ?? 0);
 
-    const dealValue = referral?.dealValue || 0;
-    const agreedTotal = referral?.agreedTotal || 0;
-
-    const slabs = item?.agreedValue?.slabs || [];
+    const slabs =
+        item?.agreedValue?.multiple?.slabs ||
+        item?.agreedValue?.multiple?.itemSlabs ||
+        [];
 
     const isActive = item?.status !== "inactive";
 
@@ -165,6 +172,14 @@ export default function ServiceTab({ referral }) {
                             </div>
                         )}
 
+                        {commissionType === "fixed" && (
+                            <div className="bg-slate-50 p-3 rounded-lg text-slate-700">
+                                Fixed reward:
+                                <br />
+                                Commission = ₹{commissionValue.toLocaleString()}
+                            </div>
+                        )}
+
                         {/* Slabs */}
                         {slabs.length > 0 && (
                             <div className="space-y-2">
@@ -181,7 +196,9 @@ export default function ServiceTab({ referral }) {
                                             ₹{slab.from} - ₹{slab.to}
                                         </span>
                                         <span>
-                                            {slab.value}%
+                                            {slab.type === "fixed"
+                                                ? `₹${slab.value}`
+                                                : `${slab.value}%`}
                                         </span>
                                     </div>
                                 ))}
