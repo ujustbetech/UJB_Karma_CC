@@ -258,7 +258,7 @@ function KPI({ icon:Icon, title, value, color }) {
       <div className={`p-2 rounded-lg text-white ${color}`}>
         <Icon size={18} />
       </div>
-      <div>
+      <div className='flex justify-center items-center gap-2'>
         <Text className="text-xs text-slate-500">{title}</Text>
         <Text variant="h2">{value}</Text>
       </div>

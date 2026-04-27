@@ -9,11 +9,9 @@ import { NAV_ITEMS } from "./nav.config";
 import {
   ChevronRight,
   LogOut,
-  PanelLeftClose,
-  PanelLeftOpen,
 } from "lucide-react";
 
-export default function Sidebar({ collapsed, setCollapsed }) {
+export default function Sidebar({ collapsed }) {
   const pathname = usePathname();
 
   const [openMenu, setOpenMenu] = useState(null);
@@ -100,7 +98,7 @@ export default function Sidebar({ collapsed, setCollapsed }) {
       </div>
 
       {/* Navigation */}
-      <nav className="mt-6 px-1 space-y-1">
+      <nav className="mt-6 px-1 space-y-1 overflow-y-auto">
         {NAV_ITEMS.map((item) => {
           const Icon = item.icon;
 
@@ -221,18 +219,6 @@ export default function Sidebar({ collapsed, setCollapsed }) {
 
       {/* Footer */}
       <div className="mt-auto px-1 pb-4 space-y-1">
-        <button
-          onClick={() => setCollapsed(!collapsed)}
-          className="flex items-center h-9 px-3 rounded-[10px] text-sm text-slate-400 hover:bg-slate-100 hover:text-slate-900"
-        >
-          {collapsed ? (
-            <PanelLeftOpen className="h-4 w-4" />
-          ) : (
-            <PanelLeftClose className="h-4 w-4" />
-          )}
-          {!collapsed && <span className="ml-3">Collapse</span>}
-        </button>
-
         <Link
           href="/logout"
           className="flex items-center h-9 px-3 rounded-[10px] text-sm text-slate-400 hover:bg-slate-100 hover:text-slate-900"

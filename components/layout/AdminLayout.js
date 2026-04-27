@@ -21,14 +21,13 @@ export default function AdminLayout({ children, role }) {
       <Sidebar
         role={role}
         collapsed={collapsed}
-        setCollapsed={setCollapsed}
       />
 
       <div
         className={`flex flex-col min-h-screen transition-all duration-300
         ${collapsed ? "ml-16" : "ml-[240px]"}`}
       >
-        <Topbar />
+        <Topbar collapsed={collapsed} setCollapsed={setCollapsed} />
         <main className="h-[calc(100vh-64px)] overflow-y-auto p-6">
           {children}
         </main>

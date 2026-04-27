@@ -1,12 +1,12 @@
 "use client";
 
-import { Search, Plus } from "lucide-react";
+import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { usePageMeta } from "@/hooks/usePageMeta";
 import { useRouter } from "next/navigation";
 import Swal from "sweetalert2";
 import { useAdminSession } from "@/hooks/useAdminSession";
 
-export default function Topbar() {
+export default function Topbar({ collapsed, setCollapsed }) {
   const { title } = usePageMeta();
   const router = useRouter();
   const { admin: currentUser, loading, logout } = useAdminSession();
@@ -62,9 +62,25 @@ export default function Topbar() {
   return (
     <header className="sticky top-0 z-30 h-16 bg-gray-200 shadow-sm">
       <div className="flex items-center h-16 px-6">
-        <h1 className="text-3xl font-bold tracking-tight text-slate-800">
-          {title}
-        </h1>
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => setCollapsed(!collapsed)}
+            className="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-300 bg-white text-slate-600 transition hover:border-slate-400 hover:text-slate-900"
+            aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+            title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+          >
+            {collapsed ? (
+              <PanelLeftOpen className="h-5 w-5" />
+            ) : (
+              <PanelLeftClose className="h-5 w-5" />
+            )}
+          </button>
+
+          <h1 className="text-3xl font-bold tracking-tight text-slate-800">
+            {title}
+          </h1>
+        </div>
 
         <div className="flex-1" />
 
