@@ -43,16 +43,27 @@ export default function ReferralDetailsPage() {
 
       setReferral(data);
 
-      if (!currentUserUjbCode) return;
+      if (!currentUserUjbCode) {
+        setUserRole("viewer");
+        setLoading(false);
+        return;
+      }
 
-      if (currentUserUjbCode === data?.cosmoUjbCode) {
+      const cosmoCode =
+        data?.cosmoUjbCode || data?.cosmoOrbiter?.ujbCode;
+      const orbiterCode =
+        data?.orbiterUJBCode ||
+        data?.orbiter?.ujbCode ||
+        data?.orbiter?.UJBCode;
+
+      if (currentUserUjbCode === cosmoCode) {
         setUserRole("cosmo");
       }
-      else if (currentUserUjbCode === data?.orbiter?.ujbCode) {
+      else if (currentUserUjbCode === orbiterCode) {
         setUserRole("orbiter");
       }
       else {
-        setUserRole("admin");
+        setUserRole("viewer");
       }
 
       setLoading(false);

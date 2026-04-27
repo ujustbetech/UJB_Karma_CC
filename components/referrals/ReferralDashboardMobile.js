@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
     Copy,
     LayoutDashboard,
@@ -9,7 +9,6 @@ import {
     Users,
     MessageCircle,
     FileText,
-    X
 } from "lucide-react";
 
 import OverviewTab from "./tabs/OverviewTab";
@@ -19,12 +18,19 @@ import StakeholdersTab from "./tabs/StakeholdersTab";
 import DiscussionTab from "./tabs/DiscussionTab";
 import InvoiceModal from "./tabs/InvoiceModal";
 import InvoiceTab from "./tabs/InvoiceTab";
+import { useToast } from "@/components/ui/ToastProvider";
+import { REFERRAL_STATUSES } from "@/lib/referrals/referralStates.mjs";
 
-export default function ReferralDashboardMobile({ referral, userRole, currentUserUjbCode }) {
-
+export default function ReferralDashboardMobile({
+    referral,
+    userRole,
+    currentUserUjbCode,
+}) {
     const [activeTab, setActiveTab] = useState("overview");
     const [showInvoiceModal, setShowInvoiceModal] = useState(false);
     const [isExpanded, setIsExpanded] = useState(false);
+    const [copying, setCopying] = useState(false);
+    const toast = useToast();
 
     const tabs = [
         { key: "overview", label: "Overview", icon: LayoutDashboard },
@@ -32,90 +38,111 @@ export default function ReferralDashboardMobile({ referral, userRole, currentUse
         { key: "service", label: "Service", icon: Briefcase },
         { key: "invoice", label: "Invoice", icon: FileText },
         { key: "stakeholders", label: "People", icon: Users },
-        { key: "discussion", label: "Chat", icon: MessageCircle }
+        { key: "discussion", label: "Chat", icon: MessageCircle },
     ];
 
-    const handleCopy = () => {
-        navigator.clipboard.writeText(referral?.referralId);
-        toast.success("Referral ID copied");
-    };
+    const statusTone = useMemo(
+        () => getStatusTone(referral?.dealStatus),
+        [referral?.dealStatus]
+    );
+    const roleLabel =
+        userRole === "cosmo"
+            ? "COSM"
+            : userRole === "orbiter"
+                ? "Orbiter"
+                : "Viewer";
 
-    const statusColor = {
-        Closed: "bg-green-50 border-green-100",
-        Pending: "bg-yellow-50 border-yellow-100",
-        Lost: "bg-red-50 border-red-100",
+    const handleCopy = async (event) => {
+        event.stopPropagation();
+
+        const shareValue =
+            typeof window !== "undefined"
+                ? window.location.href
+                : referral?.referralId || "";
+
+        if (!shareValue) {
+            toast.error("Nothing to copy yet.");
+            return;
+        }
+
+        try {
+            setCopying(true);
+            await navigator.clipboard.writeText(shareValue);
+            toast.success("Deal link copied.");
+        } catch {
+            toast.error("Copy failed. Please try again.");
+        } finally {
+            setCopying(false);
+        }
     };
 
     return (
         <div className="min-h-screen pb-24">
-
-            {/* Header */}
             <div
-                onClick={() => setIsExpanded(!isExpanded)}
-                className={`sticky top-0 z-20 
-    bg-gradient-to-r from-orange-50 via-white to-orange-50
-    border border-orange-100
-    px-4 
-    transition-all duration-300 
-    rounded-2xl shadow-sm cursor-pointer
-  `}
+                onClick={() => setIsExpanded((prev) => !prev)}
+                className="sticky top-0 z-20 rounded-2xl border border-orange-100 bg-gradient-to-r from-orange-50 via-white to-orange-50 px-4 shadow-sm transition-all duration-300"
             >
-                <div className={`overflow-hidden transition-all duration-300 
-    ${isExpanded ? "py-4" : "py-3"}
-  `}>
-
-                    <div className="flex justify-between items-start">
-
+                <div
+                    className={`overflow-hidden transition-all duration-300 ${
+                        isExpanded ? "py-4" : "py-3"
+                    }`}
+                >
+                    <div className="flex items-start justify-between gap-4">
                         <div>
-                            {/* Compact Always Visible */}
                             <p className="text-lg font-bold">
-                                ₹{referral?.dealValue?.toLocaleString() || 0}
+                                ₹{Number(referral?.dealValue || 0).toLocaleString("en-IN")}
                             </p>
 
                             <p className="text-xs text-slate-500">
                                 Deal Value
                             </p>
 
-                            {/* Expandable Section */}
                             <div
-                                className={`transition-all duration-300 overflow-hidden
-            ${isExpanded ? "max-h-20 mt-2 opacity-100" : "max-h-0 opacity-0"}
-          `}
+                                className={`overflow-hidden transition-all duration-300 ${
+                                    isExpanded ? "mt-2 max-h-24 opacity-100" : "max-h-0 opacity-0"
+                                }`}
                             >
                                 <p className="text-xs text-slate-400">
-                                    Referral #{referral?.referralId}
+                                    Referral #{referral?.referralId || referral?.id}
                                 </p>
+
+                                <div className="mt-2 flex flex-wrap items-center gap-2">
+                                    <span className="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-medium text-slate-700">
+                                        Your Role: {roleLabel}
+                                    </span>
+                                    <span className="inline-flex items-center rounded-full bg-orange-100 px-2.5 py-1 text-[11px] font-medium text-orange-700">
+                                        {userRole === "viewer"
+                                            ? "Read only"
+                                            : "Can update deal status"}
+                                    </span>
+                                </div>
                             </div>
                         </div>
 
                         <div className="flex items-center gap-3">
-                            <span className="px-3 py-1 rounded-full text-xs bg-green-100 text-green-700 font-medium">
-                                {referral?.dealStatus}
+                            <span
+                                className={`px-3 py-1 rounded-full text-xs font-semibold ${statusTone.badge}`}
+                            >
+                                {referral?.dealStatus || REFERRAL_STATUSES.PENDING}
                             </span>
 
                             <button
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    navigator.clipboard.writeText(referral?.referralId);
-                                }}
-                                className="p-2 rounded-lg bg-white shadow-sm"
+                                onClick={handleCopy}
+                                disabled={copying}
+                                aria-label="Copy deal link"
+                                title={copying ? "Copying..." : "Copy deal link"}
+                                className="rounded-lg bg-white p-2 shadow-sm disabled:cursor-not-allowed disabled:opacity-60"
                             >
                                 <Copy size={16} />
                             </button>
                         </div>
-
                     </div>
-
                 </div>
             </div>
 
-            {/* Tabs */}
-            <div className="sticky top-[84px] z-20 bg-white shadow-sm mt-3 rounded-2xl">
-
+            <div className="sticky top-[84px] z-20 mt-3 rounded-2xl bg-white shadow-sm">
                 <div className="flex overflow-x-auto no-scrollbar">
-
-                    {tabs.map(tab => {
-
+                    {tabs.map((tab) => {
                         const Icon = tab.icon;
                         const isActive = activeTab === tab.key;
 
@@ -123,33 +150,25 @@ export default function ReferralDashboardMobile({ referral, userRole, currentUse
                             <button
                                 key={tab.key}
                                 onClick={() => setActiveTab(tab.key)}
-                                className={`flex flex-col items-center justify-center min-w-[80px] px-4 py-3 transition-all duration-200 relative
-            ${isActive
-                                        ? "text-orange-600"
-                                        : "text-slate-400"
-                                    }
-          `}
+                                className={`relative flex min-w-[80px] flex-col items-center justify-center px-4 py-3 transition-all duration-200 ${
+                                    isActive ? "text-orange-600" : "text-slate-400"
+                                }`}
                             >
-                                <Icon
-                                    size={18}
-                                    strokeWidth={isActive ? 2.5 : 2}
-                                />
+                                <Icon size={18} strokeWidth={isActive ? 2.5 : 2} />
 
-                                <span className="text-[11px] mt-1 whitespace-nowrap">
+                                <span className="mt-1 whitespace-nowrap text-[11px]">
                                     {tab.label}
                                 </span>
 
                                 {isActive && (
-                                    <div className="absolute bottom-0 h-[3px] w-8 bg-orange-500 rounded-full" />
+                                    <div className="absolute bottom-0 h-[3px] w-8 rounded-full bg-orange-500" />
                                 )}
                             </button>
                         );
                     })}
-
                 </div>
-
             </div>
-            {/* Tab Content */}
+
             {activeTab === "overview" && (
                 <OverviewTab
                     referral={referral}
@@ -158,23 +177,16 @@ export default function ReferralDashboardMobile({ referral, userRole, currentUse
                 />
             )}
 
-            {activeTab === "payments" && (
-                <PaymentsTab referral={referral} />
-            )}
-
-            {activeTab === "service" && (
-                <ServiceTab referral={referral} />
-            )}
-
-            {activeTab === "stakeholders" && (
-                <StakeholdersTab referral={referral} />
-            )}
-            {activeTab === "invoice" && (
-                <InvoiceTab referral={referral} />
-            )}
-
+            {activeTab === "payments" && <PaymentsTab referral={referral} />}
+            {activeTab === "service" && <ServiceTab referral={referral} />}
+            {activeTab === "stakeholders" && <StakeholdersTab referral={referral} />}
+            {activeTab === "invoice" && <InvoiceTab referral={referral} />}
             {activeTab === "discussion" && (
-                <DiscussionTab referral={referral} referralId={referral.id} currentUserUjbCode={currentUserUjbCode} />
+                <DiscussionTab
+                    referral={referral}
+                    referralId={referral.id}
+                    currentUserUjbCode={currentUserUjbCode}
+                />
             )}
 
             {showInvoiceModal && (
@@ -183,7 +195,39 @@ export default function ReferralDashboardMobile({ referral, userRole, currentUse
                     onClose={() => setShowInvoiceModal(false)}
                 />
             )}
-
         </div>
     );
+}
+
+function getStatusTone(status) {
+    const tones = {
+        [REFERRAL_STATUSES.PENDING]: {
+            badge: "bg-amber-100 text-amber-800",
+        },
+        [REFERRAL_STATUSES.ACCEPTED]: {
+            badge: "bg-slate-200 text-slate-700",
+        },
+        [REFERRAL_STATUSES.DISCUSSION_IN_PROGRESS]: {
+            badge: "bg-sky-100 text-sky-800",
+        },
+        [REFERRAL_STATUSES.DEAL_WON]: {
+            badge: "bg-emerald-100 text-emerald-800",
+        },
+        [REFERRAL_STATUSES.DEAL_LOST]: {
+            badge: "bg-rose-100 text-rose-800",
+        },
+        [REFERRAL_STATUSES.WORK_IN_PROGRESS]: {
+            badge: "bg-indigo-100 text-indigo-800",
+        },
+        [REFERRAL_STATUSES.WORK_COMPLETED]: {
+            badge: "bg-violet-100 text-violet-800",
+        },
+        [REFERRAL_STATUSES.HOLD]: {
+            badge: "bg-orange-100 text-orange-800",
+        },
+    };
+
+    return tones[status] || {
+        badge: "bg-slate-100 text-slate-700",
+    };
 }

@@ -306,272 +306,318 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(37,99,235,0.18),_transparent_32%),radial-gradient(circle_at_bottom_right,_rgba(15,118,110,0.16),_transparent_28%),linear-gradient(135deg,#f8fafc_0%,#e2e8f0_48%,#f8fafc_100%)]">
-      <div className="mx-auto flex min-h-screen w-full max-w-7xl items-center px-6 py-10 lg:px-10">
-        <div className="grid w-full gap-8 lg:grid-cols-[1.15fr_0.95fr]">
-          <section className="relative overflow-hidden rounded-[34px] border border-white/70 bg-slate-950 px-8 py-10 text-white shadow-[0_28px_80px_rgba(15,23,42,0.26)] lg:px-10 lg:py-12">
-            <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,_rgba(96,165,250,0.32),_transparent_28%),radial-gradient(circle_at_bottom_left,_rgba(45,212,191,0.22),_transparent_30%)]" />
-            <div className="relative">
-              <div className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.24em] text-sky-100">
+    <div className="min-h-screen w-full bg-[#f6f8fb] text-slate-900">
+      <div className="w-full">
+        <div className="mx-auto grid w-full max-w-[1440px] lg:grid-cols-[minmax(0,1.05fr)_minmax(420px,0.95fr)]">
+        <section className="relative overflow-hidden bg-[linear-gradient(145deg,#eaf4ff_0%,#edf8f6_44%,#f7fbff_100%)] px-6 py-8 sm:px-8 lg:px-10 lg:py-10 xl:px-14">
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_18%_18%,rgba(59,130,246,0.10),transparent_24%),radial-gradient(circle_at_82%_20%,rgba(20,184,166,0.08),transparent_22%),radial-gradient(circle_at_50%_80%,rgba(249,115,22,0.08),transparent_28%)]" />
+          <div className="absolute inset-y-0 right-0 hidden w-px bg-slate-200/70 lg:block" />
+
+          <div className="relative w-full space-y-8">
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <div className="inline-flex items-center gap-2 rounded-full border border-sky-200 bg-white/80 px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.22em] text-sky-700 backdrop-blur">
                 <ShieldCheck size={14} />
                 UJustBe Admin Access
               </div>
 
-              <div className="mt-8 flex items-center gap-5">
-                <div className="rounded-[28px] bg-white/10 p-3 ring-1 ring-white/15 backdrop-blur">
-                  <Image
-                    src="/ujustbe-logo.svg"
-                    alt="UJustBe logo"
-                    width={110}
-                    height={110}
-                    priority
-                    className="h-24 w-24 rounded-[22px] object-cover"
-                  />
-                </div>
-
-                <div>
-                  <p className="text-sm font-medium uppercase tracking-[0.26em] text-sky-100/80">
-                    UJustBe Universe
-                  </p>
-                  <h1 className="mt-3 max-w-xl text-4xl font-semibold leading-tight text-white lg:text-5xl">
-                    Secure sign-in for your admin workspace.
-                  </h1>
-                </div>
-              </div>
-
-              <p className="mt-8 max-w-2xl text-base leading-7 text-slate-200">
-                Manage prospect journeys, orbiters, referrals, and meetings from a
-                polished, secure access point with modern provider login and
-                password recovery support.
-              </p>
-
-              <div className="mt-10 grid gap-4 md:grid-cols-3">
-                {[
-                  "Microsoft and Google SSO support",
-                  "Secure email and password sign-in",
-                  "Password reset and input validation",
-                ].map((item) => (
-                  <div
-                    key={item}
-                    className="rounded-2xl border border-white/12 bg-white/8 p-4 backdrop-blur"
-                  >
-                    <div className="mb-3 inline-flex rounded-full bg-white/12 p-2 text-sky-100">
-                      <Sparkles size={16} />
-                    </div>
-                    <p className="text-sm leading-6 text-slate-100">{item}</p>
-                  </div>
-                ))}
+              <div className="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-4 py-2 text-xs font-medium text-emerald-700">
+                <span className="h-2 w-2 rounded-full bg-emerald-500" />
+                Secure Workspace
               </div>
             </div>
-          </section>
 
-          <section className="rounded-[34px] border border-slate-200/80 bg-white/92 p-6 shadow-[0_20px_60px_rgba(15,23,42,0.08)] backdrop-blur lg:p-8">
-            <div className="mb-8">
-              <p className="text-sm font-semibold uppercase tracking-[0.2em] text-sky-700">
-                Welcome Back
-              </p>
-              <h2 className="mt-3 text-3xl font-semibold text-slate-900">
-                Admin Login
-              </h2>
-              <p className="mt-3 text-sm leading-6 text-slate-600">
-                Sign in with your approved admin account. OAuth and email/password
-                methods both route through the existing admin authorization system.
-              </p>
-            </div>
-
-            {status.message ? (
-              <div
-                className={`mb-6 rounded-2xl border px-4 py-3 text-sm ${
-                  status.type === "success"
-                    ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                    : "border-rose-200 bg-rose-50 text-rose-700"
-                }`}
-              >
-                {status.message}
-              </div>
-            ) : null}
-
-            <div className="space-y-3">
-              <ProviderButton
-                label="Sign in with Microsoft"
-                onClick={() =>
-                  handleProviderLogin("Microsoft", microsoftProvider)
-                }
-                disabled={anyBusy}
-                loading={loadingProvider === "Microsoft"}
-                icon={<MicrosoftMark />}
-              />
-              <ProviderButton
-                label="Sign in with Google"
-                onClick={() => handleProviderLogin("Google", googleProvider)}
-                disabled={anyBusy}
-                loading={loadingProvider === "Google"}
-                icon={<GoogleMark />}
-              />
-            </div>
-
-            <div className="my-6 flex items-center gap-4">
-              <div className="h-px flex-1 bg-slate-200" />
-              <span className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
-                Or use email
-              </span>
-              <div className="h-px flex-1 bg-slate-200" />
-            </div>
-
-            {!forgotMode ? (
-              <form className="space-y-4" onSubmit={handlePasswordLogin}>
-                <div>
-                  <label
-                    htmlFor="admin-email"
-                    className="mb-2 block text-sm font-medium text-slate-700"
-                  >
-                    Email address
-                  </label>
-                  <div className="relative">
-                    <Mail
-                      size={18}
-                      className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
-                    />
-                    <input
-                      id="admin-email"
-                      type="email"
-                      autoComplete="username"
-                      value={email}
-                      onChange={(e) => {
-                        setEmail(e.target.value);
-                        setFieldErrors((prev) => ({ ...prev, email: "" }));
-                      }}
-                      className="w-full rounded-2xl border border-slate-200 bg-white px-12 py-3 text-sm text-slate-900 outline-none transition focus:border-sky-500 focus:ring-4 focus:ring-sky-100"
-                      placeholder="admin@ujustbe.com"
+            <div className="grid gap-8 xl:grid-cols-[minmax(0,1fr)_300px] xl:items-start">
+              <div className="max-w-2xl">
+                <div className="flex items-center gap-5">
+                  <div className="rounded-[28px] border border-white/90 bg-white/90 p-3 shadow-[0_16px_36px_rgba(148,163,184,0.18)] backdrop-blur">
+                    <Image
+                      src="/ujustbe-logo.svg"
+                      alt="UJustBe logo"
+                      width={120}
+                      height={120}
+                      priority
+                      className="h-20 w-20 rounded-[22px] object-cover sm:h-24 sm:w-24"
                     />
                   </div>
-                  {fieldErrors.email ? (
-                    <p className="mt-2 text-xs text-rose-600">{fieldErrors.email}</p>
-                  ) : null}
-                </div>
 
-                <div>
-                  <label
-                    htmlFor="admin-password"
-                    className="mb-2 block text-sm font-medium text-slate-700"
-                  >
-                    Password
-                  </label>
-                  <div className="relative">
-                    <LockKeyhole
-                      size={18}
-                      className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
-                    />
-                    <input
-                      id="admin-password"
-                      type="password"
-                      autoComplete="current-password"
-                      value={password}
-                      onChange={(e) => {
-                        setPassword(e.target.value);
-                        setFieldErrors((prev) => ({ ...prev, password: "" }));
-                      }}
-                      className="w-full rounded-2xl border border-slate-200 bg-white px-12 py-3 text-sm text-slate-900 outline-none transition focus:border-sky-500 focus:ring-4 focus:ring-sky-100"
-                      placeholder="Enter your password"
-                    />
-                  </div>
-                  {fieldErrors.password ? (
-                    <p className="mt-2 text-xs text-rose-600">
-                      {fieldErrors.password}
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.26em] text-sky-700/80">
+                      UJustBe Universe
                     </p>
-                  ) : null}
+                    <h1 className="mt-3 max-w-xl text-3xl font-semibold leading-tight text-slate-900 sm:text-4xl xl:text-[2.9rem]">
+                      Admin Workspace Login
+                    </h1>
+                  </div>
                 </div>
 
-                <div className="flex items-center justify-between gap-4 pt-1">
-                  <p className="text-xs leading-5 text-slate-500">
-                    Passwords are verified through Firebase Authentication and are
-                    never stored in app code or plain text.
+                <p className="mt-6 max-w-xl text-sm leading-7 text-slate-600 sm:text-base">
+                  Secure access for authorized administrators to manage platform
+                  operations.
+                </p>
+
+                <div className="mt-8 grid gap-4 sm:grid-cols-2 xl:max-w-2xl xl:grid-cols-3">
+                  {[
+                    "Microsoft and Google sign-in",
+                    "Email and password authentication",
+                    "Password reset support",
+                  ].map((item) => (
+                    <div
+                      key={item}
+                      className="rounded-3xl border border-white/90 bg-white/78 p-4 shadow-sm backdrop-blur transition duration-200 hover:-translate-y-0.5 hover:shadow-md"
+                    >
+                      <div className="mb-3 inline-flex rounded-full bg-sky-100 p-2 text-sky-700">
+                        <Sparkles size={16} />
+                      </div>
+                      <p className="text-sm leading-6 text-slate-700">{item}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="grid gap-4">
+                <div className="rounded-[26px] border border-white/90 bg-white/82 p-5 shadow-sm backdrop-blur">
+                  <p className="text-xs font-semibold uppercase tracking-[0.22em] text-sky-700/75">
+                    Access Overview
                   </p>
+                  <p className="mt-3 text-xl font-semibold text-slate-900">
+                    Authorized admin sign-in
+                  </p>
+                  <p className="mt-3 text-sm leading-6 text-slate-600">
+                    Use your approved account to continue to the admin dashboard.
+                  </p>
+                </div>
+
+                <div className="rounded-[26px] border border-slate-200 bg-slate-50/90 p-5">
+                  <div className="grid gap-4 sm:grid-cols-3 xl:grid-cols-1">
+                    {[
+                      ["01", "Role-based access"],
+                      ["02", "Secure authentication"],
+                      ["03", "Password recovery"],
+                    ].map(([index, label]) => (
+                      <div key={index} className="flex items-start gap-3">
+                        <span className="mt-0.5 inline-flex h-8 w-8 items-center justify-center rounded-full bg-white text-xs font-semibold text-slate-700 shadow-sm">
+                          {index}
+                        </span>
+                        <p className="text-sm leading-6 text-slate-700">{label}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section className="bg-[linear-gradient(180deg,#fbfdff_0%,#f2f6fb_100%)] px-5 py-7 sm:px-8 lg:px-10 lg:py-10 xl:px-12">
+          <div className="w-full">
+            <div className="mx-auto w-full max-w-lg rounded-[28px] border border-white/90 bg-white/92 p-6 shadow-[0_24px_56px_rgba(15,23,42,0.08)] backdrop-blur sm:p-7">
+              <div className="mb-8">
+                <p className="text-sm font-semibold uppercase tracking-[0.2em] text-sky-700">
+                  Welcome Back
+                </p>
+                <h2 className="mt-3 text-2xl font-semibold text-slate-900 sm:text-3xl">
+                  Admin Login
+                </h2>
+                <p className="mt-3 max-w-lg text-sm leading-6 text-slate-600">
+                  Sign in with your approved admin account to access the dashboard.
+                </p>
+              </div>
+
+              {status.message ? (
+                <div
+                  className={`mb-6 rounded-2xl border px-4 py-3 text-sm ${
+                    status.type === "success"
+                      ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                      : "border-rose-200 bg-rose-50 text-rose-700"
+                  }`}
+                >
+                  {status.message}
+                </div>
+              ) : null}
+
+              <div className="space-y-3">
+                <ProviderButton
+                  label="Sign in with Microsoft"
+                  onClick={() =>
+                    handleProviderLogin("Microsoft", microsoftProvider)
+                  }
+                  disabled={anyBusy}
+                  loading={loadingProvider === "Microsoft"}
+                  icon={<MicrosoftMark />}
+                />
+                <ProviderButton
+                  label="Sign in with Google"
+                  onClick={() => handleProviderLogin("Google", googleProvider)}
+                  disabled={anyBusy}
+                  loading={loadingProvider === "Google"}
+                  icon={<GoogleMark />}
+                />
+              </div>
+
+              <div className="my-6 flex items-center gap-4">
+                <div className="h-px flex-1 bg-slate-200" />
+                <span className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
+                  Or use email
+                </span>
+                <div className="h-px flex-1 bg-slate-200" />
+              </div>
+
+              {!forgotMode ? (
+                <form className="space-y-4" onSubmit={handlePasswordLogin}>
+                  <div>
+                    <label
+                      htmlFor="admin-email"
+                      className="mb-2 block text-sm font-medium text-slate-700"
+                    >
+                      Email address
+                    </label>
+                    <div className="relative">
+                      <Mail
+                        size={18}
+                        className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
+                      />
+                      <input
+                        id="admin-email"
+                        type="email"
+                        autoComplete="username"
+                        value={email}
+                        onChange={(e) => {
+                          setEmail(e.target.value);
+                          setFieldErrors((prev) => ({ ...prev, email: "" }));
+                        }}
+                        className="w-full rounded-2xl border border-slate-200 bg-white px-12 py-3 text-sm text-slate-900 outline-none transition focus:border-sky-500 focus:ring-4 focus:ring-sky-100"
+                        placeholder="admin@ujustbe.com"
+                      />
+                    </div>
+                    {fieldErrors.email ? (
+                      <p className="mt-2 text-xs text-rose-600">{fieldErrors.email}</p>
+                    ) : null}
+                  </div>
+
+                  <div>
+                    <label
+                      htmlFor="admin-password"
+                      className="mb-2 block text-sm font-medium text-slate-700"
+                    >
+                      Password
+                    </label>
+                    <div className="relative">
+                      <LockKeyhole
+                        size={18}
+                        className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
+                      />
+                      <input
+                        id="admin-password"
+                        type="password"
+                        autoComplete="current-password"
+                        value={password}
+                        onChange={(e) => {
+                          setPassword(e.target.value);
+                          setFieldErrors((prev) => ({ ...prev, password: "" }));
+                        }}
+                        className="w-full rounded-2xl border border-slate-200 bg-white px-12 py-3 text-sm text-slate-900 outline-none transition focus:border-sky-500 focus:ring-4 focus:ring-sky-100"
+                        placeholder="Enter your password"
+                      />
+                    </div>
+                    {fieldErrors.password ? (
+                      <p className="mt-2 text-xs text-rose-600">
+                        {fieldErrors.password}
+                      </p>
+                    ) : null}
+                  </div>
+
+                  <div className="flex items-center justify-between gap-4 pt-1">
+                    <p className="text-xs leading-5 text-slate-500">
+                      Passwords are verified through Firebase Authentication and are
+                      never stored in app code or plain text.
+                    </p>
+
+                    <button
+                      type="button"
+                      className="shrink-0 text-sm font-medium text-sky-700 transition hover:text-sky-800"
+                      onClick={() => {
+                        clearMessages();
+                        setForgotMode(true);
+                        setResetEmail(email);
+                      }}
+                    >
+                      Forgot password?
+                    </button>
+                  </div>
+
+                  <Button
+                    type="submit"
+                    className="mt-2 w-full justify-center"
+                    disabled={anyBusy}
+                    loading={passwordSubmitting}
+                  >
+                    Sign in with Email
+                  </Button>
+                </form>
+              ) : (
+                <form className="space-y-4" onSubmit={handlePasswordReset}>
+                  <div className="rounded-2xl border border-sky-100 bg-sky-50 px-4 py-3 text-sm text-sky-800">
+                    Send a secure reset link to your admin email. Once you update the
+                    password, come back here and sign in normally.
+                  </div>
+
+                  <div>
+                    <label
+                      htmlFor="reset-email"
+                      className="mb-2 block text-sm font-medium text-slate-700"
+                    >
+                      Reset email
+                    </label>
+                    <div className="relative">
+                      <Mail
+                        size={18}
+                        className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
+                      />
+                      <input
+                        id="reset-email"
+                        type="email"
+                        autoComplete="email"
+                        value={resetEmail}
+                        onChange={(e) => {
+                          setResetEmail(e.target.value);
+                          setFieldErrors((prev) => ({ ...prev, resetEmail: "" }));
+                        }}
+                        className="w-full rounded-2xl border border-slate-200 bg-white px-12 py-3 text-sm text-slate-900 outline-none transition focus:border-sky-500 focus:ring-4 focus:ring-sky-100"
+                        placeholder="admin@ujustbe.com"
+                      />
+                    </div>
+                    {fieldErrors.resetEmail ? (
+                      <p className="mt-2 text-xs text-rose-600">
+                        {fieldErrors.resetEmail}
+                      </p>
+                    ) : null}
+                  </div>
+
+                  <Button
+                    type="submit"
+                    className="w-full justify-center"
+                    disabled={anyBusy}
+                    loading={resetSubmitting}
+                  >
+                    Send Reset Link
+                  </Button>
 
                   <button
                     type="button"
-                    className="shrink-0 text-sm font-medium text-sky-700 transition hover:text-sky-800"
                     onClick={() => {
                       clearMessages();
-                      setForgotMode(true);
-                      setResetEmail(email);
+                      setForgotMode(false);
                     }}
+                    className="inline-flex items-center gap-2 text-sm font-medium text-slate-600 transition hover:text-slate-900"
                   >
-                    Forgot password?
+                    <ArrowLeft size={16} />
+                    Back to sign in
                   </button>
-                </div>
-
-                <Button
-                  type="submit"
-                  className="mt-2 w-full justify-center"
-                  disabled={anyBusy}
-                  loading={passwordSubmitting}
-                >
-                  Sign in with Email
-                </Button>
-              </form>
-            ) : (
-              <form className="space-y-4" onSubmit={handlePasswordReset}>
-                <div className="rounded-2xl border border-sky-100 bg-sky-50 px-4 py-3 text-sm text-sky-800">
-                  Send a secure reset link to your admin email. Once you update the
-                  password, come back here and sign in normally.
-                </div>
-
-                <div>
-                  <label
-                    htmlFor="reset-email"
-                    className="mb-2 block text-sm font-medium text-slate-700"
-                  >
-                    Reset email
-                  </label>
-                  <div className="relative">
-                    <Mail
-                      size={18}
-                      className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
-                    />
-                    <input
-                      id="reset-email"
-                      type="email"
-                      autoComplete="email"
-                      value={resetEmail}
-                      onChange={(e) => {
-                        setResetEmail(e.target.value);
-                        setFieldErrors((prev) => ({ ...prev, resetEmail: "" }));
-                      }}
-                      className="w-full rounded-2xl border border-slate-200 bg-white px-12 py-3 text-sm text-slate-900 outline-none transition focus:border-sky-500 focus:ring-4 focus:ring-sky-100"
-                      placeholder="admin@ujustbe.com"
-                    />
-                  </div>
-                  {fieldErrors.resetEmail ? (
-                    <p className="mt-2 text-xs text-rose-600">
-                      {fieldErrors.resetEmail}
-                    </p>
-                  ) : null}
-                </div>
-
-                <Button
-                  type="submit"
-                  className="w-full justify-center"
-                  disabled={anyBusy}
-                  loading={resetSubmitting}
-                >
-                  Send Reset Link
-                </Button>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    clearMessages();
-                    setForgotMode(false);
-                  }}
-                  className="inline-flex items-center gap-2 text-sm font-medium text-slate-600 transition hover:text-slate-900"
-                >
-                  <ArrowLeft size={16} />
-                  Back to sign in
-                </button>
-              </form>
-            )}
-          </section>
+                </form>
+              )}
+            </div>
+          </div>
+        </section>
         </div>
       </div>
     </div>

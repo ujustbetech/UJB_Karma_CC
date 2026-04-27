@@ -47,10 +47,18 @@ import {
   normalizeReferralStatus,
 } from "../lib/referrals/referralStates.mjs";
 import {
+  canUserUpdateReferralStatus,
+  getReferralParticipantRole,
+} from "../lib/referrals/referralServerWorkflow.mjs";
+import {
   REFERRAL_REWARD_TYPES,
   buildDealDistribution,
   getReferralRewardDetails,
 } from "../utils/referralCalculations.js";
+import {
+  formatValueForDisplayInput,
+  normalizeValueForStorageInput,
+} from "../lib/utils/dateFormat.js";
 
 const results = [];
 
@@ -388,6 +396,68 @@ await run("referral fixed rewards stay as rupee amounts", () => {
   assert.equal(reward.rewardAmount, 10);
   assert.equal(distribution.agreedAmount, 10);
   assert.equal(distribution.percentage, 0);
+});
+
+await run("referral status permissions allow the assigned participants", () => {
+  const referral = {
+    cosmoUjbCode: "COS001",
+    orbiterUJBCode: "ORB001",
+  };
+
+  assert.equal(
+    getReferralParticipantRole({
+      referral,
+      sessionUjbCode: "COS001",
+    }),
+    "cosmo"
+  );
+  assert.equal(
+    getReferralParticipantRole({
+      referral,
+      sessionUjbCode: "ORB001",
+    }),
+    "orbiter"
+  );
+  assert.equal(
+    canUserUpdateReferralStatus({
+      referral,
+      sessionUjbCode: "COS001",
+    }),
+    true
+  );
+  assert.equal(
+    canUserUpdateReferralStatus({
+      referral,
+      sessionUjbCode: "ORB001",
+    }),
+    true
+  );
+  assert.equal(
+    canUserUpdateReferralStatus({
+      referral,
+      sessionUjbCode: "OTHER001",
+    }),
+    false
+  );
+});
+
+await run("date inputs keep dd/mm/yy display with ISO storage", () => {
+  assert.equal(
+    formatValueForDisplayInput("2026-04-27", "date"),
+    "27/04/26"
+  );
+  assert.equal(
+    normalizeValueForStorageInput("27/04/26", "date"),
+    "2026-04-27"
+  );
+  assert.equal(
+    formatValueForDisplayInput("2026-04-27T14:30", "datetime-local"),
+    "27/04/26 14:30"
+  );
+  assert.equal(
+    normalizeValueForStorageInput("27/04/26 14:30", "datetime-local"),
+    "2026-04-27T14:30"
+  );
 });
 
 const failed = results.filter((result) => result.status === "failed");

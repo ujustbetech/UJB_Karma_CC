@@ -25,10 +25,18 @@ import {
   normalizeReferralStatus,
 } from "../lib/referrals/referralStates.mjs";
 import {
+  canUserUpdateReferralStatus,
+  getReferralParticipantRole,
+} from "../lib/referrals/referralServerWorkflow.mjs";
+import {
   REFERRAL_REWARD_TYPES,
   buildDealDistribution,
   getReferralRewardDetails,
 } from "../utils/referralCalculations.js";
+import {
+  formatValueForDisplayInput,
+  normalizeValueForStorageInput,
+} from "../lib/utils/dateFormat.js";
 
 test("referral workflow normalizes legacy percentage items", () => {
   const item = normalizeReferralItem({
@@ -221,4 +229,66 @@ test("referral calculations preserve fixed rewards as rupee amounts", () => {
   assert.equal(reward.rewardAmount, 10);
   assert.equal(distribution.agreedAmount, 10);
   assert.equal(distribution.percentage, 0);
+});
+
+test("referral status permissions allow assigned cosmo and orbiter only", () => {
+  const referral = {
+    cosmoUjbCode: "COS001",
+    orbiterUJBCode: "ORB001",
+  };
+
+  assert.equal(
+    getReferralParticipantRole({
+      referral,
+      sessionUjbCode: "COS001",
+    }),
+    "cosmo"
+  );
+  assert.equal(
+    getReferralParticipantRole({
+      referral,
+      sessionUjbCode: "ORB001",
+    }),
+    "orbiter"
+  );
+  assert.equal(
+    canUserUpdateReferralStatus({
+      referral,
+      sessionUjbCode: "COS001",
+    }),
+    true
+  );
+  assert.equal(
+    canUserUpdateReferralStatus({
+      referral,
+      sessionUjbCode: "ORB001",
+    }),
+    true
+  );
+  assert.equal(
+    canUserUpdateReferralStatus({
+      referral,
+      sessionUjbCode: "OTHER001",
+    }),
+    false
+  );
+});
+
+test("date inputs keep dd/mm/yy display with ISO storage", () => {
+  assert.equal(
+    formatValueForDisplayInput("2026-04-27", "date"),
+    "27/04/26"
+  );
+  assert.equal(
+    normalizeValueForStorageInput("27/04/26", "date"),
+    "2026-04-27"
+  );
+  assert.equal(
+    formatValueForDisplayInput("2026-04-27T14:30", "datetime-local"),
+    "27/04/26 14:30"
+  );
+  assert.equal(
+    normalizeValueForStorageInput("27/04/26 14:30", "datetime-local"),
+    "2026-04-27T14:30"
+  );
 });

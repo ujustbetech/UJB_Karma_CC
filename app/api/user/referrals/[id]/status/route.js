@@ -5,7 +5,11 @@ import {
 } from "@/lib/firebase/firebaseAdmin";
 import { publicEnv } from "@/lib/config/publicEnv";
 import { validateUserRequest } from "@/lib/auth/userRequestAuth.mjs";
-import { updateReferralStatusRecord } from "@/lib/referrals/referralServerWorkflow.mjs";
+import {
+  canUserUpdateReferralStatus,
+  getReferralParticipantRole,
+  updateReferralStatusRecord,
+} from "@/lib/referrals/referralServerWorkflow.mjs";
 
 const referralCollectionName = publicEnv.collections.referral;
 
@@ -33,13 +37,14 @@ export async function PATCH(req, { params }) {
 
     const referral = referralSnap.data();
     const sessionUjbCode = String(authResult.session?.ujbCode || "").trim();
-    const ownerUjbCode = String(
-      referral?.cosmoUjbCode || referral?.cosmoOrbiter?.ujbCode || ""
-    ).trim();
+    const actorRole = getReferralParticipantRole({
+      referral,
+      sessionUjbCode,
+    });
 
-    if (!sessionUjbCode || sessionUjbCode !== ownerUjbCode) {
+    if (!canUserUpdateReferralStatus({ referral, sessionUjbCode })) {
       return NextResponse.json(
-        { message: "You are not allowed to update this referral" },
+        { message: "Only the assigned COSM or Orbiter can update this referral" },
         { status: 403 }
       );
     }
@@ -52,7 +57,7 @@ export async function PATCH(req, { params }) {
       rejectReason,
     });
 
-    return NextResponse.json({ success: true, referral: updated });
+    return NextResponse.json({ success: true, referral: updated, actorRole });
   } catch (error) {
     return NextResponse.json(
       { message: error?.message || "Failed to update referral" },
