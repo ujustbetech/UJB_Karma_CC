@@ -18,6 +18,33 @@ const TDS_NRI = 0.20;      // 20%
 
 const round2 = (n) => Math.round(n * 100) / 100;
 
+const getPaymentIdentity = (payment, index = 0) =>
+  payment?.paymentId ||
+  payment?.meta?.paymentId ||
+  payment?.transactionRef ||
+  `payment-${index}`;
+
+const dedupePayments = (paymentList) => {
+  const seen = new Set();
+  const result = [];
+
+  paymentList.forEach((payment, index) => {
+    const identity = getPaymentIdentity(payment, index);
+
+    if (seen.has(identity)) {
+      return;
+    }
+
+    seen.add(identity);
+    result.push(payment);
+  });
+
+  return result;
+};
+
+const mergePaymentEntry = (previousPayments, nextEntry) =>
+  dedupePayments([...(Array.isArray(previousPayments) ? previousPayments : []), nextEntry]);
+
 /* ===================== HELPERS ===================== */
 
 const calculateTDS = (gross, payeeType = "resident") => {
@@ -50,10 +77,13 @@ export default function useReferralPayments({
   /* ===================== SAFE PAYMENTS ===================== */
 
   const safePayments = useMemo(() => {
-    if (Array.isArray(payments)) return payments;
-    if (payments && typeof payments === "object")
-      return Object.values(payments);
-    return [];
+    const normalized = Array.isArray(payments)
+      ? payments
+      : payments && typeof payments === "object"
+      ? Object.values(payments)
+      : [];
+
+    return dedupePayments(normalized);
   }, [payments]);
 
   /* ===================== AGREED & PAID ===================== */
@@ -175,7 +205,7 @@ export default function useReferralPayments({
         tdsReceivable: increment(tdsAmount),
       });
 
-      setPayments((prev = []) => [...prev, entry]);
+      setPayments((prev = []) => mergePaymentEntry(prev, entry));
       closePaymentModal();
     } catch (err) {
       console.error(err);
@@ -236,7 +266,7 @@ export default function useReferralPayments({
       tdsPayable: increment(tds),
     });
 
-    setPayments((prev = []) => [...prev, payoutEntry]);
+    setPayments((prev = []) => mergePaymentEntry(prev, payoutEntry));
     return payoutEntry;
   };
 

@@ -28,9 +28,25 @@ export default function PaymentHistory({
 }) {
   const [expanded, setExpanded] = useState(null);
 
-  const safePayments = Array.isArray(payments)
+  const rawPayments = Array.isArray(payments)
     ? payments
     : Object.values(payments || {}).flat();
+
+  const seenPayments = new Set();
+  const safePayments = rawPayments.filter((payment, index) => {
+    const identity =
+      payment?.paymentId ||
+      payment?.meta?.paymentId ||
+      payment?.transactionRef ||
+      `payment-${index}`;
+
+    if (seenPayments.has(identity)) {
+      return false;
+    }
+
+    seenPayments.add(identity);
+    return true;
+  });
 
   const visiblePayments = safePayments.filter(
     (p) =>

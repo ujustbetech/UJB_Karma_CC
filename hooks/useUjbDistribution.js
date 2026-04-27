@@ -9,6 +9,28 @@ import {
 import { db } from "@/lib/firebase/firebaseClient";
 import { COLLECTIONS } from "@/lib/utility_collection";
 
+const getPaymentIdentity = (payment, index = 0) =>
+  payment?.paymentId ||
+  payment?.meta?.paymentId ||
+  payment?.transactionRef ||
+  `payment-${index}`;
+
+const mergePaymentEntry = (previousPayments, nextEntry) => {
+  const merged = [...(Array.isArray(previousPayments) ? previousPayments : []), nextEntry];
+  const seen = new Set();
+
+  return merged.filter((payment, index) => {
+    const identity = getPaymentIdentity(payment, index);
+
+    if (seen.has(identity)) {
+      return false;
+    }
+
+    seen.add(identity);
+    return true;
+  });
+};
+
 export function useUjbDistribution({
   referralId,
   referralData,
@@ -112,7 +134,7 @@ export function useUjbDistribution({
       });
 
       // Local optimistic update
-      onPaymentsUpdate?.((prev = []) => [...prev, entry]);
+      onPaymentsUpdate?.((prev = []) => mergePaymentEntry(prev, entry));
 
       return { success: true };
     } catch (err) {
