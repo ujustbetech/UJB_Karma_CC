@@ -177,7 +177,7 @@ export default function PaymentsTab({ referral }) {
 
                                                             {referral.paidToCosmoMentor > 0 && (
                                                                 <div className="flex justify-between">
-                                                                    <span>Paid To Cosmo Mentor</span>
+                                                                    <span>Paid To CosmOrbiter Mentor</span>
                                                                     <span>₹{referral.paidToCosmoMentor.toLocaleString()}</span>
                                                                 </div>
                                                             )}

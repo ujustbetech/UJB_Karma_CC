@@ -207,7 +207,7 @@ export default function PaymentHistory({
                     />
 
                     <SlotPayoutRow
-                      label="Cosmo Mentor"
+                      label="CosmOrbiter Mentor"
                       totalShare={pay.distribution.cosmoMentor}
                       paidSoFar={cosmoPaid}
                       onRequestPayout={(amount) =>

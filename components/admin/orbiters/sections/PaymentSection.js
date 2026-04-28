@@ -97,7 +97,7 @@ export default function PaymentSection({ profile }) {
 
       {formData?.Category === 'CosmOrbiter' && (
         <div className="px-3 py-1 rounded bg-slate-100 text-sm">
-          Cosmo: {cosmoStatus()}
+          CosmOrbiter: {cosmoStatus()}
         </div>
       )}
 

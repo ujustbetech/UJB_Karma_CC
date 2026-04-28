@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
@@ -520,7 +520,7 @@ export default function ReferralDetails() {
             )}
           </div>
 
-          <div className="sticky top-0">
+          <div>
             <div className="flex mt-6 bg-gray-100 rounded-full p-1 text-sm">
               {[
                 { key: "about", label: "About", icon: <Info size={16} /> },

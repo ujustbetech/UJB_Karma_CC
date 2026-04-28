@@ -25,7 +25,16 @@ export async function PATCH(req, { params }) {
   }
 
   try {
-    const { id } = params;
+    const resolvedParams = await params;
+    const id = String(resolvedParams?.id || "").trim();
+
+    if (!id) {
+      return NextResponse.json(
+        { message: "Missing referral id" },
+        { status: 400 }
+      );
+    }
+
     const body = await req.json();
     const updated = await updateReferralStatusRecord({
       adminDb,

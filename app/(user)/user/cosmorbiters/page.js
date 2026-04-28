@@ -228,8 +228,7 @@ export default function AllEvents() {
       </div>
 
       {/* Sticky Search Bar */}
-      {/* Sticky Search */}
-      <div className="sticky top-0 z-30 pb-3 pt-2">
+      <div className="pb-3 pt-2">
 
         <div className="relative">
           <Search className="absolute left-4 top-3 w-4 h-4 text-gray-500" />

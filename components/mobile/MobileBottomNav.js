@@ -8,7 +8,8 @@ import {
   Search,
   Users,
   Calendar,
-  CalendarDays
+  CalendarDays,
+  Home
 } from "lucide-react";
 
 export default function MobileBottomNav() {
@@ -18,6 +19,7 @@ export default function MobileBottomNav() {
   const menuRef = useRef(null);
 
   const navItemsLeft = [
+    { label: "Home", icon: Home, path: "/user" },
     { label: "Dewdrop", icon: Droplet, path: "/user/dewdrop/content" },
     { label: "Prospects", icon: UserPlus, path: "/user/prospects" },
   ];

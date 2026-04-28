@@ -150,7 +150,7 @@ export default function PaymentSummary({
           </div>
 
           <div className="flex justify-between">
-            <Text variant="body">Cosmo Mentor</Text>
+            <Text variant="body">CosmOrbiter Mentor</Text>
             <Text variant="body">
               ₹{cosmoMentorShare.toLocaleString("en-IN")}
               <span className="text-slate-400 ml-2">
@@ -185,7 +185,7 @@ export default function PaymentSummary({
           className="flex items-center gap-2"
         >
           <PlusCircle size={16} />
-          Add Cosmo Payment
+          Add CosmOrbiter Payment
         </Button>
       </div>
     </>
