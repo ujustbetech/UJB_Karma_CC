@@ -1,15 +1,10 @@
 import { NextResponse } from "next/server";
 import { publicEnv } from "@/lib/config/publicEnv";
-import {
-  adminDb,
-  getFirebaseAdminInitError,
-} from "@/lib/firebase/firebaseAdmin";
+import { adminDb } from "@/lib/firebase/firebaseAdmin";
 import { hasAdminAccess } from "@/lib/auth/accessControl";
-import { validateAdminRequest } from "@/lib/auth/adminRequestAuth.mjs";
+import { requireAdminSession } from "@/lib/auth/adminRequestAuth.mjs";
+import { getDataProvider } from "@/lib/data/provider.mjs";
 import { createReferralRecord } from "@/lib/referrals/referralServerWorkflow.mjs";
-
-const referralCollectionName = publicEnv.collections.referral;
-const userCollectionName = publicEnv.collections.userDetail;
 
 function buildUserSummary(userData) {
   return {
@@ -22,18 +17,66 @@ function buildUserSummary(userData) {
   };
 }
 
-export async function POST(req) {
-  const adminResult = validateAdminRequest(req, hasAdminAccess);
-
-  if (!adminResult.ok) {
-    return adminResult.response;
+function validateAdminOrError(req) {
+  const auth = requireAdminSession(req, hasAdminAccess);
+  if (!auth.ok) {
+    return {
+      ok: false,
+      response: NextResponse.json(
+        { message: auth.message },
+        { status: auth.status }
+      ),
+    };
   }
 
-  if (getFirebaseAdminInitError() || !adminDb) {
+  try {
+    const provider = getDataProvider();
+    return { ok: true, provider, admin: auth.admin };
+  } catch (error) {
+    return {
+      ok: false,
+      response: NextResponse.json(
+        { message: error?.message || "Referral API is not configured." },
+        { status: 500 }
+      ),
+    };
+  }
+}
+
+export async function GET(req) {
+  const guard = validateAdminOrError(req);
+  if (!guard.ok) {
+    return guard.response;
+  }
+
+  try {
+    const id = String(req.nextUrl.searchParams.get("id") || "").trim();
+
+    if (id) {
+      const referral = await guard.provider.referrals.getById(id);
+      if (!referral) {
+        return NextResponse.json({ message: "Referral not found" }, { status: 404 });
+      }
+      return NextResponse.json({
+        referral,
+      });
+    }
+
+    const referrals = await guard.provider.referrals.listAll();
+
+    return NextResponse.json({ referrals });
+  } catch (error) {
     return NextResponse.json(
-      { message: "Referral API is not configured." },
+      { message: error?.message || "Failed to fetch referrals" },
       { status: 500 }
     );
+  }
+}
+
+export async function POST(req) {
+  const guard = validateAdminOrError(req);
+  if (!guard.ok) {
+    return guard.response;
   }
 
   try {
@@ -53,23 +96,23 @@ export async function POST(req) {
     }
 
     const [orbiterSnap, cosmoSnap] = await Promise.all([
-      adminDb.collection(userCollectionName).doc(selectedOrbiterId).get(),
-      adminDb.collection(userCollectionName).doc(selectedCosmoId).get(),
+      guard.provider.users.getByUjbCode(selectedOrbiterId),
+      guard.provider.users.getByUjbCode(selectedCosmoId),
     ]);
 
-    if (!orbiterSnap.exists || !cosmoSnap.exists) {
+    if (!orbiterSnap || !cosmoSnap) {
       return NextResponse.json(
         { message: "Selected referral users were not found" },
         { status: 404 }
       );
     }
 
-    const orbiterData = orbiterSnap.data();
-    const cosmoData = cosmoSnap.data();
+    const orbiterData = orbiterSnap;
+    const cosmoData = cosmoSnap;
     const created = await createReferralRecord({
       adminDb,
-      referralCollectionName,
-      userCollectionName,
+      referralCollectionName: publicEnv.collections.referral,
+      userCollectionName: publicEnv.collections.userDetail,
       payload: {
         selectedItem,
         leadDescription: body?.leadDescription || "",
@@ -99,6 +142,28 @@ export async function POST(req) {
     return NextResponse.json(
       { message: error?.message || "Failed to create referral" },
       { status: error?.status || 500 }
+    );
+  }
+}
+
+export async function DELETE(req) {
+  const guard = validateAdminOrError(req);
+  if (!guard.ok) {
+    return guard.response;
+  }
+
+  try {
+    const id = String(req.nextUrl.searchParams.get("id") || "").trim();
+    if (!id) {
+      return NextResponse.json({ message: "Missing referral id" }, { status: 400 });
+    }
+
+    await guard.provider.referrals.deleteById(id);
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    return NextResponse.json(
+      { message: error?.message || "Failed to delete referral" },
+      { status: 500 }
     );
   }
 }

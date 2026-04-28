@@ -16,56 +16,16 @@ import {
   CheckCircle,
   UserCheck,
   Activity,
-  BookOpen,
-  Book,
-  Library,
-  Mail,
-  Phone,
-  Users,
-  Network,
-  Calendar,
-  Sparkles,
-  Star,
-  Eye,
-  ClipboardList,
-  Share2,
-  GitBranch,
-  Smile,
-  Compass,
-  ShieldCheck,
-  Rocket,
-  CalendarCheck,
-  MessageSquareText,
 } from "lucide-react";
 
 import Edit from "@/components/admin/prospect/EditProspectForm";
 import AditionalInfo from "@/components/admin/prospect/AdditionalInfo";
 import FollowUpInfo from "@/components/admin/prospect/FollowUps";
 import Assesment from "@/components/admin/prospect/Assesment";
-import NTIntro from "@/components/admin/prospect/NTIntro";
-import NTBriefCall from "@/components/admin/prospect/NTBriefCall";
 import EnrollmentStage from "@/components/admin/prospect/EnrollmentStage";
 import ProspectFormDetails from "@/components/admin/prospect/ProspectDetails";
 import EngagementForm from "@/components/admin/prospect/Engagementform";
-import EngagementActivity from "@/components/admin/prospect/EngagementActivity";
 import ProspectFeedback from "@/components/admin/prospect/ProspectFeedback";
-import KnowledgeSharing4 from "@/components/admin/prospect/KnowledgeSharing4";
-import KnowledgeSharing5 from "@/components/admin/prospect/KnowledgeSharing5";
-import KnowledgeSeries9 from "@/components/admin/prospect/KnowledgeSeries9";
-import KnowledgeSeries10 from "@/components/admin/prospect/KnowledgeSeries10";
-import CaseStudy1 from "@/components/admin/prospect/CaseStudy1";
-import CaseStudy2 from "@/components/admin/prospect/CaseStudy2";
-import AssesmentCall from "@/components/admin/prospect/AssesmentCall";
-import AssesmentMail from "@/components/admin/prospect/AssesmentMail";
-import Assessment from "@/components/admin/prospect/AssesmentBtn";
-import Day17SocialMedia from "@/components/admin/prospect/SocialParticipation";
-import Day19Referral from "@/components/admin/prospect/ReferralParticipation";
-import Day21HappyFace from "@/components/admin/prospect/HappyFace";
-import Day22VisionAlignment from "@/components/admin/prospect/VisionAllignment";
-import Day24IntegrityReferral from "@/components/admin/prospect/IntegrityReferral";
-import Day25CosmOrbiterImpact from "@/components/admin/prospect/CosmOrbiterImpact";
-import Day27Events from "@/components/admin/prospect/Events";
-import Day28Feedback from "@/components/admin/prospect/FinalFeedback";
 
 const tabs = [
   "Prospect Details",
@@ -76,26 +36,6 @@ const tabs = [
   "Authentic Choice",
   "Enrollment Status",
   "Engagement Logs",
-  "Introduction to UJustBe",
-  "Terms Knowledge Transfer",
-  "Knowledge Series",
-  "Mail for NT",
-  "Briefing on NT",
-  "NT Introduction",
-  "Referrals Knowledge",
-  "Monthly Meeting Knowledge",
-  "As Lived Part 1",
-  "As Lived Part 2",
-  "Review Session",
-  "Assesment Completion",
-  "Social Participation",
-  "Referral Participation",
-  "Happy Face",
-  "Vision Allignment",
-  "Integrity Referral",
-  "CosmOrbiter Impact",
-  "Event",
-  "Feedback",
 ];
 
 const icons = [
@@ -107,26 +47,6 @@ const icons = [
   CheckCircle,
   UserCheck,
   Activity,
-  BookOpen,
-  Book,
-  Library,
-  Mail,
-  Phone,
-  Users,
-  Network,
-  Calendar,
-  Sparkles,
-  Star,
-  Eye,
-  ClipboardList,
-  Share2,
-  GitBranch,
-  Smile,
-  Compass,
-  ShieldCheck,
-  Rocket,
-  CalendarCheck,
-  MessageSquareText,
 ];
 
 export default function EditAdminEvent() {
@@ -262,46 +182,6 @@ export default function EditAdminEvent() {
         return <EnrollmentStage data={eventData} id={id} />;
       case 7:
         return <EngagementForm data={eventData} id={id} />;
-      case 8:
-        return <EngagementActivity data={eventData} id={id} />;
-      case 9:
-        return <KnowledgeSharing4 data={eventData} id={id} />;
-      case 10:
-        return <KnowledgeSharing5 data={eventData} id={id} />;
-      case 11:
-        return <NTIntro data={eventData} id={id} />;
-      case 12:
-        return <NTBriefCall data={eventData} id={id} />;
-      case 13:
-        return <KnowledgeSeries9 data={eventData} id={id} />;
-      case 14:
-        return <KnowledgeSeries10 data={eventData} id={id} />;
-      case 15:
-        return <AssesmentMail data={eventData} id={id} />;
-      case 16:
-        return <CaseStudy1 data={eventData} id={id} />;
-      case 17:
-        return <CaseStudy2 data={eventData} id={id} />;
-      case 18:
-        return <AssesmentCall data={eventData} id={id} />;
-      case 19:
-        return <Assessment data={eventData} id={id} />;
-      case 20:
-        return <Day17SocialMedia data={eventData} id={id} />;
-      case 21:
-        return <Day19Referral data={eventData} id={id} />;
-      case 22:
-        return <Day21HappyFace data={eventData} id={id} />;
-      case 23:
-        return <Day22VisionAlignment data={eventData} id={id} />;
-      case 24:
-        return <Day24IntegrityReferral data={eventData} id={id} />;
-      case 25:
-        return <Day25CosmOrbiterImpact data={eventData} id={id} />;
-      case 26:
-        return <Day27Events data={eventData} id={id} />;
-      case 27:
-        return <Day28Feedback data={eventData} id={id} />;
       default:
         return null;
     }

@@ -1,18 +1,10 @@
 import { NextResponse } from "next/server";
-import {
-  adminDb,
-  getFirebaseAdminInitError,
-} from "@/lib/firebase/firebaseAdmin";
-import {
-  ADMIN_COOKIE_NAME,
-  verifyAdminSessionToken,
-} from "@/lib/auth/adminSession";
+import { requireAdminSession } from "@/lib/auth/adminRequestAuth.mjs";
 import { hasAdminAccess } from "@/lib/auth/accessControl";
-import { validateAdminSessionAccess } from "@/lib/auth/adminAccessWorkflow.mjs";
+import { getDataProvider } from "@/lib/data/provider.mjs";
 import { publicEnv } from "@/lib/config/publicEnv";
 import { serverEnv } from "@/lib/config/serverEnv";
 
-const userCollectionName = publicEnv.collections.userDetail;
 const UJB_SEED_START = 10122000000001;
 
 function validateProjectAlignment() {
@@ -59,66 +51,50 @@ function extractUjbSequence(value) {
   return 0;
 }
 
-function getAdminDbOrError() {
-  const firebaseAdminInitError = getFirebaseAdminInitError();
+function requireAdminProvider(req) {
+  const auth = requireAdminSession(req, hasAdminAccess);
 
-  if (firebaseAdminInitError || !adminDb) {
+  if (!auth.ok) {
+    return {
+      ok: false,
+      response: NextResponse.json(
+        { message: auth.message },
+        { status: auth.status }
+      ),
+    };
+  }
+
+  try {
+    const provider = getDataProvider();
+    return { ok: true, admin: auth.admin, provider };
+  } catch (error) {
     return {
       ok: false,
       response: NextResponse.json(
         {
           message:
-            "Admin Firebase access is not configured. Check server Firebase credentials.",
+            error?.message || "Admin Firebase access is not configured.",
         },
         { status: 500 }
       ),
     };
   }
-
-  return { ok: true, adminDb };
 }
 
-function validateAdminRequest(req) {
-  const token = req.cookies.get(ADMIN_COOKIE_NAME)?.value;
+async function buildOrbiterPayloads(provider) {
+  const users = await provider.users.listAll();
 
-  if (!token) {
-    return {
-      ok: false,
-      response: NextResponse.json({ message: "Unauthorized" }, { status: 401 }),
-    };
-  }
-
-  const decoded = verifyAdminSessionToken(token);
-  const validation = validateAdminSessionAccess(decoded, hasAdminAccess);
-
-  if (!validation.ok) {
-    return {
-      ok: false,
-      response: NextResponse.json(
-        { message: validation.message },
-        { status: validation.status }
-      ),
-    };
-  }
-
-  return { ok: true, admin: validation.admin };
-}
-
-async function buildOrbiterPayloads(db) {
-  const snapshot = await db.collection(userCollectionName).get();
-
-  const orbiters = snapshot.docs.map((docSnap) => ({
-    ujbCode: docSnap.id,
-    name: docSnap.data().Name || "",
-    phone: docSnap.data().MobileNo || "",
-    email: docSnap.data().Email || "",
+  const orbiters = users.map((user) => ({
+    ujbCode: user.id,
+    name: user.Name || "",
+    phone: user.MobileNo || "",
+    email: user.Email || "",
   }));
 
   let maxNumber = 0;
 
-  snapshot.forEach((docSnap) => {
-    const data = docSnap.data();
-    const code = data.UJBCode || data.ujbCode || docSnap.id;
+  users.forEach((data) => {
+    const code = data.UJBCode || data.ujbCode || data.id;
     const num = extractUjbSequence(code);
 
     if (num !== null && num > maxNumber) {
@@ -134,14 +110,7 @@ async function buildOrbiterPayloads(db) {
 }
 
 async function buildFullUserPayload(db) {
-  const snapshot = await db.collection(userCollectionName).get();
-
-  const users = snapshot.docs.map((docSnap) => ({
-    id: docSnap.id,
-    ...docSnap.data(),
-  }));
-
-  return { users };
+  return { users: await db.users.listAll() };
 }
 
 export async function GET(req) {
@@ -152,28 +121,18 @@ export async function GET(req) {
       return alignmentResult.response;
     }
 
-    const dbResult = getAdminDbOrError();
-
-    if (!dbResult.ok) {
-      return dbResult.response;
-    }
-
-    const authResult = validateAdminRequest(req);
-
-    if (!authResult.ok) {
-      return authResult.response;
+    const guard = requireAdminProvider(req);
+    if (!guard.ok) {
+      return guard.response;
     }
 
     const ujbCode = req.nextUrl.searchParams.get("ujbCode");
     const view = req.nextUrl.searchParams.get("view");
 
     if (ujbCode) {
-      const docSnap = await dbResult.adminDb
-        .collection(userCollectionName)
-        .doc(ujbCode)
-        .get();
+      const user = await guard.provider.users.getByUjbCode(ujbCode);
 
-      if (!docSnap.exists) {
+      if (!user) {
         return NextResponse.json(
           { message: "Orbiter not found" },
           { status: 404 }
@@ -181,17 +140,14 @@ export async function GET(req) {
       }
 
       return NextResponse.json({
-        user: {
-          id: docSnap.id,
-          ...docSnap.data(),
-        },
+        user,
       });
     }
 
     const payload =
       view === "full"
-        ? await buildFullUserPayload(dbResult.adminDb)
-        : await buildOrbiterPayloads(dbResult.adminDb);
+        ? await buildFullUserPayload(guard.provider)
+        : await buildOrbiterPayloads(guard.provider);
 
     return NextResponse.json(payload);
   } catch (error) {
@@ -212,16 +168,9 @@ export async function POST(req) {
       return alignmentResult.response;
     }
 
-    const dbResult = getAdminDbOrError();
-
-    if (!dbResult.ok) {
-      return dbResult.response;
-    }
-
-    const authResult = validateAdminRequest(req);
-
-    if (!authResult.ok) {
-      return authResult.response;
+    const guard = requireAdminProvider(req);
+    if (!guard.ok) {
+      return guard.response;
     }
 
     const body = await req.json();
@@ -242,7 +191,7 @@ export async function POST(req) {
       );
     }
 
-    const { orbiters, nextUjbCode } = await buildOrbiterPayloads(dbResult.adminDb);
+    const { orbiters, nextUjbCode } = await buildOrbiterPayloads(guard.provider);
 
     let mentorData = {
       name: "",
@@ -278,10 +227,7 @@ export async function POST(req) {
         ? `${day}/${month}/${year}`
         : "";
 
-    await dbResult.adminDb
-      .collection(userCollectionName)
-      .doc(nextUjbCode)
-      .set({
+    await guard.provider.users.createById(nextUjbCode, {
         Name: name,
         MobileNo: phoneNumber,
         Category: role,
@@ -317,16 +263,9 @@ export async function DELETE(req) {
       return alignmentResult.response;
     }
 
-    const dbResult = getAdminDbOrError();
-
-    if (!dbResult.ok) {
-      return dbResult.response;
-    }
-
-    const authResult = validateAdminRequest(req);
-
-    if (!authResult.ok) {
-      return authResult.response;
+    const guard = requireAdminProvider(req);
+    if (!guard.ok) {
+      return guard.response;
     }
 
     const ujbCode = req.nextUrl.searchParams.get("ujbCode");
@@ -338,7 +277,7 @@ export async function DELETE(req) {
       );
     }
 
-    await dbResult.adminDb.collection(userCollectionName).doc(ujbCode).delete();
+    await guard.provider.users.deleteByUjbCode(ujbCode);
 
     return NextResponse.json({ success: true });
   } catch (error) {
@@ -359,16 +298,9 @@ export async function PATCH(req) {
       return alignmentResult.response;
     }
 
-    const dbResult = getAdminDbOrError();
-
-    if (!dbResult.ok) {
-      return dbResult.response;
-    }
-
-    const authResult = validateAdminRequest(req);
-
-    if (!authResult.ok) {
-      return authResult.response;
+    const guard = requireAdminProvider(req);
+    if (!guard.ok) {
+      return guard.response;
     }
 
     const ujbCode = req.nextUrl.searchParams.get("ujbCode");
@@ -384,28 +316,11 @@ export async function PATCH(req) {
     const update =
       body && typeof body.update === "object" ? body.update : {};
 
-    await dbResult.adminDb
-      .collection(userCollectionName)
-      .doc(ujbCode)
-      .set(
-        {
-          ...update,
-          updatedAt: new Date(),
-        },
-        { merge: true }
-      );
-
-    const updatedSnap = await dbResult.adminDb
-      .collection(userCollectionName)
-      .doc(ujbCode)
-      .get();
+    const updatedUser = await guard.provider.users.updateByUjbCode(ujbCode, update);
 
     return NextResponse.json({
       success: true,
-      user: {
-        id: updatedSnap.id,
-        ...updatedSnap.data(),
-      },
+      user: updatedUser,
     });
   } catch (error) {
     console.error("Admin orbiter update error:", error);

@@ -4,12 +4,15 @@ import {
   adminDb,
   getFirebaseAdminInitError,
 } from "@/lib/firebase/firebaseAdmin";
-import { hasAdminAccess } from "@/lib/auth/accessControl";
+import { hasAdminAccess, hasSuperAdminAccess } from "@/lib/auth/accessControl";
 import {
   ADMIN_COOKIE_NAME,
   verifyAdminSessionToken,
 } from "@/lib/auth/adminSession";
-import { validateAdminSessionAccess } from "@/lib/auth/adminAccessWorkflow.mjs";
+import {
+  validateAdminRoleAccess,
+  validateAdminSessionAccess,
+} from "@/lib/auth/adminAccessWorkflow.mjs";
 import {
   ADMIN_ROLES_COLLECTION,
   ADMIN_USERS_COLLECTION,
@@ -58,22 +61,6 @@ function validateAdminRequest(req) {
   }
 
   return { ok: true, admin: validation.admin };
-}
-
-function requireSuperAdmin(admin) {
-  const role = String(admin?.role || "").trim().toLowerCase();
-
-  if (role !== "super") {
-    return {
-      ok: false,
-      response: NextResponse.json(
-        { message: "Only Super Admin can manage admin users" },
-        { status: 403 }
-      ),
-    };
-  }
-
-  return { ok: true };
 }
 
 function normalizeEmail(value) {
@@ -234,10 +221,16 @@ export async function POST(req) {
       return authResult.response;
     }
 
-    const superCheck = requireSuperAdmin(authResult.admin);
-
-    if (!superCheck.ok) {
-      return superCheck.response;
+    const roleCheck = validateAdminRoleAccess(
+      authResult.admin,
+      hasSuperAdminAccess,
+      "Only Super Admin can manage admin users"
+    );
+    if (!roleCheck.ok) {
+      return NextResponse.json(
+        { message: roleCheck.message },
+        { status: roleCheck.status }
+      );
     }
 
     const body = await req.json();
@@ -396,10 +389,16 @@ export async function PATCH(req) {
       return authResult.response;
     }
 
-    const superCheck = requireSuperAdmin(authResult.admin);
-
-    if (!superCheck.ok) {
-      return superCheck.response;
+    const roleCheck = validateAdminRoleAccess(
+      authResult.admin,
+      hasSuperAdminAccess,
+      "Only Super Admin can manage admin users"
+    );
+    if (!roleCheck.ok) {
+      return NextResponse.json(
+        { message: roleCheck.message },
+        { status: roleCheck.status }
+      );
     }
 
     const body = await req.json();
@@ -515,10 +514,16 @@ export async function DELETE(req) {
       return authResult.response;
     }
 
-    const superCheck = requireSuperAdmin(authResult.admin);
-
-    if (!superCheck.ok) {
-      return superCheck.response;
+    const roleCheck = validateAdminRoleAccess(
+      authResult.admin,
+      hasSuperAdminAccess,
+      "Only Super Admin can manage admin users"
+    );
+    if (!roleCheck.ok) {
+      return NextResponse.json(
+        { message: roleCheck.message },
+        { status: roleCheck.status }
+      );
     }
 
     const id = req.nextUrl.searchParams.get("id");

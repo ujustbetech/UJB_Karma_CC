@@ -1,21 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import {
-  addDoc,
-  collection,
-  deleteDoc,
-  doc,
-  getDocs,
-  Timestamp,
-  updateDoc,
-} from "firebase/firestore";
 import { Pencil, Shield, Tags, Trash2 } from "lucide-react";
 
-import { db } from "@/lib/firebase/firebaseClient";
 import {
-  ADMIN_ROLES_COLLECTION,
-  ADMIN_USERS_COLLECTION,
   DEFAULT_ADMIN_ROLE_NAMES,
   getMergedAdminRoleNames,
   isSystemAdminRole,
@@ -67,30 +55,23 @@ export default function ManageRolesPage() {
 
     const fetchData = async () => {
       try {
-        const [rolesSnapshot, adminsSnapshot] = await Promise.all([
-          getDocs(collection(db, ADMIN_ROLES_COLLECTION)),
-          getDocs(collection(db, ADMIN_USERS_COLLECTION)),
-        ]);
+        const res = await fetch("/api/admin/roles", {
+          credentials: "include",
+        });
+        const data = await res.json().catch(() => ({}));
+
+        if (!res.ok) {
+          throw new Error(data.message || "Failed to load roles");
+        }
 
         if (!mounted) {
           return;
         }
 
-        setRoles(
-          rolesSnapshot.docs.map((snapshot) => ({
-            id: snapshot.id,
-            ...snapshot.data(),
-          }))
-        );
-
-        setAdmins(
-          adminsSnapshot.docs.map((snapshot) => ({
-            id: snapshot.id,
-            ...snapshot.data(),
-          }))
-        );
-      } catch {
-        toast.error("Failed to load roles");
+        setRoles(Array.isArray(data.roles) ? data.roles : []);
+        setAdmins(Array.isArray(data.admins) ? data.admins : []);
+      } catch (error) {
+        toast.error(error.message || "Failed to load roles");
       } finally {
         if (mounted) {
           setLoading(false);
@@ -154,20 +135,30 @@ export default function ManageRolesPage() {
     setSubmitting(true);
 
     try {
-      const createdDoc = await addDoc(collection(db, ADMIN_ROLES_COLLECTION), {
-        name: trimmedName,
-        normalizedName,
-        createdAt: Timestamp.now(),
+      const res = await fetch("/api/admin/roles", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        credentials: "include",
+        body: JSON.stringify({
+          name: trimmedName,
+        }),
       });
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        throw new Error(data.message || "Failed to create role");
+      }
 
       setRoles((previous) => [
         ...previous,
-        { id: createdDoc.id, name: trimmedName, normalizedName },
+        data.role || { id: Date.now().toString(), name: trimmedName, normalizedName },
       ]);
       setNewRoleName("");
       toast.success("Role created successfully");
-    } catch {
-      toast.error("Failed to create role");
+    } catch (error) {
+      toast.error(error.message || "Failed to create role");
     } finally {
       setSubmitting(false);
     }
@@ -199,15 +190,27 @@ export default function ManageRolesPage() {
     }
 
     try {
-      await updateDoc(doc(db, ADMIN_ROLES_COLLECTION, editingId), {
-        name: trimmedName,
-        normalizedName,
+      const res = await fetch("/api/admin/roles", {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        credentials: "include",
+        body: JSON.stringify({
+          id: editingId,
+          name: trimmedName,
+        }),
       });
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        throw new Error(data.message || "Failed to update role");
+      }
 
       setRoles((previous) =>
         previous.map((role) =>
           role.id === editingId
-            ? { ...role, name: trimmedName, normalizedName }
+            ? { ...role, ...(data.role || { name: trimmedName, normalizedName }) }
             : role
         )
       );
@@ -215,8 +218,8 @@ export default function ManageRolesPage() {
       setEditingId(null);
       setEditName("");
       toast.success("Role updated successfully");
-    } catch {
-      toast.error("Failed to update role");
+    } catch (error) {
+      toast.error(error.message || "Failed to update role");
     }
   };
 
@@ -238,13 +241,25 @@ export default function ManageRolesPage() {
     }
 
     try {
-      await deleteDoc(doc(db, ADMIN_ROLES_COLLECTION, deleteRole.id));
+      const res = await fetch(
+        `/api/admin/roles?id=${encodeURIComponent(deleteRole.id)}`,
+        {
+          method: "DELETE",
+          credentials: "include",
+        }
+      );
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        throw new Error(data.message || "Failed to delete role");
+      }
+
       setRoles((previous) =>
         previous.filter((role) => role.id !== deleteRole.id)
       );
       toast.success("Role deleted successfully");
-    } catch {
-      toast.error("Failed to delete role");
+    } catch (error) {
+      toast.error(error.message || "Failed to delete role");
     } finally {
       setDeleteRole(null);
     }

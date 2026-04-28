@@ -2,13 +2,6 @@
 
 import { useEffect, useState } from "react";
 import {
-  collection,
-  getDocs,
-  orderBy,
-  query,
-} from "firebase/firestore";
-import { db } from "@/lib/firebase/firebaseClient";
-import {
   Eye,
   Heart,
   Music,
@@ -20,6 +13,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import UserPageHeader from "@/components/user/UserPageHeader";
+import { fetchUserDewdropContent } from "@/services/dewdropService";
 
 export default function ContentPage() {
   const [contents, setContents] = useState([]);
@@ -29,19 +23,8 @@ export default function ContentPage() {
   useEffect(() => {
     const fetchContent = async () => {
       try {
-        const q = query(
-          collection(db, "ContentData"),
-          orderBy("AdminCreatedby", "desc")
-        );
-
-        const snap = await getDocs(q);
-
-        setContents(
-          snap.docs.map((doc) => ({
-            id: doc.id,
-            ...doc.data(),
-          }))
-        );
+        const list = await fetchUserDewdropContent();
+        setContents(list);
       } catch (error) {
         console.error("Error fetching content:", error);
       } finally {

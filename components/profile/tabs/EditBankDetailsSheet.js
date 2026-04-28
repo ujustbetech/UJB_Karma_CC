@@ -2,10 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { X } from "lucide-react";
-import { doc, updateDoc } from "firebase/firestore";
+import { updateUserProfile } from "@/services/profileService";
 import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
-import { db } from "@/lib/firebase/firebaseClient";
-import { COLLECTIONS } from "@/lib/utility_collection";
 import { encryptData } from "@/utils/encryption";
 
 export default function EditBankDetailsSheet({
@@ -61,7 +59,7 @@ export default function EditBankDetailsSheet({
         };
       }
 
-      await updateDoc(doc(db, COLLECTIONS.userDetail, userDocId), {
+      await updateUserProfile({
         bankDetails: nextBankDetails,
       });
 
@@ -175,3 +173,4 @@ function SelectField({ label, value, onChange, options }) {
     </div>
   );
 }
+

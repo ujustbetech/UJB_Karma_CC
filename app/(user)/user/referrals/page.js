@@ -1,21 +1,15 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
-import {
-    getFirestore,
-    collection,
-    query,
-    where,
-    onSnapshot,
-} from "firebase/firestore";
-import { app } from "@/lib/firebase/firebaseClient";
+import React, { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 // import HeaderNav from "../component/HeaderNav";
 // import Swal from "sweetalert2";
 
 // import Headertop from "../component/Header";
-import { COLLECTIONS } from "@/lib/utility_collection";
-import { updateReferralStatus } from "@/services/referralService";
+import {
+    fetchUserReferrals,
+    updateReferralStatus,
+} from "@/services/referralService";
 import {
     REFERRAL_STATUS_OPTIONS,
     REFERRAL_STATUSES,
@@ -24,24 +18,18 @@ import {
 import { CheckCircle, Inbox, Mail, Phone, Send, X } from "lucide-react";
 import { useAuth } from "@/context/authContext";
 import {
-    Search,
-    Filter,
     Trophy,
     TrendingUp,
     Users,
     Share2,
-    CheckCircle2,
     XCircle,
     Clock,
     PauseCircle,
-    AlertTriangle,
 } from "lucide-react";
 
 import { SlidersHorizontal } from "lucide-react";
 import { sendWhatsAppTemplateRequest } from "@/utils/whatsappClient";
 import UserPageHeader from "@/components/user/UserPageHeader";
-
-const db = getFirestore(app);
 
 function getReferralTimestampValue(referral) {
     const rawTimestamp = referral?.timestamp;
@@ -56,6 +44,16 @@ function getReferralTimestampValue(referral) {
 
     const parsed = new Date(rawTimestamp || 0).getTime();
     return Number.isNaN(parsed) ? 0 : parsed;
+}
+
+function formatReferralTimestamp(referral) {
+    const timestampValue = getReferralTimestampValue(referral);
+
+    if (!timestampValue) {
+        return "N/A";
+    }
+
+    return new Date(timestampValue).toLocaleString();
 }
 
 function sortReferralsByLatest(referrals = []) {
@@ -173,63 +171,50 @@ const UserReferrals = () => {
 
     const { user: sessionUser, loading: authLoading } = useAuth();
     const currentUJB = sessionUser?.profile?.ujbCode;
-    // Firestore realtime subscriptions (lists + counts)
-    useEffect(() => {
-        if (authLoading || !currentUJB) return;
 
+    const loadReferrals = useCallback(async () => {
         setLoading(true);
 
-        const referralsCol = collection(db, COLLECTIONS.referral);
+        try {
+            const data = await fetchUserReferrals();
+            const myReferrals = sortReferralsByLatest(data.my || []);
+            const passedReferrals = sortReferralsByLatest(data.passed || []);
 
-        const myQuery = query(
-            referralsCol,
-            where("cosmoOrbiter.ujbCode", "==", currentUJB)
-        );
-
-        const passedQuery = query(
-            referralsCol,
-            where("orbiter.ujbCode", "==", currentUJB)
-        );
-
-        let loadedCount = 0;
-        const markLoaded = () => {
-            loadedCount += 1;
-            if (loadedCount === 2) setLoading(false);
-        };
-
-        const unsubMy = onSnapshot(myQuery, (snapshot) => {
-            const myReferrals = sortReferralsByLatest(snapshot.docs.map((d) => ({
-                id: d.id,
-                ...d.data(),
-            })));
-
-            setAllReferrals((prev) => ({ ...prev, my: myReferrals }));
+            setAllReferrals({
+                my: myReferrals,
+                passed: passedReferrals,
+            });
             setNtMeetCount(myReferrals.length);
-            markLoaded();
-        });
-
-        const unsubPassed = onSnapshot(passedQuery, (snapshot) => {
-            const passedReferrals = sortReferralsByLatest(snapshot.docs.map((d) => ({
-                id: d.id,
-                ...d.data(),
-            })));
-
-            setAllReferrals((prev) => ({ ...prev, passed: passedReferrals }));
             setMonthlyMetCount(passedReferrals.length);
-            markLoaded();
-        });
+        } catch (error) {
+            console.error("Failed to load referrals:", error);
+            setAllReferrals({ my: [], passed: [] });
+            setNtMeetCount(0);
+            setMonthlyMetCount(0);
+        } finally {
+            setLoading(false);
+        }
+    }, []);
 
-        return () => {
-            unsubMy();
-            unsubPassed();
-        };
+    useEffect(() => {
+        if (authLoading) return;
 
-    }, [currentUJB, authLoading]);
+        if (!currentUJB) {
+            setAllReferrals({ my: [], passed: [] });
+            setNtMeetCount(0);
+            setMonthlyMetCount(0);
+            setLoading(false);
+            return;
+        }
+
+        loadReferrals();
+    }, [authLoading, currentUJB, loadReferrals]);
 
     // Handle deal status change (My Referrals)
     const handleStatusChange = async (referral, newStatus) => {
         try {
             await updateReferralStatus({ id: referral.id, status: newStatus });
+            await loadReferrals();
 
             // Send WhatsApp messages dynamically if templates exist
             const templates = statusMessages[newStatus];
@@ -251,134 +236,6 @@ const UserReferrals = () => {
             console.error("Error updating deal status:", error);
             Swal.fire("Error", "Failed to update deal status.", "error");
         }
-    };
-
-    // // Accept referral (My Referrals)
-    // const handleAccept = async (ref) => {
-    //     Swal.fire({
-    //         title: "Accept Referral?",
-    //         text: "Are you sure you want to accept this referral?",
-    //         icon: "question",
-    //         showCancelButton: true,
-    //         confirmButtonColor: "#3085d6",
-    //         cancelButtonColor: "#d33",
-    //         confirmButtonText: "Yes, Accept",
-    //         cancelButtonText: "No",
-    //     }).then(async (result) => {
-    //         if (result.isConfirmed) {
-    //             try {
-    //                 const docRef = doc(db, COLLECTIONS.referral, ref.id);
-
-    //                 const newStatus = "Not Connected";
-
-    //                 await updateDoc(docRef, {
-    //                     dealStatus: newStatus,
-    //                     "cosmoOrbiter.dealStatus": newStatus,
-    //                     statusLogs: arrayUnion({
-    //                         status: newStatus,
-    //                         updatedAt: Timestamp.now(),
-    //                     }),
-    //                     lastUpdated: Timestamp.now(),
-    //                 });
-
-    //                 const templates = statusMessages[newStatus];
-    //                 if (templates) {
-    //                     await Promise.all([
-    //                         sendWhatsAppTemplate(
-    //                             ref.orbiter.phone,
-    //                             ref.orbiter.name,
-    //                             getDynamicMessage(templates.Orbiter, ref)
-    //                         ),
-    //                         sendWhatsAppTemplate(
-    //                             ref.cosmoOrbiter.phone,
-    //                             ref.cosmoOrbiter.name,
-    //                             getDynamicMessage(templates.CosmOrbiter, ref)
-    //                         ),
-    //                     ]);
-    //                 }
-
-    //                 Swal.fire({
-    //                     title: "Accepted!",
-    //                     text: "Referral has been accepted successfully.",
-    //                     icon: "success",
-    //                     timer: 2000,
-    //                     showConfirmButton: false,
-    //                 });
-    //                 // UI auto-updates via onSnapshot
-    //             } catch (error) {
-    //                 console.error("Error accepting referral:", error);
-    //                 Swal.fire(
-    //                     "Error",
-    //                     "Failed to accept referral. Try again.",
-    //                     "error"
-    //                 );
-    //             }
-    //         }
-    //     });
-    // };
-
-    // Reject referral with reason
-    const handleReject = async (ref) => {
-        Swal.fire({
-            title: "Reject Referral?",
-            html: `
-                <p>Please enter the reason for rejection:</p>
-                <textarea id="rejectReason" class="swal2-textarea" placeholder="Reason here..."></textarea>
-            `,
-            showCancelButton: true,
-            confirmButtonText: "Reject",
-            cancelButtonText: "Cancel",
-            preConfirm: () => {
-                const reasonEl = document.getElementById("rejectReason");
-                const reason = reasonEl ? reasonEl.value : "";
-                if (!reason.trim()) {
-                    Swal.showValidationMessage("Reason is required");
-                    return false;
-                }
-                return reason;
-            },
-        }).then(async (result) => {
-            if (result.isConfirmed) {
-                const reason = result.value;
-
-                try {
-                    await updateReferralStatus({
-                        id: ref.id,
-                        status: REFERRAL_STATUSES.REJECTED,
-                        rejectReason: reason,
-                    });
-
-                    const orbiterMsg = `Your referral was rejected.\nReason: ${reason}`;
-                    const cosmoMsg = `You have rejected a referral.\nReason: ${reason}`;
-
-                    await Promise.all([
-                        sendWhatsAppTemplate(
-                            ref.orbiter.phone,
-                            ref.orbiter.name,
-                            orbiterMsg
-                        ),
-                        sendWhatsAppTemplate(
-                            ref.cosmoOrbiter.phone,
-                            ref.cosmoOrbiter.name,
-                            cosmoMsg
-                        ),
-                    ]);
-
-                    Swal.fire({
-                        icon: "success",
-                        title: "Referral Rejected",
-                        text: "Reason saved & notifications sent.",
-                    });
-                } catch (error) {
-                    console.error("Reject error:", error);
-                    Swal.fire("Error", "Failed to reject referral.", "error");
-                }
-            }
-        });
-    };
-
-    const handleTabClick = (tabKey) => {
-        setActiveTab(tabKey);
     };
 
     const referrals = React.useMemo(() => {
@@ -424,6 +281,7 @@ const UserReferrals = () => {
 
             const newStatus = REFERRAL_STATUSES.ACCEPTED;
             await updateReferralStatus({ id: selectedReferral.id, status: newStatus });
+            await loadReferrals();
 
             const templates = statusMessages[newStatus];
 
@@ -465,6 +323,7 @@ const UserReferrals = () => {
                 status: REFERRAL_STATUSES.REJECTED,
                 rejectReason,
             });
+            await loadReferrals();
 
             const orbiterMsg = `Your referral was rejected.\nReason: ${rejectReason}`;
             const cosmoMsg = `You have rejected a referral.\nReason: ${rejectReason}`;
@@ -654,9 +513,7 @@ const UserReferrals = () => {
                                         <div className="text-xs text-gray-500 text-right space-y-1">
                                             <p>{ref.referralId || "-"}</p>
                                             <p>
-                                                {ref.timestamp?.toDate
-                                                    ? ref.timestamp.toDate().toLocaleString()
-                                                    : "N/A"}
+                                                {formatReferralTimestamp(ref)}
                                             </p>
                                         </div>
                                     </div>

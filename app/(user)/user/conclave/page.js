@@ -1,60 +1,20 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import {
-  getFirestore,
-  collection,
-  getDocs,
-  doc,
-  getDoc,
-} from "firebase/firestore";
-import { app } from "@/lib/firebase/firebaseClient";
 import Link from "next/link";
 import { Calendar, Users, Crown } from "lucide-react";
-import { COLLECTIONS } from "@/lib/utility_collection";
 import UserPageHeader from "@/components/user/UserPageHeader";
-
-const db = getFirestore(app);
+import { fetchUserConclaves } from "@/services/conclaveService";
 
 export default function AllConclaves() {
   const [events, setEvents] = useState([]);
-  const [leaderNames, setLeaderNames] = useState({});
 
   /* ================= FETCH CONCLAVES ================= */
   useEffect(() => {
     const fetchAllConclaves = async () => {
       try {
-        const snapshot = await getDocs(
-          collection(db, COLLECTIONS.conclaves)
-        );
-
-        const conclaveList = snapshot.docs.map((docSnap) => {
-          const data = docSnap.data();
-          return {
-            id: docSnap.id,
-            ...data,
-            orbiterCount: data.orbiters?.length || 0,
-            ntMemberCount: data.ntMembers?.length || 0,
-          };
-        });
-
+        const conclaveList = await fetchUserConclaves();
         setEvents(conclaveList);
-
-        // Fetch leader names
-        const namesMap = {};
-        for (const conclave of conclaveList) {
-          if (conclave.leader && !namesMap[conclave.leader]) {
-            const userRef = doc(db, "userdetails", conclave.leader);
-            const userDoc = await getDoc(userRef);
-            namesMap[conclave.leader] =
-              userDoc.exists()
-                ? userDoc.data()[" Name"]
-                : "User";
-          }
-        }
-
-        setLeaderNames(namesMap);
-
       } catch (error) {
         console.error("Error fetching conclaves:", error);
       }
@@ -154,7 +114,7 @@ export default function AllConclaves() {
 
                 <div className="flex items-center gap-2 text-orange-600">
                   <Crown size={16} />
-                  {leaderNames[conclave.leader] || "Loading..."}
+                  {conclave.leaderName || "User"}
                 </div>
 
               </div>

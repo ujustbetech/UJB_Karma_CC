@@ -2,10 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { X } from "lucide-react";
-import { doc, updateDoc } from "firebase/firestore";
+import { updateUserProfile } from "@/services/profileService";
 import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
-import { db } from "@/lib/firebase/firebaseClient";
-import { COLLECTIONS } from "@/lib/utility_collection";
 
 const PERSONAL_KYC_FIELDS = [
   { key: "panCard", label: "Upload PAN Card" },
@@ -76,7 +74,7 @@ export default function EditPersonalKycSheet({
         personalKYC: nextPersonalKyc,
       };
 
-      await updateDoc(doc(db, COLLECTIONS.userDetail, userDocId), payload);
+      await updateUserProfile(payload);
 
       if (typeof setUser === "function") {
         setUser((prev) => ({
@@ -168,3 +166,4 @@ function InputField({ label, value, onChange }) {
     </div>
   );
 }
+

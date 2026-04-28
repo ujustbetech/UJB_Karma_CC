@@ -25,6 +25,7 @@ export default function ReferralDashboardMobile({
     referral,
     userRole,
     currentUserUjbCode,
+    onReferralUpdated,
 }) {
     const [activeTab, setActiveTab] = useState("overview");
     const [showInvoiceModal, setShowInvoiceModal] = useState(false);
@@ -174,12 +175,18 @@ export default function ReferralDashboardMobile({
                     referral={referral}
                     userRole={userRole}
                     openInvoice={() => setShowInvoiceModal(true)}
+                    onReferralUpdated={onReferralUpdated}
                 />
             )}
 
             {activeTab === "payments" && <PaymentsTab referral={referral} />}
             {activeTab === "service" && <ServiceTab referral={referral} />}
-            {activeTab === "stakeholders" && <StakeholdersTab referral={referral} />}
+            {activeTab === "stakeholders" && (
+                <StakeholdersTab
+                    referral={referral}
+                    currentUserUjbCode={currentUserUjbCode}
+                />
+            )}
             {activeTab === "invoice" && <InvoiceTab referral={referral} />}
             {activeTab === "discussion" && (
                 <DiscussionTab

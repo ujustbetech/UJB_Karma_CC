@@ -2,14 +2,13 @@
 
 import { useState, useEffect } from "react";
 import { X } from "lucide-react";
-import { doc, updateDoc } from "firebase/firestore";
+import { updateUserProfile } from "@/services/profileService";
 import {
     ref,
     uploadBytes,
     getDownloadURL,
 } from "firebase/storage";
-import { db, storage } from "@/lib/firebase/firebaseClient";
-import { COLLECTIONS } from "@/lib/utility_collection";
+import { storage } from "@/lib/firebase/firebaseClient";
 
 
 export default function EditBusinessSheet({
@@ -163,9 +162,7 @@ export default function EditBusinessSheet({
 
             setLoading(true);
 
-            await updateDoc(
-                doc(db, COLLECTIONS.userDetail, userDocId),
-                form
+            await updateUserProfile(form
             );
 
             if (typeof setUser === "function") {
@@ -412,3 +409,4 @@ function Textarea({ label, value, onChange }) {
         </div>
     );
 }
+

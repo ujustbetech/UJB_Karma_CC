@@ -2,20 +2,10 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
-import {
-  getFirestore,
-  doc,
-  getDoc,
-  collection,
-  getDocs,
-} from "firebase/firestore";
-import { app } from "@/lib/firebase/firebaseClient";
 import Link from "next/link";
 import { Calendar, Video, MapPin, Crown, CalendarDays } from "lucide-react";
-import { COLLECTIONS } from "@/lib/utility_collection";
 import UserPageHeader from "@/components/user/UserPageHeader";
-
-const db = getFirestore(app);
+import { fetchUserConclaveDetails } from "@/services/conclaveService";
 
 function formatMeetingDate(value) {
   if (typeof value?.seconds === "number") {
@@ -39,37 +29,17 @@ export default function ConclaveDetails() {
   useEffect(() => {
     if (!id) return;
 
-    const fetchConclave = async () => {
+    const fetchConclaveAndMeetings = async () => {
       try {
-        const conclaveRef = doc(db, COLLECTIONS.conclaves, id);
-        const snap = await getDoc(conclaveRef);
-
-        if (snap.exists()) {
-          setConclave(snap.data());
-        }
+        const data = await fetchUserConclaveDetails(id);
+        setConclave(data.conclave || null);
+        setMeetings(Array.isArray(data.meetings) ? data.meetings : []);
       } catch (error) {
         console.error("Error fetching conclave:", error);
       }
     };
 
-    const fetchMeetings = async () => {
-      try {
-        const meetingsRef = collection(db, COLLECTIONS.conclaves, id, "meetings");
-        const snap = await getDocs(meetingsRef);
-
-        setMeetings(
-          snap.docs.map((docSnap) => ({
-            id: docSnap.id,
-            ...docSnap.data(),
-          }))
-        );
-      } catch (error) {
-        console.error("Error fetching meetings:", error);
-      }
-    };
-
-    fetchConclave();
-    fetchMeetings();
+    fetchConclaveAndMeetings();
   }, [id]);
 
   const nextMeetingLabel = useMemo(() => {
@@ -174,8 +144,7 @@ export default function ConclaveDetails() {
 
                 <div className="flex items-center justify-between">
                   <Link
-                    href={`/user/conclave/meeting/${meeting.id}`}
-                    onClick={() => localStorage.setItem("conclaveId", id)}
+                    href={`/user/conclave/meeting/${meeting.id}?conclaveId=${id}`}
                     className="text-sm font-semibold text-indigo-600 hover:underline"
                   >
                     View Details

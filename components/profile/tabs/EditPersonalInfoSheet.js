@@ -2,9 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { X } from "lucide-react";
-import { doc, updateDoc } from "firebase/firestore";
-import { db } from "@/lib/firebase/firebaseClient";
-import { COLLECTIONS } from "@/lib/utility_collection";
+import { updateUserProfile } from "@/services/profileService";
 
 const SOCIAL_PLATFORM_OPTIONS = [
   "Facebook",
@@ -100,7 +98,7 @@ export default function EditPersonalInfoSheet({
             : "",
       };
 
-      await updateDoc(doc(db, COLLECTIONS.userDetail, userDocId), payload);
+      await updateUserProfile(payload);
 
       if (typeof setUser === "function") {
         setUser((prev) => ({
@@ -285,3 +283,4 @@ function TextAreaField({ label, value, onChange }) {
     </div>
   );
 }
+

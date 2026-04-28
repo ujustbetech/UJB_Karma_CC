@@ -27,7 +27,7 @@ export function proxy(req) {
     const adminToken = req.cookies.get(ADMIN_COOKIE_NAME)?.value;
 
     if (!adminToken) {
-      return NextResponse.redirect(new URL("/", req.url));
+      return NextResponse.redirect(new URL("/login", req.url));
     }
   }
 

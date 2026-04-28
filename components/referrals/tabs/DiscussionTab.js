@@ -1,89 +1,81 @@
 'use client';
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Send } from "lucide-react";
 import {
-  collection,
-  addDoc,
-  query,
-  orderBy,
-  onSnapshot,
-  serverTimestamp
-} from "firebase/firestore";
-import { db } from "@/lib/firebase/firebaseClient";
+  fetchReferralDiscussionMessages,
+  sendReferralDiscussionMessage,
+} from "@/services/referralService";
+
+function formatMessageTime(createdAt) {
+  if (!createdAt) {
+    return "";
+  }
+
+  const parsed = new Date(createdAt).getTime();
+
+  if (Number.isNaN(parsed)) {
+    return "";
+  }
+
+  return new Date(parsed).toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
 
 export default function DiscussionTab({
   referralId,
-  currentUserUjbCode
+  currentUserUjbCode,
 }) {
 
   const [message, setMessage] = useState("");
   const [messages, setMessages] = useState([]);
   const messagesEndRef = useRef(null);
 
-  /* ===============================
-     LISTENER
-  ================================ */
-  useEffect(() => {
-
+  const loadMessages = useCallback(async () => {
     if (!referralId) return;
 
-    const q = query(
-      collection(db, "referrals", referralId, "discussionMessages"),
-      orderBy("createdAt", "asc")
-    );
-
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const msgs = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
-      setMessages(msgs);
-    });
-
-    return () => unsubscribe();
-
+    try {
+      const nextMessages = await fetchReferralDiscussionMessages(referralId);
+      setMessages(nextMessages);
+    } catch (error) {
+      console.error("Discussion load failed:", error);
+      setMessages([]);
+    }
   }, [referralId]);
 
-  /* ===============================
-     AUTO SCROLL
-  ================================ */
+  useEffect(() => {
+    loadMessages();
+  }, [loadMessages]);
+
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  /* ===============================
-     SEND MESSAGE
-  ================================ */
   const sendMessage = async () => {
-
     try {
-
       if (!message.trim()) return;
 
       if (!referralId) {
-        console.log("❌ referralId missing");
+        console.log("referralId missing");
         return;
       }
 
       if (!currentUserUjbCode) {
-        console.log("❌ currentUserUjbCode missing");
+        console.log("currentUserUjbCode missing");
         return;
       }
 
-      await addDoc(
-        collection(db, "referrals", referralId, "discussionMessages"),
-        {
-          text: message,
-          senderUjbCode: currentUserUjbCode,
-          createdAt: serverTimestamp()
-        }
-      );
+      const sentMessage = await sendReferralDiscussionMessage({
+        referralId,
+        text: message,
+      });
 
+      setMessages((prev) => [...prev, sentMessage].filter(Boolean));
       setMessage("");
-
     } catch (error) {
-      console.error("🔥 Firestore Error:", error);
+      console.error("Discussion send failed:", error);
     }
   };
 
@@ -94,7 +86,7 @@ export default function DiscussionTab({
 
         {messages.length === 0 && (
           <div className="text-center text-slate-400 text-sm mt-10">
-            Start discussion about this referral 👋
+            Start discussion about this referral
           </div>
         )}
 
@@ -102,6 +94,7 @@ export default function DiscussionTab({
 
           const isSender =
             msg.senderUjbCode === currentUserUjbCode;
+          const messageTime = formatMessageTime(msg.createdAt);
 
           return (
             <div
@@ -120,7 +113,7 @@ export default function DiscussionTab({
               >
                 {msg.text}
 
-                {msg.createdAt?.seconds && (
+                {messageTime && (
                   <div
                     className={`text-[10px] mt-1 text-right ${
                       isSender
@@ -128,12 +121,7 @@ export default function DiscussionTab({
                         : "text-slate-400"
                     }`}
                   >
-                    {new Date(
-                      msg.createdAt.seconds * 1000
-                    ).toLocaleTimeString([], {
-                      hour: "2-digit",
-                      minute: "2-digit"
-                    })}
+                    {messageTime}
                   </div>
                 )}
               </div>

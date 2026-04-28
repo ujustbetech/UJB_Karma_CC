@@ -1,11 +1,9 @@
 ﻿'use client';
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
-import { doc, onSnapshot } from "firebase/firestore";
-import { db } from "@/lib/firebase/firebaseClient";
-import { COLLECTIONS } from "@/lib/utility_collection";
 import { useAuth } from "@/context/authContext";
+import { fetchUserReferralDetails } from "@/services/referralService";
 
 import ReferralDashboardMobile from "@/components/referrals/ReferralDashboardMobile";
 import ReferralDetailsSkeleton from "@/components/referrals/ReferralDetailsSkeleton";
@@ -19,60 +17,31 @@ export default function ReferralDetailsPage() {
   const [loading, setLoading] = useState(true);
   const [userRole, setUserRole] = useState(null);
 
-  // âœ… Get from session (NOT localStorage)
   const currentUserUjbCode = sessionUser?.profile?.ujbCode;
 
-  useEffect(() => {
-
+  const loadReferral = useCallback(async () => {
     if (!id) return;
 
-    const refDoc = doc(db, COLLECTIONS.referral, id);
+    setLoading(true);
 
-    const unsubscribe = onSnapshot(refDoc, (snap) => {
-
-      if (!snap.exists()) {
-        setReferral(null);
-        setLoading(false);
-        return;
-      }
-
-      const data = {
-        id: snap.id,
-        ...snap.data(),
-      };
-
-      setReferral(data);
-
-      if (!currentUserUjbCode) {
-        setUserRole("viewer");
-        setLoading(false);
-        return;
-      }
-
-      const cosmoCode =
-        data?.cosmoUjbCode || data?.cosmoOrbiter?.ujbCode;
-      const orbiterCode =
-        data?.orbiterUJBCode ||
-        data?.orbiter?.ujbCode ||
-        data?.orbiter?.UJBCode;
-
-      if (currentUserUjbCode === cosmoCode) {
-        setUserRole("cosmo");
-      }
-      else if (currentUserUjbCode === orbiterCode) {
-        setUserRole("orbiter");
-      }
-      else {
-        setUserRole("viewer");
-      }
-
+    try {
+      const data = await fetchUserReferralDetails(id);
+      setReferral(data.referral || null);
+      setUserRole(data.userRole || "viewer");
+    } catch (error) {
+      console.error("Referral load failed:", error);
+      setReferral(null);
+      setUserRole(null);
+    } finally {
       setLoading(false);
+    }
+  }, [id]);
 
-    });
+  useEffect(() => {
+    if (authLoading) return;
 
-    return () => unsubscribe();
-
-  }, [id, currentUserUjbCode]);
+    loadReferral();
+  }, [authLoading, loadReferral]);
 
   if (authLoading || loading) {
     return <ReferralDetailsSkeleton />;
@@ -91,6 +60,7 @@ export default function ReferralDetailsPage() {
       referral={referral}
       userRole={userRole}
       currentUserUjbCode={currentUserUjbCode}  // âœ… IMPORTANT
+      onReferralUpdated={loadReferral}
     />
   );
 }

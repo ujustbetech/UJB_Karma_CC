@@ -2,10 +2,8 @@
 
 import { useState, useEffect } from "react";
 import { X, Upload } from "lucide-react";
-import { db } from "@/lib/firebase/firebaseClient";
-import { doc, updateDoc } from "firebase/firestore";
+import { updateUserProfile } from "@/services/profileService";
 import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
-import { COLLECTIONS } from "@/lib/utility_collection";
 
 export default function EditHeroSheet({ open, setOpen, user, setUser, ujbCode }) {
 
@@ -48,7 +46,7 @@ export default function EditHeroSheet({ open, setOpen, user, setUser, ujbCode })
         throw new Error("User profile document not found");
       }
 
-      await updateDoc(doc(db, COLLECTIONS.userDetail, userDocId), {
+      await updateUserProfile({
         ProfilePhotoURL: downloadURL,
       });
 
@@ -74,7 +72,7 @@ export default function EditHeroSheet({ open, setOpen, user, setUser, ujbCode })
         throw new Error("User profile document not found");
       }
 
-      await updateDoc(doc(db, COLLECTIONS.userDetail, userDocId), {
+      await updateUserProfile({
         TagLine: tagline,
         City: city,
       });
@@ -214,3 +212,4 @@ export default function EditHeroSheet({ open, setOpen, user, setUser, ujbCode })
     </>
   );
 }
+
