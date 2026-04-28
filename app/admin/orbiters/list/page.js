@@ -205,10 +205,21 @@ export default function OrbitersListingPage() {
 
             {/* Colored Stats Cards */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
-                <Card className="bg-blue-50 border border-blue-100"><div className="flex items-center justify-between"><div><Text variant="h3">{totalUsers}</Text><Text variant="muted">Total Users</Text></div><Users className="text-blue-500" /></div></Card>
-                <Card className="bg-green-50 border border-green-100"><div className="flex items-center justify-between"><div><Text variant="h3">{totalOrbiters}</Text><Text variant="muted">Orbiter</Text></div><UserCheck className="text-green-500" /></div></Card>
-                <Card className="bg-purple-50 border border-purple-100"><div className="flex items-center justify-between"><div><Text variant="h3">{totalCosm}</Text><Text variant="muted">CosmOrbiter</Text></div><UserCog className="text-purple-500" /></div></Card>
-                <Card className="bg-orange-50 border border-orange-100"><div className="flex items-center justify-between"><div><Text variant="h3">{incomplete}</Text><Text variant="muted">Incomplete</Text></div><AlertCircle className="text-orange-500" /></div></Card>
+                <Card className="bg-blue-50 border border-blue-100">
+                    <div className="flex items-center justify-stretch gap-2">
+                        <Users className="text-blue-500" />
+                        <div className="flex items-center gap-1">
+                            <Text variant="h3">{totalUsers}</Text>
+                            <Text variant="muted">Total Users</Text>
+                        </div>
+                    </div>
+                </Card>
+                <Card className="bg-green-50 border border-green-100">
+                    <div className="flex items-center justify-stretch gap-2"><div className="flex items-center justify-stretch gap-2" ><UserCheck className="text-green-500" /><Text variant="h3">{totalOrbiters}</Text><Text variant="muted">Orbiter</Text></div></div></Card>
+                <Card className="bg-purple-50 border border-purple-100">
+                    <div className="flex items-center justify-stretch gap-2"><div className="flex items-center justify-stretch gap-2" ><UserCog className="text-purple-500" /><Text variant="h3">{totalCosm}</Text><Text variant="muted">CosmOrbiter</Text></div></div></Card>
+                <Card className="bg-orange-50 border border-orange-100">
+                    <div className="flex items-center justify-stretch gap-2"><div className="flex items-center justify-stretch gap-2" ><AlertCircle className="text-orange-500" /><Text variant="h3">{incomplete}</Text><Text variant="muted">Incomplete</Text></div></div></Card>
             </div>
 
             {/* Sticky Filter Bar */}
