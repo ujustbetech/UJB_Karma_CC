@@ -1,15 +1,6 @@
 "use client";
 
-import React, { useEffect, useState, useMemo } from "react";
-import {
-    collection,
-    query,
-    where,
-    getDocs,
-} from "firebase/firestore";
-import { db } from "@/lib/firebase/firebaseClient";
-import { useAuth } from "@/context/authContext";
-import { COLLECTIONS } from "@/lib/utility_collection";
+import React, { useEffect, useMemo, useState } from "react";
 import {
     User,
     Phone,
@@ -22,6 +13,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import UserPageHeader from "@/components/user/UserPageHeader";
+import { fetchUserProspects } from "@/services/prospectService";
 
 function toDateValue(value) {
     if (!value) return null;
@@ -45,14 +37,10 @@ function toDateValue(value) {
 function formatProspectDate(value) {
     if (!value) return "";
 
-    if (typeof value === "string") {
-        return value;
-    }
-
     const date = toDateValue(value);
 
     if (!date) {
-        return "";
+        return String(value || "");
     }
 
     return date.toLocaleString("en-IN", {
@@ -65,7 +53,6 @@ function formatProspectDate(value) {
 }
 
 export default function ProspectListPage() {
-    const { user, loading } = useAuth();
     const [isClosing, setIsClosing] = useState(false);
     const [prospects, setProspects] = useState([]);
     const [loadingData, setLoadingData] = useState(true);
@@ -73,66 +60,17 @@ export default function ProspectListPage() {
     const [selectedProspect, setSelectedProspect] = useState(null);
 
     useEffect(() => {
-        if (loading) return;
-
-        const ujbCode = user?.profile?.ujbCode;
-        const phone = user?.phone;
-
-        if (!ujbCode && !phone) {
-            setLoadingData(false);
-            return;
-        }
-
         const fetchProspects = async () => {
             try {
-                const collectionRef = collection(db, COLLECTIONS.prospect);
-                let results = [];
+                const results = await fetchUserProspects();
 
-                if (ujbCode) {
-                    const q1 = query(
-                        collectionRef,
-                        where("mentorUjbCode", "==", ujbCode)
-                    );
-                    const snap1 = await getDocs(q1);
-                    results = snap1.docs.map((doc) => {
-                        const data = doc.data();
-
-                        return {
-                            id: doc.id,
-                            ...data,
-                            date: formatProspectDate(data.date || data.registeredAt),
-                            registeredAt: toDateValue(data.registeredAt || data.date),
-                        };
-                    });
-                }
-
-                if (phone) {
-                    const q2 = query(
-                        collectionRef,
-                        where("orbiterContact", "==", phone)
-                    );
-                    const snap2 = await getDocs(q2);
-
-                    snap2.docs.forEach((doc) => {
-                        if (!results.find((p) => p.id === doc.id)) {
-                            const data = doc.data();
-
-                            results.push({
-                                id: doc.id,
-                                ...data,
-                                date: formatProspectDate(data.date || data.registeredAt),
-                                registeredAt: toDateValue(data.registeredAt || data.date),
-                            });
-                        }
-                    });
-                }
-
-                results.sort((a, b) => {
-                    if (!a.registeredAt || !b.registeredAt) return 0;
-                    return b.registeredAt.getTime() - a.registeredAt.getTime();
-                });
-
-                setProspects(results);
+                setProspects(
+                    results.map((prospect) => ({
+                        ...prospect,
+                        date: formatProspectDate(prospect.date || prospect.registeredAt),
+                        registeredAt: toDateValue(prospect.registeredAt || prospect.date),
+                    }))
+                );
             } catch (err) {
                 console.error(err);
             } finally {
@@ -141,7 +79,7 @@ export default function ProspectListPage() {
         };
 
         fetchProspects();
-    }, [user, loading]);
+    }, []);
 
     const filteredProspects = useMemo(() => {
         return prospects.filter((p) =>

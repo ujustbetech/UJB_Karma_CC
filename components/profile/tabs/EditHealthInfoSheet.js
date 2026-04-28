@@ -2,9 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { X } from "lucide-react";
-import { doc, updateDoc } from "firebase/firestore";
-import { db } from "@/lib/firebase/firebaseClient";
-import { COLLECTIONS } from "@/lib/utility_collection";
+import { updateUserProfile } from "@/services/profileService";
 
 export default function EditHealthInfoSheet({ open, setOpen, user, setUser = null }) {
   const [form, setForm] = useState({});
@@ -28,7 +26,7 @@ export default function EditHealthInfoSheet({ open, setOpen, user, setUser = nul
       const userDocId = user?.__docId;
       if (!userDocId) throw new Error("User profile document not found");
       setLoading(true);
-      await updateDoc(doc(db, COLLECTIONS.userDetail, userDocId), form);
+      await updateUserProfile(form);
       setUser?.((prev) => ({ ...prev, ...form }));
       setOpen(false);
     } catch (error) {
@@ -74,3 +72,4 @@ function TagField({ label, items, onChange }) {
   const [value, setValue] = useState("");
   return <div><label className="text-sm text-gray-500">{label}</label><div className="flex gap-2 mt-2"><input value={value} onChange={(e) => setValue(e.target.value)} className="flex-1 border border-gray-300 rounded-xl px-3 py-2 text-sm" /><button type="button" onClick={() => { const next = value.trim(); if (!next || items.includes(next)) return; onChange([...(items || []), next]); setValue(""); }} className="bg-orange-500 text-white px-4 rounded-xl text-sm">Add</button></div><div className="flex flex-wrap gap-2 mt-3">{(items || []).map((item) => <span key={item} onClick={() => onChange((items || []).filter((entry) => entry !== item))} className="px-3 py-1 text-xs rounded-full cursor-pointer bg-orange-100 text-orange-600">{item} ×</span>)}</div></div>;
 }
+

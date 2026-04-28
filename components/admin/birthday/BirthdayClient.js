@@ -71,7 +71,7 @@ export default function BirthdayClient() {
   const BirthdayRow = (user) => {
     const isSent = sentMessages.includes(user.id);
     const isSending = sendingUserId === user.id;
-
+    console.log({tomorrowList})
     return (
       <div
         key={user.id}

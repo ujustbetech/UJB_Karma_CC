@@ -2,9 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { X } from "lucide-react";
-import { db } from "@/lib/firebase/firebaseClient";
-import { doc, updateDoc } from "firebase/firestore";
-import { COLLECTIONS } from "@/lib/utility_collection";
+import { updateUserProfile } from "@/services/profileService";
 
 export default function EditAboutSheet({
     open,
@@ -95,9 +93,7 @@ export default function EditAboutSheet({
                 InterestArea: interests,
             };
 
-            await updateDoc(
-                doc(db, COLLECTIONS.userDetail, userDocId),
-                updatedData
+            await updateUserProfile(updatedData
             );
 
             if (typeof setUser === "function") {
@@ -460,5 +456,6 @@ function TextAreaBox({
         </div>
     );
 }
+
 
 

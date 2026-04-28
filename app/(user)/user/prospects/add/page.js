@@ -1,26 +1,17 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import {
-  doc,
-  getDoc,
-  addDoc,
-  collection,
-  serverTimestamp,
-} from "firebase/firestore";
-import { db } from "@/lib/firebase/firebaseClient";
-import { useAuth } from "@/context/authContext";
-import { COLLECTIONS } from "@/lib/utility_collection";
-
 import MentorInfo from "@/components/prospect/MentorInfo";
 import ProspectForm from "@/components/prospect/ProspectForm";
 import SuccessModal from "@/components/prospect/SuccessModal";
 import UserPageHeader from "@/components/user/UserPageHeader";
 import { UserPlus } from "lucide-react";
+import {
+  createUserProspect,
+  fetchCurrentUserProfile,
+} from "@/services/prospectService";
 
 export default function UserAddProspect() {
-  const { user, loading } = useAuth();
-
   const [mentor, setMentor] = useState(null);
   const [loadingMentor, setLoadingMentor] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -35,83 +26,34 @@ export default function UserAddProspect() {
     source: "close_connect",
   });
 
-  // 🔹 Fetch Mentor using ujbCode
   useEffect(() => {
-    if (loading) return;
-
     setLoadingMentor(true);
 
-    const ujbCode = user?.profile?.ujbCode;
-
-    if (!ujbCode) {
-      setLoadingMentor(false);
-      return;
-    }
-
-    const fetchMentor = async () => {
+    const loadMentor = async () => {
       try {
-        const snap = await getDoc(
-          doc(db, "usersdetail", ujbCode)
-        );
-
-        if (snap.exists()) {
-          setMentor({ id: snap.id, ...snap.data() });
-        }
-      } catch (error) {
-        // Optional error handling
+        const profile = await fetchCurrentUserProfile();
+        setMentor(profile);
+      } catch {
+        setMentor(null);
       } finally {
         setLoadingMentor(false);
       }
     };
 
-    fetchMentor();
-  }, [user, loading]);
+    loadMentor();
+  }, []);
 
   const handleChange = (field, value) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
   };
 
-  // 🔥 Updated Submit (Old Structure + mentorUjbCode)
   const handleSubmit = async () => {
     if (submitting) return;
 
     try {
       setSubmitting(true);
+      await createUserProspect(formData);
 
-      const now = new Date();
-
-      const formattedDate = now.toLocaleString("en-IN", {
-        day: "2-digit",
-        month: "long",
-        year: "2-digit",
-        hour: "2-digit",
-        minute: "2-digit",
-      });
-
-      await addDoc(collection(db, COLLECTIONS.prospect), {
-        // Prospect Info
-        prospectName: formData.prospectName,
-        prospectPhone: formData.prospectPhone,
-        email: formData.prospectEmail || "",
-        occupation: formData.occupation,
-        hobbies: formData.hobbies,
-        source: formData.source,
-
-        // Old Structure Fields
-        orbiterName: mentor?.Name || user?.profile?.name || "",
-        orbiterContact: user?.phone || "",
-        orbiterEmail: mentor?.Email || "",
-
-        // New (Future Safe)
-        mentorUjbCode: user?.profile?.ujbCode || "",
-
-        // Meta
-        date: formattedDate,
-        registeredAt: serverTimestamp(),
-        userType: "orbiter",
-      });
-
-      // Reset form
       setFormData({
         prospectName: "",
         prospectPhone: "",
@@ -122,9 +64,8 @@ export default function UserAddProspect() {
       });
 
       setShowSuccess(true);
-
-    } catch (err) {
-      // Optional error handling
+    } catch (error) {
+      console.error(error);
     } finally {
       setSubmitting(false);
     }
@@ -134,15 +75,12 @@ export default function UserAddProspect() {
     <>
       <div className="min-h-screen py-8">
         <div className="max-w-4xl mx-auto space-y-6">
-
-          {/* Header */}
           <UserPageHeader
             title="Add Prospect"
             description="Register a new lead under your network and keep your prospect pipeline fresh and organized."
             icon={UserPlus}
           />
 
-          {/* Mentor Section */}
           <div className="bg-white border border-slate-200 rounded-2xl shadow-sm">
             {loadingMentor ? (
               <div className="p-6 animate-pulse space-y-4">
@@ -152,13 +90,10 @@ export default function UserAddProspect() {
             ) : mentor ? (
               <MentorInfo mentor={mentor} />
             ) : (
-              <div className="p-6 text-sm text-red-500">
-                Mentor not found.
-              </div>
+              <div className="p-6 text-sm text-red-500">Mentor not found.</div>
             )}
           </div>
 
-          {/* Form Section */}
           <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
             <ProspectForm
               formData={formData}
@@ -167,11 +102,9 @@ export default function UserAddProspect() {
               submitting={submitting}
             />
           </div>
-
         </div>
       </div>
 
-      {/* Success Modal */}
       <SuccessModal
         open={showSuccess}
         onClose={() => setShowSuccess(false)}

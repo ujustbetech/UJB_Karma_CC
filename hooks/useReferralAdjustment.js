@@ -1,88 +1,40 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import {
-  collection,
-  doc,
-  getDocs,
-  query,
-  updateDoc,
-  where,
-  arrayUnion,
-} from "firebase/firestore";
-
-import { db } from "@/lib/firebase/firebaseClient";
+import { useCallback, useEffect, useState } from "react";
 import { COLLECTIONS } from "@/lib/utility_collection";
-import { applyAdjustmentBeforePayRoleCalc } from "@/utils/referralCalculations";
-import sanitizeForFirestore from "@/utils/sanitizeForFirestore";
+import {
+  applyCcReferralAdjustment,
+  previewCcReferralAdjustment,
+} from "@/services/ccReferralService";
 
-/**
- * 🔐 SINGLE SOURCE OF TRUTH
- * COLLECTION.userDetail → payment.orbiter.adjustmentRemaining
- *
- * COLLECTION.referral → VIEW ONLY
- */
 export const useReferralAdjustment = (
   referralId,
   orbiterUjbCode,
-  { collectionName = COLLECTIONS.referral } = {}
+  { collectionName = COLLECTIONS.referral, orbiterProfile = null, onRefresh = null } = {}
 ) => {
   const [loading, setLoading] = useState(false);
   const [loadingInit, setLoadingInit] = useState(false);
   const [error, setError] = useState(null);
-
-  // UI-only cache (NOT used for business logic)
   const [profileDocId, setProfileDocId] = useState(null);
   const [globalRemaining, setGlobalRemaining] = useState(0);
   const [feeType, setFeeType] = useState("adjustment");
 
-  const initLoaded = useRef(false);
-
-  /* --------------------------------------------------
-     LOAD ORBITER ADJUSTMENT BUCKET (UI DISPLAY ONLY)
-  -------------------------------------------------- */
-  const loadProfileAdjustment = useCallback(async () => {
-    if (!orbiterUjbCode || initLoaded.current) return;
-    initLoaded.current = true;
+  useEffect(() => {
+    setLoadingInit(true);
 
     try {
-      setLoadingInit(true);
-
-      const q = query(
-        collection(db, COLLECTIONS.userDetail),
-        where("UJBCode", "==", orbiterUjbCode)
-      );
-
-      const snap = await getDocs(q);
-      if (snap.empty) return;
-
-      const d = snap.docs[0];
-      const orb = d.data()?.payment?.orbiter || {};
-
-      const remaining = Math.max(
-        Number(orb.adjustmentRemaining ?? 0),
-        0
-      );
-
-      setProfileDocId(d.id);
-      setGlobalRemaining(remaining);
-      setFeeType(orb.feeType || "adjustment");
+      const bucket = orbiterProfile?.payment?.orbiter || {};
+      setProfileDocId(orbiterProfile?.id || orbiterProfile?.ujbCode || null);
+      setGlobalRemaining(Math.max(Number(bucket.adjustmentRemaining ?? 0), 0));
+      setFeeType(bucket.feeType || "adjustment");
     } catch (e) {
       console.error(e);
       setError("Failed to load adjustment bucket");
     } finally {
       setLoadingInit(false);
     }
-  }, [orbiterUjbCode]);
+  }, [orbiterProfile]);
 
-  useEffect(() => {
-    initLoaded.current = false;
-    loadProfileAdjustment();
-  }, [loadProfileAdjustment]);
-
-  /* --------------------------------------------------
-     APPLY ADJUSTMENT (PREVIEW OR COMMIT)
-  -------------------------------------------------- */
   const applyAdjustmentForRole = useCallback(
     async ({
       role,
@@ -93,136 +45,65 @@ export const useReferralAdjustment = (
       previewOnly = false,
     }) => {
       const req = Math.max(0, Number(requestedAmount || 0));
-      if (!ujbCode || req <= 0) {
+
+      if (!ujbCode || req <= 0 || collectionName !== "CCReferral") {
         return { cashToPay: req, deducted: 0 };
       }
 
-      /* ---------- LOAD USERDETAIL (AUTHORITATIVE) ---------- */
-      let targetDocId = null;
-      let bucketRemaining = 0;
-      let bucketFeeType = "adjustment";
-      let existingLogs = [];
+      setLoading(true);
+      setError(null);
 
-      const q = query(
-        collection(db, COLLECTIONS.userDetail),
-        where("UJBCode", "==", ujbCode)
-      );
+      try {
+        const data = previewOnly
+          ? await previewCcReferralAdjustment({
+              id: referralId,
+              role,
+              requestedAmount: req,
+              dealValue,
+              ujbCode,
+            })
+          : await applyCcReferralAdjustment({
+              id: referralId,
+              role,
+              requestedAmount: req,
+              dealValue,
+              ujbCode,
+            });
 
-      const snap = await getDocs(q);
-      if (!snap.empty) {
-        const d = snap.docs[0];
-        targetDocId = d.id;
+        const adjustment = data.adjustment || {};
 
-        const orb = d.data()?.payment?.orbiter || {};
-        bucketRemaining = Math.max(Number(orb.adjustmentRemaining ?? 0), 0);
-        bucketFeeType = orb.feeType || "adjustment";
-        existingLogs = Array.isArray(orb.adjustmentLogs)
-          ? orb.adjustmentLogs
-          : [];
-      }
-
-      if (!targetDocId || bucketRemaining <= 0) {
-        return {
-          cashToPay: req,
-          deducted: 0,
-          newGlobalRemaining: bucketRemaining,
-          previewOnly,
-        };
-      }
-
-      /* ---------- CALC ---------- */
-      const {
-        deducted,
-        remainingForCash,
-        newGlobalRemaining,
-        logEntry,
-      } = applyAdjustmentBeforePayRoleCalc({
-        requestedAmount: req,
-        userDetailData: {
-          adjustmentRemaining: bucketRemaining,
-          feeType: bucketFeeType,
-        },
-        referral,
-        dealValue,
-        role,
-        ujbCode,
-      });
-
-      if (previewOnly) {
-        return {
-          previewOnly: true,
-          deducted,
-          cashToPay: remainingForCash,
-          newGlobalRemaining,
-        };
-      }
-
-      if (!deducted || deducted <= 0) {
-        return {
-          cashToPay: remainingForCash,
-          deducted: 0,
-          newGlobalRemaining: bucketRemaining,
-        };
-      }
-
-      // ONLY CHANGE SHOWN (DO NOT REMOVE OTHER CODE)
-
-      const safeLog = sanitizeForFirestore({
-        id: `adj_${Date.now()}`, // ✅ REQUIRED for multiple logs
-        ...logEntry,
-        previousRemaining: bucketRemaining,
-        newRemaining: Math.max(newGlobalRemaining, 0),
-        createdAt: new Date().toISOString(),
-        _v: 1,
-      });
-
-
-      /* ---------- WRITE ---------- */
-      await updateDoc(
-        doc(db, COLLECTIONS.userDetail, targetDocId),
-        {
-          "payment.orbiter.adjustmentRemaining": newGlobalRemaining,
-          "payment.orbiter.adjustmentCompleted": newGlobalRemaining === 0,
-          "payment.orbiter.adjustmentLogs": arrayUnion(safeLog),
+        if (!previewOnly) {
+          setGlobalRemaining(
+            Math.max(Number(adjustment.newGlobalRemaining || 0), 0)
+          );
+          await onRefresh?.();
         }
-      );
 
-      if (referral?.id) {
-        await updateDoc(
-          doc(db, collectionName, referral.id),
-          {
-            adjustmentLogs: arrayUnion({
-              type: safeLog.type,
-              role: safeLog.role,
-              deducted: safeLog.deducted,
-              remainingForCash: safeLog.remainingForCash,
-              dealValue: safeLog.dealValue,
-              ujbCode: safeLog.ujbCode,
-              createdAt: safeLog.createdAt,
-            }),
-          }
-        );
+        return {
+          previewOnly,
+          deducted: Number(adjustment.deducted || 0),
+          cashToPay: Number(adjustment.cashToPay || req),
+          newGlobalRemaining: Number(adjustment.newGlobalRemaining || 0),
+          logEntry: adjustment.logEntry,
+        };
+      } catch (e) {
+        console.error(e);
+        setError("Failed to apply adjustment");
+        throw e;
+      } finally {
+        setLoading(false);
       }
-
-      return {
-        cashToPay: remainingForCash,
-        deducted,
-        newGlobalRemaining,
-        logEntry: safeLog,
-      };
     },
-    [orbiterUjbCode, collectionName]
+    [collectionName, onRefresh, referralId]
   );
-
 
   return {
     loading,
     loadingInit,
     error,
     profileDocId,
-    globalRemaining, // UI display only
+    globalRemaining,
     feeType,
     applyAdjustmentForRole,
   };
 };
-

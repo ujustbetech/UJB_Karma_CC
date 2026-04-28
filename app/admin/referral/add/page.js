@@ -1,23 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
-import {
-    collection,
-    getDocs,
-    addDoc,
-    doc,
-    getDoc,
-    query,
-    where,
-    setDoc,
-    updateDoc,
-    serverTimestamp,
-} from 'firebase/firestore';
-
-import { db } from '@/lib/firebase/firebaseClient';
-import { COLLECTIONS } from '@/lib/utility_collection';
-
-import AdminLayout from '@/components/layout/AdminLayout';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Card from '@/components/ui/Card';
 import Text from '@/components/ui/Text';
 import Button from '@/components/ui/Button';
@@ -26,859 +9,367 @@ import Select from '@/components/ui/Select';
 import Textarea from '@/components/ui/Textarea';
 import FormField from '@/components/ui/FormField';
 import { useToast } from '@/components/ui/ToastProvider';
-
 import { UserPlus, Users, Briefcase, Settings } from 'lucide-react';
-import { sendWhatsAppTemplateRequest } from '@/utils/whatsappClient';
 
 export default function AddReferralPage() {
-    const toast = useToast();
-    const firstFieldRef = useRef(null);
+  const toast = useToast();
+  const firstFieldRef = useRef(null);
 
-    const [users, setUsers] = useState([]);
-    const [filteredOrbiters, setFilteredOrbiters] = useState([]);
-    const [filteredCosmos, setFilteredCosmos] = useState([]);
+  const [users, setUsers] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
 
-    const [orbiterSearch, setOrbiterSearch] = useState('');
-    const [cosmoSearch, setCosmoSearch] = useState('');
+  const [orbiterSearch, setOrbiterSearch] = useState('');
+  const [cosmoSearch, setCosmoSearch] = useState('');
+  const [selectedOrbiter, setSelectedOrbiter] = useState(null);
+  const [selectedCosmo, setSelectedCosmo] = useState(null);
+  const [selectedServiceName, setSelectedServiceName] = useState('');
+  const [selectedProductName, setSelectedProductName] = useState('');
+  const [dealStatus, setDealStatus] = useState('Pending');
+  const [refType, setRefType] = useState('Self');
+  const [leadDescription, setLeadDescription] = useState('');
+  const [referralSource, setReferralSource] = useState('MonthlyMeeting');
+  const [otherReferralSource, setOtherReferralSource] = useState('');
+  const [otherName, setOtherName] = useState('');
+  const [otherPhone, setOtherPhone] = useState('');
+  const [otherEmail, setOtherEmail] = useState('');
+  const [errors, setErrors] = useState({});
 
-    const [selectedOrbiter, setSelectedOrbiter] = useState(null);
-    const [selectedCosmo, setSelectedCosmo] = useState(null);
+  useEffect(() => {
+    firstFieldRef.current?.focus();
+  }, []);
 
-    const [services, setServices] = useState([]);
-    const [products, setProducts] = useState([]);
-    const [selectedService, setSelectedService] = useState(null);
-    const [selectedProduct, setSelectedProduct] = useState(null);
-
-    const [dealStatus, setDealStatus] = useState('Pending');
-    const [refType, setRefType] = useState('Self');
-    const [leadDescription, setLeadDescription] = useState('');
-
-    const [referralSource, setReferralSource] = useState('MonthlyMeeting');
-    const [otherReferralSource, setOtherReferralSource] = useState('');
-
-    const [otherName, setOtherName] = useState('');
-    const [otherPhone, setOtherPhone] = useState('');
-    const [otherEmail, setOtherEmail] = useState('');
-
-    const [errors, setErrors] = useState({});
-    const [saving, setSaving] = useState(false);
-
-    const offeringRef = useRef(null);
-    const dealRef = useRef(null);
-    const [pageLoading, setPageLoading] = useState(true);
-
-    const clearError = (field) =>
-        setErrors((p) => ({
-            ...p,
-            [field]: '',
-        }));
-
-    useEffect(() => {
-        firstFieldRef.current?.focus();
-    }, []);
-
-    useEffect(() => {
-        if (selectedCosmo) {
-            offeringRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        }
-    }, [selectedCosmo]);
-
-    useEffect(() => {
-        if (selectedService || selectedProduct) {
-            dealRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        }
-    }, [selectedService, selectedProduct]);
-
-
-    /* ================= LOAD USERS ================= */
-    useEffect(() => {
-        const load = async () => {
-            setPageLoading(true);
-
-            const snap = await getDocs(collection(db, COLLECTIONS.userDetail));
-            const data = snap.docs.map((d) => ({
-                id: d.id,
-                name: d.data().Name || '',
-                phone: d.data().MobileNo || '',
-                category: d.data().Category || '',
-            }));
-
-            setUsers(data);
-            setPageLoading(false);
-        };
-        load();
-    }, []);
-
-
-    /* ================= AUTOSUGGEST ================= */
-    const handleOrbiterSearch = (value) => {
-        setOrbiterSearch(value);
-        setSelectedOrbiter(null);
-        clearError('orbiter');
-
-        if (!value) return setFilteredOrbiters([]);
-
-        setFilteredOrbiters(
-            users.filter((u) =>
-                u.name.toLowerCase().includes(value.toLowerCase())
-            )
-        );
-    };
-
-    const handleCosmoSearch = (value) => {
-        setCosmoSearch(value);
-        setSelectedCosmo(null);
-        clearError('cosmo');
-
-        if (!value) return setFilteredCosmos([]);
-
-        setFilteredCosmos(
-            users.filter(
-                (u) =>
-                    u.category.toLowerCase().includes('cosmo') &&
-                    u.name.toLowerCase().includes(value.toLowerCase())
-            )
-        );
-    };
-
-    const selectOrbiter = (u) => {
-        setSelectedOrbiter(u);
-        setOrbiterSearch(u.name);
-        setFilteredOrbiters([]);
-    };
-
-    const selectCosmo = async (u) => {
-        setSelectedCosmo(u);
-        setCosmoSearch(u.name);
-        setFilteredCosmos([]);
-
-        const snap = await getDoc(doc(db, COLLECTIONS.userDetail, u.id));
-        if (snap.exists()) {
-            const data = snap.data();
-            setServices(data.services || []);
-            setProducts(data.products || []);
-        }
-    };
-
-    /* ================= VALIDATION ================= */
-    const validate = () => {
-        const e = {};
-        if (!selectedOrbiter) e.orbiter = 'Select orbiter';
-        if (!selectedCosmo) e.cosmo = 'Select cosmo';
-        if (!selectedService && !selectedProduct)
-            e.service = 'Select service or product';
-        setErrors(e);
-        return Object.keys(e).length === 0;
-    };
-
-    /* ================= SUBMIT ================= */
-    /* ================= CP + MENTOR + WHATSAPP HELPERS ================= */
-
-    const ensureCpBoardUser = async (orbiter) => {
-        if (!orbiter?.ujbCode) return;
-
-        const ref = doc(db, "CPBoard", orbiter.ujbCode);
-        const snap = await getDoc(ref);
-
-        if (!snap.exists()) {
-            await setDoc(ref, {
-                id: orbiter.ujbCode,
-                name: orbiter.name,
-                phoneNumber: orbiter.phone,
-                role: "Orbiter",
-                totals: { R: 0, H: 0, W: 0 },
-                createdAt: serverTimestamp(),
-            });
-        }
-    };
-
-    const updateCategoryTotals = async (orbiter, categories, points) => {
-        const ref = doc(db, "CPBoard", orbiter.ujbCode);
-        const snap = await getDoc(ref);
-        if (!snap.exists()) return;
-
-        const totals = snap.data().totals || { R: 0, H: 0, W: 0 };
-        const split = Math.floor(points / categories.length);
-
-        const updated = { ...totals };
-        categories.forEach((c) => {
-            updated[c] = (updated[c] || 0) + split;
+  useEffect(() => {
+    const loadUsers = async () => {
+      try {
+        const res = await fetch('/api/admin/orbiters?view=full', {
+          credentials: 'include',
         });
-
-        await updateDoc(ref, {
-            totals: updated,
-            lastUpdatedAt: serverTimestamp(),
-        });
+        const payload = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(payload.message || 'Failed to load users');
+        setUsers(Array.isArray(payload.users) ? payload.users : []);
+      } catch (error) {
+        toast.error(error.message || 'Failed to load users');
+      } finally {
+        setLoading(false);
+      }
     };
+    loadUsers();
+  }, [toast]);
 
-    const addCpForSelfReferral = async (orbiter, cosmoName) => {
-        await ensureCpBoardUser(orbiter);
+  const filteredOrbiters = useMemo(() => {
+    const term = orbiterSearch.toLowerCase();
+    if (!term || selectedOrbiter) return [];
+    return users
+      .filter((u) => String(u.Name || '').toLowerCase().includes(term))
+      .slice(0, 8);
+  }, [users, orbiterSearch, selectedOrbiter]);
 
-        const q = query(
-            collection(db, "CPBoard", orbiter.ujbCode, "activities"),
-            where("activityNo", "==", "DIP_SELF"),
-            where("cosmoName", "==", cosmoName)
-        );
+  const filteredCosmos = useMemo(() => {
+    const term = cosmoSearch.toLowerCase();
+    if (!term || selectedCosmo) return [];
+    return users
+      .filter((u) => String(u.Category || '').toLowerCase().includes('cosmo'))
+      .filter((u) => String(u.Name || '').toLowerCase().includes(term))
+      .slice(0, 8);
+  }, [users, cosmoSearch, selectedCosmo]);
 
-        const snap = await getDocs(q);
-        if (!snap.empty) return;
+  const serviceOptions = useMemo(() => {
+    const list = Array.isArray(selectedCosmo?.services) ? selectedCosmo.services : [];
+    return [{ label: 'Select Service', value: '' }, ...list.map((s) => ({ label: s.name || s.serviceName || '', value: s.name || s.serviceName || '' }))];
+  }, [selectedCosmo]);
 
-        const points = 100;
-        const categories = ["R"];
+  const productOptions = useMemo(() => {
+    const list = Array.isArray(selectedCosmo?.products) ? selectedCosmo.products : [];
+    return [{ label: 'Select Product', value: '' }, ...list.map((p) => ({ label: p.name || p.productName || '', value: p.name || p.productName || '' }))];
+  }, [selectedCosmo]);
 
-        await addDoc(
-            collection(db, "CPBoard", orbiter.ujbCode, "activities"),
-            {
-                activityNo: "DIP_SELF",
-                activityName: "Referral Identification by Self (DIP Status)",
-                points,
-                categories,
-                cosmoName,
-                source: "ReferralModule",
-                month: new Date().toLocaleString("default", {
-                    month: "short",
-                    year: "numeric",
-                }),
-                addedAt: serverTimestamp(),
-            }
-        );
-
-        await updateCategoryTotals(orbiter, categories, points);
-    };
-
-    const addCpForThirdPartyReferral = async (orbiter, thirdPartyName) => {
-        await ensureCpBoardUser(orbiter);
-
-        const q = query(
-            collection(db, "CPBoard", orbiter.ujbCode, "activities"),
-            where("activityNo", "==", "DIP_THIRD"),
-            where("thirdPartyName", "==", thirdPartyName)
-        );
-
-        const snap = await getDocs(q);
-        if (!snap.empty) return;
-
-        const points = 75;
-        const categories = ["R"];
-
-        await addDoc(
-            collection(db, "CPBoard", orbiter.ujbCode, "activities"),
-            {
-                activityNo: "DIP_THIRD",
-                activityName: "Referral passed for Third Party (DIP Status)",
-                points,
-                categories,
-                thirdPartyName,
-                source: "ReferralModule",
-                month: new Date().toLocaleString("default", {
-                    month: "short",
-                    year: "numeric",
-                }),
-                addedAt: serverTimestamp(),
-            }
-        );
-
-        await updateCategoryTotals(orbiter, categories, points);
-    };
-
-    const addCpForFirstReferral = async (orbiter) => {
-        await ensureCpBoardUser(orbiter);
-
-        const q = query(
-            collection(db, "CPBoard", orbiter.ujbCode, "activities"),
-            where("activityNo", "==", "DIP_FIRST")
-        );
-
-        const snap = await getDocs(q);
-        if (!snap.empty) return;
-
-        const points = 125;
-        const categories = ["R"];
-
-        await addDoc(
-            collection(db, "CPBoard", orbiter.ujbCode, "activities"),
-            {
-                activityNo: "DIP_FIRST",
-                activityName: "First Referral Bonus",
-                points,
-                categories,
-                source: "ReferralModule",
-                month: new Date().toLocaleString("default", {
-                    month: "short",
-                    year: "numeric",
-                }),
-                addedAt: serverTimestamp(),
-            }
-        );
-
-        await updateCategoryTotals(orbiter, categories, points);
-    };
-
-    // ================== WHATSAPP TEMPLATE (UNCHANGED) ==================
-    const sendWhatsAppTemplate = async (phone, name, message) => {
-        await sendWhatsAppTemplateRequest({
-            phone,
-            templateName: "referral_module",
-            parameters: [name, message],
-        });
-    };
-
-const resetForm = () => {
+  const resetForm = () => {
     setOrbiterSearch('');
     setCosmoSearch('');
-
     setSelectedOrbiter(null);
     setSelectedCosmo(null);
-
-    setFilteredOrbiters([]);
-    setFilteredCosmos([]);
-
-    setServices([]);
-    setProducts([]);
-
-    setSelectedService(null);
-    setSelectedProduct(null);
-
+    setSelectedServiceName('');
+    setSelectedProductName('');
     setDealStatus('Pending');
     setRefType('Self');
-
     setLeadDescription('');
-
     setReferralSource('MonthlyMeeting');
     setOtherReferralSource('');
-
     setOtherName('');
     setOtherPhone('');
     setOtherEmail('');
-
     setErrors({});
-};
-    const handleSubmit = async () => {
-        if (!validate()) return;
+  };
 
-        setSaving(true);
+  const validate = () => {
+    const next = {};
+    if (!selectedOrbiter) next.orbiter = 'Select orbiter';
+    if (!selectedCosmo) next.cosmo = 'Select cosmo';
+    if (!selectedServiceName && !selectedProductName) next.service = 'Select service or product';
+    if (refType === 'Others') {
+      if (!otherName.trim()) next.otherName = 'Name required';
+      if (!otherPhone.trim()) next.otherPhone = 'Phone required';
+      if (!otherEmail.trim()) next.otherEmail = 'Email required';
+    }
+    setErrors(next);
+    return Object.keys(next).length === 0;
+  };
 
-        try {
-            // Fetch FULL data using UJBCode
-            const orbiterSnap = await getDoc(
-                doc(db, COLLECTIONS.userDetail, selectedOrbiter.id)
-            );
-            const cosmoSnap = await getDoc(
-                doc(db, COLLECTIONS.userDetail, selectedCosmo.id)
-            );
+  const handleSubmit = async () => {
+    if (!validate()) return;
+    setSaving(true);
+    try {
+      const selectedService =
+        (Array.isArray(selectedCosmo?.services) ? selectedCosmo.services : []).find(
+          (s) => (s.name || s.serviceName || '') === selectedServiceName
+        ) || null;
+      const selectedProduct =
+        (Array.isArray(selectedCosmo?.products) ? selectedCosmo.products : []).find(
+          (p) => (p.name || p.productName || '') === selectedProductName
+        ) || null;
 
-            const orbiterData = orbiterSnap.data() || {};
-            const cosmoData = cosmoSnap.data() || {};
+      const selectedItem = selectedService
+        ? { type: 'service', label: selectedServiceName, raw: selectedService }
+        : { type: 'product', label: selectedProductName, raw: selectedProduct };
 
-            const response = await fetch('/api/admin/referrals', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                credentials: 'include',
-                body: JSON.stringify({
-                    selectedOrbiterId: selectedOrbiter.id,
-                    selectedCosmoId: selectedCosmo.id,
-                    selectedItem: selectedService
-                        ? {
-                              type: 'service',
-                              label: selectedService.name || selectedService.serviceName || '',
-                              raw: selectedService,
-                          }
-                        : {
-                              type: 'product',
-                              label: selectedProduct.name || selectedProduct.productName || '',
-                              raw: selectedProduct,
-                          },
-                    leadDescription,
-                    refType,
-                    referralSource,
-                    otherReferralSource,
-                    otherName,
-                    otherPhone,
-                    otherEmail,
-                    dealStatus,
-                }),
-            });
+      const res = await fetch('/api/admin/referrals', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          selectedOrbiterId: selectedOrbiter.id,
+          selectedCosmoId: selectedCosmo.id,
+          selectedItem,
+          leadDescription,
+          refType,
+          referralSource,
+          otherReferralSource,
+          otherName,
+          otherPhone,
+          otherEmail,
+          dealStatus,
+        }),
+      });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok || !payload?.success) {
+        throw new Error(payload?.message || 'Referral creation failed');
+      }
+      toast.success('Referral submitted successfully');
+      resetForm();
+      firstFieldRef.current?.focus();
+    } catch (error) {
+      toast.error(error.message || 'Submission failed');
+    } finally {
+      setSaving(false);
+    }
+  };
 
-            const responseData = await response.json().catch(() => ({}));
-
-            if (!response.ok || !responseData?.success) {
-                throw new Error(responseData?.message || 'Referral creation failed');
-            }
-
-            const referralId = responseData.referralId;
-
-            // CP Engine
-            const orbiter = {
-                ujbCode: orbiterData.UJBCode,
-                name: orbiterData.Name,
-                phone: orbiterData.MobileNo,
-            };
-
-            if (refType === "Self") {
-                await addCpForSelfReferral(orbiter, cosmoData.Name);
-            }
-
-            if (refType === "Others") {
-                await addCpForThirdPartyReferral(orbiter, otherName);
-            }
-
-            if (orbiterData.ReferralPassed === "No") {
-                await addCpForFirstReferral(orbiter);
-                await updateDoc(
-                    doc(db, COLLECTIONS.userDetail, selectedOrbiter.id),
-                    { ReferralPassed: "Yes" }
-                );
-            }
-
-            const serviceOrProductName =
-                selectedService?.name || selectedProduct?.name || "";
-
-            await Promise.all([
-                sendWhatsAppTemplate(
-                    orbiterData.MobileNo,
-                    orbiterData.Name,
-                    `You passed referral for ${serviceOrProductName} to ${cosmoData.Name}`
-                ),
-                sendWhatsAppTemplate(
-                    cosmoData.MobileNo,
-                    cosmoData.Name,
-                    `You received referral from ${orbiterData.Name} for ${serviceOrProductName}`
-                ),
-            ]);
-toast.success("Referral submitted successfully");
-
-resetForm(); // clear form
-
-setSaving(false);
-firstFieldRef.current?.focus(); // focus back to first field
-        } catch (err) {
-            console.error(err);
-            toast.error("Submission failed");
-            setSaving(false);
-        }
-    };
-
-
+  if (loading) {
     return (
-
-        <>
-            {pageLoading ? (
-                <div className="p-6 space-y-6">
-
-                    {/* Title Skeleton */}
-                    <div className="h-6 w-48 bg-gray-200 rounded animate-pulse" />
-
-                    {/* Step Header Skeleton */}
-                    <Card className="p-5">
-                        <div className="flex items-center justify-between">
-                            {[1, 2, 3].map((i, idx, arr) => (
-                                <div key={i} className="flex items-center flex-1">
-                                    <div className="flex items-center gap-3">
-                                        <div className="w-9 h-9 rounded-full bg-gray-200 animate-pulse" />
-                                        <div className="space-y-1">
-                                            <div className="w-20 h-3 bg-gray-200 rounded animate-pulse" />
-                                            <div className="w-28 h-2 bg-gray-200 rounded animate-pulse" />
-                                        </div>
-                                    </div>
-                                    {idx !== arr.length - 1 && (
-                                        <div className="flex-1 h-[2px] mx-6 bg-gray-200 animate-pulse" />
-                                    )}
-                                </div>
-                            ))}
-                        </div>
-                    </Card>
-
-                    {/* People Section Skeleton */}
-                    <Card className="p-6 space-y-5">
-                        <div className="h-5 w-32 bg-gray-200 rounded animate-pulse" />
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                            <div className="h-10 bg-gray-200 rounded animate-pulse" />
-                            <div className="h-10 bg-gray-200 rounded animate-pulse" />
-                        </div>
-                    </Card>
-
-                    {/* Offering Skeleton */}
-                    <Card className="p-6 space-y-5">
-                        <div className="h-5 w-32 bg-gray-200 rounded animate-pulse" />
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                            <div className="h-10 bg-gray-200 rounded animate-pulse" />
-                            <div className="h-10 bg-gray-200 rounded animate-pulse" />
-                        </div>
-                        <div className="h-20 bg-gray-200 rounded animate-pulse" />
-                    </Card>
-
-                    {/* Deal Section Skeleton */}
-                    <Card className="p-6 space-y-5">
-                        <div className="h-5 w-32 bg-gray-200 rounded animate-pulse" />
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                            <div className="h-10 bg-gray-200 rounded animate-pulse" />
-                            <div className="h-10 bg-gray-200 rounded animate-pulse" />
-                        </div>
-                        <div className="h-10 w-40 bg-gray-200 rounded animate-pulse ml-auto" />
-                    </Card>
-
-                </div>
-            ) : (
-
-                <div className="p-6 space-y-6">
-                    {/* PAGE HEADER */}
-                    <div className="flex items-center gap-2">
-                        <UserPlus className="w-5 h-5 text-blue-600" />
-                        <Text as="h1">Add Referral</Text>
-                    </div>
-
-                    {/* ===== Sticky Step Header ===== */}
-                    <div className="sticky top-0 z-30">
-                        <Card className="p-5">
-                            {(() => {
-                                // --- Completion logic ---
-                                const isPeopleDone = selectedOrbiter && selectedCosmo;
-                                const isOfferingDone = selectedService || selectedProduct;
-                                const isDealDone =
-                                    dealStatus &&
-                                    refType &&
-                                    referralSource &&
-                                    (refType !== 'Others' ||
-                                        (otherName && otherPhone && otherEmail));
-
-                                // current step index (1..4 where 4 = all done)
-                                const current = !isPeopleDone
-                                    ? 1
-                                    : !isOfferingDone
-                                        ? 2
-                                        : !isDealDone
-                                            ? 3
-                                            : 4;
-
-                                const steps = [
-                                    { id: 1, title: 'People', desc: 'Select Orbiter & Cosmo' },
-                                    { id: 2, title: 'Offering', desc: 'Service / Product' },
-                                    { id: 3, title: 'Deal', desc: 'Configure details' },
-                                ];
-
-                                return (
-                                    <div className="flex items-center justify-between">
-                                        {steps.map((step, idx) => {
-                                            const isActive = current === step.id;
-                                            const isCompleted = current > step.id;
-
-                                            return (
-                                                <div key={step.id} className="flex items-center flex-1">
-                                                    {/* Circle */}
-                                                    <div className="flex items-center gap-3">
-                                                        <div
-                                                            className={`w-9 h-9 flex items-center justify-center rounded-full border text-sm font-semibold
-                      ${isCompleted
-                                                                    ? 'bg-green-600 text-white border-green-600'
-                                                                    : isActive
-                                                                        ? 'bg-blue-600 text-white border-blue-600'
-                                                                        : 'bg-white text-gray-500 border-gray-300'
-                                                                }`}
-                                                        >
-                                                            {step.id}
-                                                        </div>
-
-                                                        <div>
-                                                            <Text as="h3">{step.title}</Text>
-                                                            <Text className="text-xs text-gray-500">{step.desc}</Text>
-                                                        </div>
-                                                    </div>
-
-                                                    {/* Connector */}
-                                                    {idx !== steps.length - 1 && (
-                                                        <div
-                                                            className={`flex-1 h-[2px] mx-6 ${current > step.id ? 'bg-green-600' : 'bg-gray-200'
-                                                                }`}
-                                                        />
-                                                    )}
-                                                </div>
-                                            );
-                                        })}
-                                    </div>
-                                );
-                            })()}
-                        </Card>
-                    </div>
-
-
-                    {(selectedOrbiter || selectedCosmo) && (
-                        <Card className="p-5">
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                {selectedOrbiter && (
-                                    <div>
-                                        <Text as="h3">Selected Orbiter</Text>
-                                        <Text className="text-sm text-gray-700">{selectedOrbiter.name}</Text>
-                                        <Text className="text-xs text-gray-500">{selectedOrbiter.phone}</Text>
-                                    </div>
-                                )}
-
-                                {selectedCosmo && (
-                                    <div>
-                                        <Text as="h3">Selected Cosmo</Text>
-                                        <Text className="text-sm text-gray-700">{selectedCosmo.name}</Text>
-                                        <Text className="text-xs text-gray-500">{selectedCosmo.phone}</Text>
-                                    </div>
-                                )}
-                            </div>
-                        </Card>
-                    )}
-
-
-                    {/* ================= PEOPLE ================= */}
-                    <Card ref={offeringRef} className="p-6 space-y-5">
-                        <div className="flex items-center gap-2">
-                            <Users className="w-4 h-4 text-blue-600" />
-                            <Text as="h2">Select People</Text>
-                        </div>
-
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                            {/* Orbiter */}
-                            <FormField label="Search Orbiter" error={errors.orbiter} required>
-                                <div className="relative">
-                                    <Input
-                                        ref={firstFieldRef}
-                                        value={orbiterSearch}
-                                        onChange={(e) => handleOrbiterSearch(e.target.value)}
-                                        error={!!errors.orbiter}
-                                        placeholder="Type member name"
-                                    />
-                                    {filteredOrbiters.length > 0 && (
-                                        <div className="absolute z-20 w-full mt-2 bg-white border border-slate-200 rounded-lg shadow max-h-56 overflow-auto">
-                                            {filteredOrbiters.map((u) => (
-                                                <div
-                                                    key={u.id}
-                                                    onClick={() => selectOrbiter(u)}
-                                                    className="px-4 py-2 cursor-pointer hover:bg-gray-50"
-                                                >
-                                                    <div className="text-sm font-medium">{u.name}</div>
-                                                    <div className="text-xs text-gray-500">{u.phone}</div>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    )}
-                                </div>
-                            </FormField>
-
-                            {/* Cosmo */}
-                            <FormField label="Search Cosmo Orbiter" error={errors.cosmo} required>
-                                <div className="relative">
-                                    <Input
-                                        value={cosmoSearch}
-                                        onChange={(e) => handleCosmoSearch(e.target.value)}
-                                        error={!!errors.cosmo}
-                                        placeholder="Type cosmo name"
-                                    />
-                                    {filteredCosmos.length > 0 && (
-                                        <div className="absolute z-20 w-full mt-2 bg-white border border-slate-200 rounded-lg  shadow max-h-56 overflow-auto">
-                                            {filteredCosmos.map((u) => (
-                                                <div
-                                                    key={u.id}
-                                                    onClick={() => selectCosmo(u)}
-                                                    className="px-4 py-2 cursor-pointer hover:bg-gray-50"
-                                                >
-                                                    <div className="text-sm font-medium">{u.name}</div>
-                                                    <div className="text-xs text-gray-500">{u.phone}</div>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    )}
-                                </div>
-                            </FormField>
-                        </div>
-                    </Card>
-
-                    {/* ================= OFFERING ================= */}
-                    {selectedCosmo && (
-                        <Card ref={dealRef} className="p-6 space-y-5">
-                            <div className="flex items-center gap-2">
-                                <Briefcase className="w-4 h-4 text-blue-600" />
-                                <Text as="h2">Offering</Text>
-                            </div>
-
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                                <FormField label="Service" error={errors.service}>
-                                    <Select
-                                        value={selectedService?.name || ''}
-                                        onChange={(val) => {
-                                            const found = services.find((s) => s.name === val);
-                                            setSelectedService(found || null);
-                                            setSelectedProduct(null);
-                                            clearError('service');
-                                        }}
-                                        options={[
-                                            { label: 'Select Service', value: '' },
-                                            ...services.map((s) => ({
-                                                label: s.name,
-                                                value: s.name,
-                                            })),
-                                        ]}
-                                    />
-                                </FormField>
-
-                                <FormField label="Product" error={errors.service}>
-                                    <Select
-                                        value={selectedProduct?.name || ''}
-                                        onChange={(val) => {
-                                            const found = products.find((p) => p.name === val);
-                                            setSelectedProduct(found || null);
-                                            setSelectedService(null);
-                                            clearError('service');
-                                        }}
-                                        options={[
-                                            { label: 'Select Product', value: '' },
-                                            ...products.map((p) => ({
-                                                label: p.name,
-                                                value: p.name,
-                                            })),
-                                        ]}
-                                    />
-                                </FormField>
-                            </div>
-
-                            {(selectedService || selectedProduct) && (
-                                <FormField label="Lead Description">
-                                    <Textarea
-                                        value={leadDescription}
-                                        onChange={(e) => setLeadDescription(e.target.value)}
-                                    />
-                                </FormField>
-                            )}
-                        </Card>
-                    )}
-
-                    {/* ================= DEAL SETTINGS ================= */}
-                    <Card className="p-6 space-y-5">
-                        <div className="flex items-center gap-2">
-                            <Settings className="w-4 h-4 text-blue-600" />
-                            <Text as="h2">Deal Details</Text>
-                        </div>
-
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                            <FormField label="Deal Status">
-                                <Select
-                                    value={dealStatus}
-                                    onChange={(val) => setDealStatus(val)}
-                                    options={[
-                                        { label: 'Pending', value: 'Pending' },
-                                        { label: 'Deal Won', value: 'Deal Won' },
-                                        { label: 'Deal Lost', value: 'Deal Lost' },
-                                        { label: 'Work in Progress', value: 'Work in Progress' },
-                                        { label: 'Work Completed', value: 'Work Completed' },
-                                    ]}
-                                />
-                            </FormField>
-
-                            <FormField label="Referral Type">
-                                <Select
-                                    value={refType}
-                                    onChange={(val) => setRefType(val)}
-                                    options={[
-                                        { label: 'Self', value: 'Self' },
-                                        { label: 'Others', value: 'Others' },
-                                    ]}
-                                />
-                            </FormField>
-                        </div>
-
-                        {refType === 'Others' && (
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                                <FormField label="Referrer Name">
-                                    <Input
-                                        value={otherName}
-                                        onChange={(e) => setOtherName(e.target.value)}
-                                    />
-                                </FormField>
-
-                                <FormField label="Referrer Phone">
-                                    <Input
-                                        value={otherPhone}
-                                        onChange={(e) => setOtherPhone(e.target.value)}
-                                    />
-                                </FormField>
-
-                                <FormField label="Referrer Email">
-                                    <Input
-                                        value={otherEmail}
-                                        onChange={(e) => setOtherEmail(e.target.value)}
-                                    />
-                                </FormField>
-                            </div>
-                        )}
-
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                            <FormField label="Referral Source">
-                                <Select
-                                    value={referralSource}
-                                    onChange={(val) => setReferralSource(val)}
-                                    options={[
-                                        { label: 'Monthly Meeting', value: 'MonthlyMeeting' },
-                                        { label: 'Conclave Meeting', value: 'ConclaveMeeting' },
-                                        { label: 'OTC Meeting', value: 'OTCMeeting' },
-                                        { label: 'Phone', value: 'Phone' },
-                                        { label: 'Other', value: 'Other' },
-                                    ]}
-                                />
-                            </FormField>
-
-                            {referralSource === 'Other' && (
-                                <FormField label="Other Source">
-                                    <Input
-                                        value={otherReferralSource}
-                                        onChange={(e) => setOtherReferralSource(e.target.value)}
-                                    />
-                                </FormField>
-                            )}
-                        </div>
-
-                        {/* <div className="flex justify-end pt-4">
-                        <Button
-                            variant="primary"
-                            onClick={handleSubmit}
-                            disabled={saving}
-                        >
-                            {saving ? 'Saving…' : 'Submit Referral'}
-                        </Button>
-                    </div> */}
-                        {selectedOrbiter && (
-                            <Card className="p-4 bg-blue-50 border">
-                                <Text as="h3">Contribution Points Preview</Text>
-
-                                <Text className="text-sm text-gray-700">
-                                    {refType === 'Self' && 'You will earn 100 CP for Self Referral'}
-                                    {refType === 'Others' && 'You will earn 75 CP for Third-Party Referral'}
-                                </Text>
-
-                                <Text className="text-xs text-gray-500 mt-1">
-                                    First referral bonus: +125 CP (auto applied once)
-                                </Text>
-                            </Card>
-                        )}
-                    </Card>
-
-                    {/* <div className="sticky bottom-0 bg-white border-t p-4 flex justify-end">
-                    <Button variant="primary" onClick={handleSubmit} disabled={saving}>
-                        {saving ? 'Saving…' : 'Submit Referral'}
-                    </Button>
-                </div> */}
-
-                    <div className="fixed bottom-0 left-0 right-0 z-40">
-                        <div className="max-w-[1400px] mx-auto px-6 pb-4">
-                            <Card className="flex items-center justify-between px-4 py-3 shadow-lg border">
-
-                                <Text className="text-sm text-slate-600">
-                                    Don’t forget to save your changes
-                                </Text>
-
-                                <Button variant="primary" onClick={handleSubmit} disabled={saving}>
-                                    {saving ? 'Saving…' : 'Submit Referral'}
-                                </Button>
-
-                            </Card>
-                        </div>
-                    </div>
-                </div>
-            )}
-        </>
+      <div className="p-6">
+        <Card className="p-6">
+          <div className="h-6 w-48 bg-gray-200 rounded animate-pulse" />
+        </Card>
+      </div>
     );
-}
+  }
 
+  return (
+    <div className="p-6 space-y-6">
+      <div className="flex items-center gap-2">
+        <UserPlus className="w-5 h-5 text-blue-600" />
+        <Text as="h1">Add Referral</Text>
+      </div>
+
+      <Card className="p-6 space-y-5">
+        <div className="flex items-center gap-2">
+          <Users className="w-4 h-4 text-blue-600" />
+          <Text as="h2">Select People</Text>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+          <FormField label="Search Orbiter" error={errors.orbiter} required>
+            <div className="relative">
+              <Input
+                ref={firstFieldRef}
+                value={orbiterSearch}
+                onChange={(e) => {
+                  setOrbiterSearch(e.target.value);
+                  setSelectedOrbiter(null);
+                }}
+                placeholder="Type member name"
+              />
+              {filteredOrbiters.length > 0 && (
+                <div className="absolute z-20 w-full mt-2 bg-white border border-slate-200 rounded-lg shadow max-h-56 overflow-auto">
+                  {filteredOrbiters.map((u) => (
+                    <div
+                      key={u.id}
+                      onClick={() => {
+                        setSelectedOrbiter({ id: u.id, name: u.Name || '', phone: u.MobileNo || '' });
+                        setOrbiterSearch(u.Name || '');
+                        setErrors((p) => ({ ...p, orbiter: '' }));
+                      }}
+                      className="px-4 py-2 cursor-pointer hover:bg-gray-50"
+                    >
+                      <div className="text-sm font-medium">{u.Name}</div>
+                      <div className="text-xs text-gray-500">{u.MobileNo}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </FormField>
+
+          <FormField label="Search Cosmo Orbiter" error={errors.cosmo} required>
+            <div className="relative">
+              <Input
+                value={cosmoSearch}
+                onChange={(e) => {
+                  setCosmoSearch(e.target.value);
+                  setSelectedCosmo(null);
+                }}
+                placeholder="Type cosmo name"
+              />
+              {filteredCosmos.length > 0 && (
+                <div className="absolute z-20 w-full mt-2 bg-white border border-slate-200 rounded-lg shadow max-h-56 overflow-auto">
+                  {filteredCosmos.map((u) => (
+                    <div
+                      key={u.id}
+                      onClick={() => {
+                        setSelectedCosmo(u);
+                        setCosmoSearch(u.Name || '');
+                        setSelectedServiceName('');
+                        setSelectedProductName('');
+                        setErrors((p) => ({ ...p, cosmo: '' }));
+                      }}
+                      className="px-4 py-2 cursor-pointer hover:bg-gray-50"
+                    >
+                      <div className="text-sm font-medium">{u.Name}</div>
+                      <div className="text-xs text-gray-500">{u.MobileNo}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </FormField>
+        </div>
+      </Card>
+
+      {selectedCosmo && (
+        <Card className="p-6 space-y-5">
+          <div className="flex items-center gap-2">
+            <Briefcase className="w-4 h-4 text-blue-600" />
+            <Text as="h2">Offering</Text>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+            <FormField label="Service" error={errors.service}>
+              <Select
+                value={selectedServiceName}
+                onChange={(val) => {
+                  setSelectedServiceName(val);
+                  setSelectedProductName('');
+                  setErrors((p) => ({ ...p, service: '' }));
+                }}
+                options={serviceOptions}
+              />
+            </FormField>
+            <FormField label="Product" error={errors.service}>
+              <Select
+                value={selectedProductName}
+                onChange={(val) => {
+                  setSelectedProductName(val);
+                  setSelectedServiceName('');
+                  setErrors((p) => ({ ...p, service: '' }));
+                }}
+                options={productOptions}
+              />
+            </FormField>
+          </div>
+          {(selectedServiceName || selectedProductName) && (
+            <FormField label="Lead Description">
+              <Textarea value={leadDescription} onChange={(e) => setLeadDescription(e.target.value)} />
+            </FormField>
+          )}
+        </Card>
+      )}
+
+      <Card className="p-6 space-y-5">
+        <div className="flex items-center gap-2">
+          <Settings className="w-4 h-4 text-blue-600" />
+          <Text as="h2">Deal Details</Text>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+          <FormField label="Deal Status">
+            <Select
+              value={dealStatus}
+              onChange={setDealStatus}
+              options={[
+                { label: 'Pending', value: 'Pending' },
+                { label: 'Deal Won', value: 'Deal Won' },
+                { label: 'Deal Lost', value: 'Deal Lost' },
+                { label: 'Work in Progress', value: 'Work in Progress' },
+                { label: 'Work Completed', value: 'Work Completed' },
+              ]}
+            />
+          </FormField>
+          <FormField label="Referral Type">
+            <Select
+              value={refType}
+              onChange={setRefType}
+              options={[
+                { label: 'Self', value: 'Self' },
+                { label: 'Others', value: 'Others' },
+              ]}
+            />
+          </FormField>
+        </div>
+
+        {refType === 'Others' && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+            <FormField label="Referrer Name" error={errors.otherName}>
+              <Input value={otherName} onChange={(e) => setOtherName(e.target.value)} />
+            </FormField>
+            <FormField label="Referrer Phone" error={errors.otherPhone}>
+              <Input value={otherPhone} onChange={(e) => setOtherPhone(e.target.value)} />
+            </FormField>
+            <FormField label="Referrer Email" error={errors.otherEmail}>
+              <Input value={otherEmail} onChange={(e) => setOtherEmail(e.target.value)} />
+            </FormField>
+          </div>
+        )}
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+          <FormField label="Referral Source">
+            <Select
+              value={referralSource}
+              onChange={setReferralSource}
+              options={[
+                { label: 'Monthly Meeting', value: 'MonthlyMeeting' },
+                { label: 'Conclave Meeting', value: 'ConclaveMeeting' },
+                { label: 'OTC Meeting', value: 'OTCMeeting' },
+                { label: 'Phone', value: 'Phone' },
+                { label: 'Other', value: 'Other' },
+              ]}
+            />
+          </FormField>
+          {referralSource === 'Other' && (
+            <FormField label="Other Source">
+              <Input value={otherReferralSource} onChange={(e) => setOtherReferralSource(e.target.value)} />
+            </FormField>
+          )}
+        </div>
+      </Card>
+
+      <div className="fixed bottom-0 left-0 right-0 z-40">
+        <div className="max-w-[1400px] mx-auto px-6 pb-4">
+          <Card className="flex items-center justify-between px-4 py-3 shadow-lg border">
+            <Text className="text-sm text-slate-600">Do not forget to save your changes</Text>
+            <Button variant="primary" onClick={handleSubmit} disabled={saving}>
+              {saving ? 'Saving...' : 'Submit Referral'}
+            </Button>
+          </Card>
+        </div>
+      </div>
+    </div>
+  );
+}

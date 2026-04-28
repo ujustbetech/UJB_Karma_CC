@@ -1,10 +1,12 @@
-import { NextResponse } from "next/server";
+import { API_ERROR_CODES } from "@/lib/api/contracts.mjs";
+import { logAuthFailure, logProviderFailure } from "@/lib/api/logging.mjs";
+import { readJsonObject } from "@/lib/api/request.mjs";
+import { jsonError, jsonSuccess } from "@/lib/api/response.mjs";
 import {
   adminDb,
-  getFirebaseAdminInitError,
 } from "@/lib/firebase/firebaseAdmin";
 import { publicEnv } from "@/lib/config/publicEnv";
-import { validateUserRequest } from "@/lib/auth/userRequestAuth.mjs";
+import { requireUserSession } from "@/lib/auth/userRequestAuth.mjs";
 import {
   canUserUpdateReferralStatus,
   getReferralParticipantRole,
@@ -14,39 +16,55 @@ import {
 const referralCollectionName = publicEnv.collections.referral;
 
 export async function PATCH(req, { params }) {
-  const authResult = await validateUserRequest(
-    req,
-    adminDb,
-    getFirebaseAdminInitError
-  );
+  const authResult = await requireUserSession(req);
 
   if (!authResult.ok) {
-    return authResult.response;
+    logAuthFailure({
+      route: "/api/user/referrals/[id]/status",
+      status: authResult.status,
+      code: authResult.code,
+      reason: authResult.reason,
+    });
+
+    return jsonError(authResult.message, {
+      status: authResult.status,
+      code: authResult.code,
+    });
+  }
+
+  const bodyResult = await readJsonObject(req);
+  if (!bodyResult.ok) {
+    return jsonError(bodyResult.message, {
+      status: bodyResult.status,
+      code: bodyResult.code,
+    });
   }
 
   try {
-    const { id } = params;
-    const body = await req.json();
-    const nextStatus = body?.status;
-    const rejectReason = body?.rejectReason || "";
+    const { id } = await params;
+    const nextStatus = bodyResult.data?.status;
+    const rejectReason = bodyResult.data?.rejectReason || "";
     const referralSnap = await adminDb.collection(referralCollectionName).doc(id).get();
 
     if (!referralSnap.exists) {
-      return NextResponse.json({ message: "Referral not found" }, { status: 404 });
+      return jsonError("Referral not found", {
+        status: 404,
+        code: API_ERROR_CODES.NOT_FOUND,
+      });
     }
 
     const referral = referralSnap.data();
-    const sessionUjbCode = String(authResult.session?.ujbCode || "").trim();
+    const sessionUjbCode = String(authResult.context?.ujbCode || "").trim();
     const actorRole = getReferralParticipantRole({
       referral,
       sessionUjbCode,
     });
 
     if (!canUserUpdateReferralStatus({ referral, sessionUjbCode })) {
-      return NextResponse.json(
-        { message: "Only the assigned COSM or Orbiter can update this referral" },
-        { status: 403 }
-      );
+      return jsonError("Only the assigned COSM or Orbiter can update this referral", {
+        status: 403,
+        code: API_ERROR_CODES.FORBIDDEN,
+      });
     }
 
     const updated = await updateReferralStatusRecord({
@@ -57,11 +75,18 @@ export async function PATCH(req, { params }) {
       rejectReason,
     });
 
-    return NextResponse.json({ success: true, referral: updated, actorRole });
+    return jsonSuccess({ referral: updated, actorRole });
   } catch (error) {
-    return NextResponse.json(
-      { message: error?.message || "Failed to update referral" },
-      { status: error?.status || 500 }
-    );
+    logProviderFailure({
+      route: "/api/user/referrals/[id]/status",
+      provider: "firebase",
+      code: error?.code || API_ERROR_CODES.PROVIDER_FAILURE,
+      error,
+    });
+
+    return jsonError(error?.message || "Failed to update referral", {
+      status: error?.status || 500,
+      code: error?.code || API_ERROR_CODES.PROVIDER_FAILURE,
+    });
   }
 }

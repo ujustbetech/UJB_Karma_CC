@@ -1,10 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { collection, doc, getDoc, getDocs } from "firebase/firestore";
 import { useParams } from "next/navigation";
-import { db } from "@/lib/firebase/firebaseClient";
-import { COLLECTIONS } from "@/lib/utility_collection";
 import {
   BookOpen,
   Briefcase,
@@ -16,6 +13,7 @@ import {
   UserCheck,
   Users,
 } from "lucide-react";
+import { fetchUserMonthlyMeetingDetails } from "@/services/monthlyMeetingService";
 
 function toDateValue(value) {
   if (!value) return null;
@@ -72,49 +70,13 @@ export default function EventDetailsPage() {
     const fetchEventData = async () => {
       try {
         setLoading(true);
-
-        const eventSnap = await getDoc(doc(db, COLLECTIONS.monthlyMeeting, id));
-        if (!eventSnap.exists()) {
-          setEventInfo({});
-          setUsers([]);
-          return;
-        }
-
-        setEventInfo(eventSnap.data());
-
-        const [regSnap, userSnap] = await Promise.all([
-          getDocs(collection(db, COLLECTIONS.monthlyMeeting, id, "registeredUsers")),
-          getDocs(collection(db, COLLECTIONS.userDetail)),
-        ]);
-
-        const userMap = {};
-        userSnap.forEach((userDoc) => {
-          const data = userDoc.data();
-          const phone = data.MobileNo || userDoc.id;
-
-          userMap[phone] = {
-            name: data.Name || "Unknown",
-            category: data.Category || "",
-            ujbCode: data.UJBCode || "",
-          };
-        });
-
-        setUsers(
-          regSnap.docs.map((docSnap) => {
-            const phone = docSnap.id;
-            const regData = docSnap.data();
-            const profile = userMap[phone] || {};
-
-            return {
-              phone,
-              name: profile.name || regData.name || "Unknown",
-              category: profile.category,
-              ujbCode: profile.ujbCode,
-              attendance: regData.attendanceStatus === true ? "Present" : "Pending",
-              feedback: regData.feedback || [],
-            };
-          })
-        );
+        const data = await fetchUserMonthlyMeetingDetails(id);
+        setEventInfo(data.event || null);
+        setUsers(Array.isArray(data.users) ? data.users : []);
+      } catch (error) {
+        console.error(error);
+        setEventInfo(null);
+        setUsers([]);
       } finally {
         setLoading(false);
       }

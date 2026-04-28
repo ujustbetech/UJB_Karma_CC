@@ -69,6 +69,7 @@ export default function UserCcReferralDetailPage() {
     editFollowup,
     deleteFollowup,
     uploadLeadDoc,
+    refreshDetail,
   } = useReferralDetails(id, { collectionName: CC_REFERRAL_COLLECTION });
 
   const payment = useReferralPayments({
@@ -78,6 +79,7 @@ export default function UserCcReferralDetailPage() {
     setPayments,
     dealLogs,
     collectionName: CC_REFERRAL_COLLECTION,
+    onRefresh: refreshDetail,
   });
 
   const ujb = useUjbDistribution({
@@ -88,6 +90,7 @@ export default function UserCcReferralDetailPage() {
     orbiter,
     cosmoOrbiter,
     collectionName: CC_REFERRAL_COLLECTION,
+    onRefresh: refreshDetail,
   });
 
   const primaryOrbiterUjb =
@@ -98,6 +101,8 @@ export default function UserCcReferralDetailPage() {
 
   const adjustment = useReferralAdjustment(id, primaryOrbiterUjb, {
     collectionName: CC_REFERRAL_COLLECTION,
+    orbiterProfile: orbiter,
+    onRefresh: refreshDetail,
   });
 
   const [payoutModal, setPayoutModal] = useState({

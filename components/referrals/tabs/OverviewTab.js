@@ -80,6 +80,7 @@ export default function OverviewTab({
     referral,
     userRole,
     openInvoice,
+    onReferralUpdated,
 }) {
     const [updating, setUpdating] = useState(false);
     const [selectedStatus, setSelectedStatus] = useState(
@@ -158,6 +159,7 @@ export default function OverviewTab({
             setModalOpen(false);
             setSuccessMessage(`Deal status updated to ${selectedStatus}.`);
             toast.success(`Deal status updated to ${selectedStatus}.`);
+            await onReferralUpdated?.();
         } catch (err) {
             const message =
                 err?.message || "Status update failed. Please try again.";

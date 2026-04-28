@@ -23,14 +23,9 @@ function getInitials(name = "") {
     .toUpperCase();
 }
 
-export default function StakeholdersTab({ referral }) {
+export default function StakeholdersTab({ referral, currentUserUjbCode }) {
 
   const [chatUser, setChatUser] = useState(null);
-
-  const currentUserUjbCode =
-    typeof window !== "undefined"
-      ? localStorage.getItem("mmUJBCode")
-      : null;
 
   const StakeholderCard = ({ person, role }) => {
 
@@ -39,9 +34,13 @@ export default function StakeholdersTab({ referral }) {
     // Normalize UJB Code safely
     const normalizedUjbCode =
       person?.ujbCode ||
-      person?.cosmoUjbCode ||
-      referral?.cosmoUjbCode ||
+      person?.UJBCode ||
+      (role === "Primary Referrer"
+        ? referral?.orbiterUJBCode
+        : referral?.cosmoUjbCode) ||
       null;
+    const canChat =
+      normalizedUjbCode && normalizedUjbCode !== currentUserUjbCode;
 
     return (
       <InfoCard icon={User}>
@@ -85,18 +84,20 @@ export default function StakeholdersTab({ referral }) {
             </a>
           )}
 
-          <button
-            onClick={() =>
-              setChatUser({
-                ...person,
-                ujbCode: normalizedUjbCode
-              })
-            }
-            className="flex items-center justify-center gap-1 bg-blue-50 text-blue-700 text-sm py-2 rounded-lg"
-          >
-            <MessageCircle size={14} />
-            Chat
-          </button>
+          {canChat && (
+            <button
+              onClick={() =>
+                setChatUser({
+                  ...person,
+                  ujbCode: normalizedUjbCode
+                })
+              }
+              className="flex items-center justify-center gap-1 bg-blue-50 text-blue-700 text-sm py-2 rounded-lg"
+            >
+              <MessageCircle size={14} />
+              Chat
+            </button>
+          )}
 
           {person?.email && (
             <a

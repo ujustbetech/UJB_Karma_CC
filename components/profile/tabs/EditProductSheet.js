@@ -2,10 +2,9 @@
 
 import { useState, useEffect } from "react";
 import { X, Plus, Trash2 } from "lucide-react";
-import { doc, updateDoc } from "firebase/firestore";
+import { updateUserProfile } from "@/services/profileService";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
-import { db, storage } from "@/lib/firebase/firebaseClient";
-import { COLLECTIONS } from "@/lib/utility_collection";
+import { storage } from "@/lib/firebase/firebaseClient";
 
 export default function EditProductSheet({
     open,
@@ -144,9 +143,7 @@ export default function EditProductSheet({
 
             setLoading(true);
 
-            await updateDoc(
-                doc(db, COLLECTIONS.userDetail, userDocId),
-                { products }
+            await updateUserProfile({ products }
             );
 
             if (typeof setUser === "function") {
@@ -506,3 +503,4 @@ function KeywordInput({ keywords, onAdd, onRemove, label = "Keywords" }) {
         </div>
     );
 }
+

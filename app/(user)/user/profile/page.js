@@ -2,9 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { decryptData } from "@/utils/encryption";
-import { db } from "@/lib/firebase/firebaseClient";
 import { useAuth } from "@/context/authContext";
-import { getUserDetailDocByUjbCode } from "@/lib/firebase/userDetailDoc";
+import { fetchUserProfile } from "@/services/profileService";
 
 import ProfileHero from "@/components/profile/ProfileHero";
 import ProfileTabs from "@/components/profile/ProfileTabs";
@@ -49,28 +48,22 @@ export default function ProfilePage() {
   const [activeTab, setActiveTab] = useState("personal");
 
   const ujbCode = sessionUser?.profile?.ujbCode;
-  const phone = sessionUser?.phone;
 
   useEffect(() => {
-    if (!ujbCode) return;
-
     const fetchUser = async () => {
-      const resolvedDoc = await getUserDetailDocByUjbCode(db, ujbCode, {
-        phone,
-      });
-
-      if (resolvedDoc?.snap?.exists()) {
-        const nextUser = decryptBankDetails({
-          __docId: resolvedDoc.id,
-          ...resolvedDoc.snap.data(),
-        });
-
-        setUser(nextUser);
+      try {
+        const profile = await fetchUserProfile();
+        if (profile) {
+          const nextUser = decryptBankDetails(profile);
+          setUser(nextUser);
+        }
+      } catch (error) {
+        console.error(error);
       }
     };
 
     fetchUser();
-  }, [ujbCode, phone]);
+  }, [ujbCode]);
 
   const isCosmOrbiter =
     normalizeCategory(user?.Category || sessionUser?.profile?.type) ===

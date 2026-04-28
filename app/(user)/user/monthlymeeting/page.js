@@ -1,19 +1,20 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import {
-  getFirestore,
-  collection,
-  getDocs,
-  doc,
-  getDoc,
-} from "firebase/firestore";
-import { app } from "@/lib/firebase/firebaseClient";
 import Link from "next/link";
 import { CalendarDays, Video } from "lucide-react";
 import UserPageHeader from "@/components/user/UserPageHeader";
+import { fetchUserMonthlyMeetings } from "@/services/monthlyMeetingService";
 
-const db = getFirestore(app);
+function toDateValue(value) {
+  if (!value) return null;
+  if (value instanceof Date) return value;
+  if (typeof value?.toDate === "function") return value.toDate();
+  if (typeof value?.seconds === "number") return new Date(value.seconds * 1000);
+
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
 
 export default function AllEvents() {
   const [events, setEvents] = useState([]);
@@ -22,38 +23,7 @@ export default function AllEvents() {
   useEffect(() => {
     const fetchAllEvents = async () => {
       try {
-        const storedPhoneNumber =
-          localStorage.getItem("mmOrbiter");
-
-        const querySnapshot = await getDocs(
-          collection(db, "MonthlyMeeting")
-        );
-
-        const eventList = await Promise.all(
-          querySnapshot.docs.map(async (eventDoc) => {
-            const eventData = {
-              id: eventDoc.id,
-              ...eventDoc.data(),
-            };
-
-            if (storedPhoneNumber) {
-              const regUserRef = doc(
-                db,
-                "MonthlyMeeting",
-                eventDoc.id,
-                "registeredUsers",
-                storedPhoneNumber
-              );
-
-              const regUserSnap = await getDoc(regUserRef);
-              eventData.isUserRegistered =
-                regUserSnap.exists();
-            }
-
-            return eventData;
-          })
-        );
-
+        const eventList = await fetchUserMonthlyMeetings();
         setEvents(eventList);
       } catch (error) {
         console.error("Error fetching events:", error);
@@ -64,8 +34,8 @@ export default function AllEvents() {
   }, []);
 
   const sortedEvents = [...events].sort((a, b) => {
-    const dateA = a.time?.toDate?.() || new Date(0);
-    const dateB = b.time?.toDate?.() || new Date(0);
+    const dateA = toDateValue(a.time) || new Date(0);
+    const dateB = toDateValue(b.time) || new Date(0);
     return dateB - dateA;
   });
 
@@ -85,7 +55,7 @@ export default function AllEvents() {
 
           {sortedEvents.map((event) => {
 
-            const eventDate = event.time?.toDate?.();
+            const eventDate = toDateValue(event.time);
             const now = new Date();
             const diffMs = eventDate ? eventDate - now : 0;
 

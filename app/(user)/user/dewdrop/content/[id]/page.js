@@ -2,9 +2,11 @@
 
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
-import { doc, getDoc, updateDoc, increment } from "firebase/firestore";
-import { db } from "@/lib/firebase/firebaseClient";
 import { Eye, Heart, Music, Video, FileText, Tag, ImageOff, User } from "lucide-react";
+import {
+  fetchUserDewdropContentDetails,
+  likeUserDewdropContent,
+} from "@/services/dewdropService";
 
 export default function ContentDetails() {
   const { id } = useParams();
@@ -17,15 +19,9 @@ export default function ContentDetails() {
     if (!id) return;
 
     const fetchContent = async () => {
-      const docRef = doc(db, "ContentData", id);
-      const snap = await getDoc(docRef);
-
-      if (snap.exists()) {
-        setContent({ id: snap.id, ...snap.data() });
-
-        await updateDoc(docRef, {
-          totalViews: increment(1),
-        });
+      const record = await fetchUserDewdropContentDetails(id);
+      if (record) {
+        setContent(record);
       }
     };
 
@@ -34,17 +30,8 @@ export default function ContentDetails() {
 
   const handleLike = async () => {
     if (liked) return;
-
-    const docRef = doc(db, "ContentData", id);
-
-    await updateDoc(docRef, {
-      totallike: increment(1),
-    });
-
-    setContent((prev) => ({
-      ...prev,
-      totallike: (prev.totallike || 0) + 1,
-    }));
+    const updated = await likeUserDewdropContent(id);
+    if (updated) setContent(updated);
 
     setLiked(true);
     setAnimateLike(true);

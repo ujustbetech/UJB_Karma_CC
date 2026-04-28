@@ -1,6 +1,20 @@
 import assert from "node:assert/strict";
 
 import {
+  API_ERROR_CODES,
+  buildApiError,
+  buildApiSuccess,
+} from "../lib/api/contracts.mjs";
+import {
+  isPlainObject,
+  requiredString,
+} from "../lib/api/request.mjs";
+import {
+  authFailure,
+  buildAdminAuthContext,
+  buildUserAuthContext,
+} from "../lib/auth/authContexts.mjs";
+import {
   buildUserSessionRecord,
   buildUserSessionResponse,
   getLogoutAllRevocations,
@@ -15,8 +29,12 @@ import {
   buildAdminSessionPayload,
   findAuthorizedAdmin,
   shouldBootstrapAdmin,
+  validateAdminRoleAccess,
   validateAdminSessionAccess,
 } from "../lib/auth/adminAccessWorkflow.mjs";
+import {
+  hasSuperAdminAccess,
+} from "../lib/auth/accessControl.js";
 import {
   buildAgreementAcceptanceUpdate,
   getAgreementTitle,
@@ -76,6 +94,53 @@ async function run(name, fn) {
 
 const hasAdminAccess = (role) =>
   String(role || "").toLowerCase().includes("admin");
+
+await run("API helpers expose stable success and error envelopes", () => {
+  assert.deepEqual(buildApiSuccess({ id: "abc" }), {
+    success: true,
+    data: { id: "abc" },
+  });
+
+  assert.deepEqual(buildApiError("Nope", API_ERROR_CODES.FORBIDDEN), {
+    success: false,
+    message: "Nope",
+    code: "FORBIDDEN",
+  });
+});
+
+await run("request helpers validate JSON object fields consistently", () => {
+  assert.equal(isPlainObject({ ok: true }), true);
+  assert.equal(isPlainObject([]), false);
+  assert.deepEqual(requiredString(" UJB001 ", "ujbCode"), {
+    ok: true,
+    value: "UJB001",
+  });
+  assert.equal(requiredString("", "ujbCode").status, 422);
+});
+
+await run("auth contexts normalize user and admin identities", () => {
+  const userContext = buildUserAuthContext({
+    session: { ujbCode: " UJB001 ", phone: " 9999999999 " },
+    sessionId: "session-1",
+  });
+
+  assert.equal(userContext.actorType, "user");
+  assert.equal(userContext.ujbCode, "UJB001");
+  assert.equal(userContext.role, "user");
+  assert.deepEqual(userContext.permissions, []);
+
+  const adminContext = buildAdminAuthContext({
+    email: " ADMIN@EXAMPLE.COM ",
+    name: "Admin User",
+    role: "Admin",
+    designation: "Lead",
+  });
+
+  assert.equal(adminContext.actorType, "admin");
+  assert.equal(adminContext.email, "admin@example.com");
+  assert.deepEqual(adminContext.permissions, ["Admin"]);
+  assert.equal(authFailure({ reason: "missing" }).ok, false);
+});
 
 await run("OTP login creates a long-lived session record", () => {
   const now = 1_700_000_000_000;
@@ -189,6 +254,24 @@ await run("admin-only access boundaries stay role-aware", () => {
   );
   assert.equal(
     validateAdminSessionAccess({ ...payload, designation: "" }, hasAdminAccess).ok,
+    true
+  );
+  assert.equal(hasSuperAdminAccess("Super"), true);
+  assert.equal(hasSuperAdminAccess("Admin"), false);
+  assert.equal(
+    validateAdminRoleAccess(
+      { role: "Admin" },
+      hasSuperAdminAccess,
+      "Only Super Admin can manage roles"
+    ).ok,
+    false
+  );
+  assert.equal(
+    validateAdminRoleAccess(
+      { role: "Super" },
+      hasSuperAdminAccess,
+      "Only Super Admin can manage roles"
+    ).ok,
     true
   );
 });
