@@ -118,3 +118,4 @@ function InfoItem({ label, value }) {
     </div>
   );
 }
+

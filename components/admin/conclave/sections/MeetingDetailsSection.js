@@ -1,13 +1,9 @@
 "use client";
 
-import { useParams, useSearchParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { doc, getDoc, updateDoc, Timestamp } from "firebase/firestore";
-import { db } from "@/lib/firebase/firebaseClient";
-import { COLLECTIONS } from "@/lib/utility_collection";
+import { updateAdminConclaveMeeting } from "@/services/adminConclaveService";
 
 import Card from "@/components/ui/Card";
-import Text from "@/components/ui/Text";
 import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
 import Textarea from "@/components/ui/Textarea";
@@ -16,17 +12,27 @@ import DateInput from "@/components/ui/DateInput";
 import FormField from "@/components/ui/FormField";
 import { useToast } from "@/components/ui/ToastProvider";
 
-export default function EditMeetingPage() {
-  const params = useParams();
-  const searchParams = useSearchParams();
-  const router = useRouter();
+function toDatetimeLocal(value) {
+  if (!value) return "";
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+
+  return new Date(date.getTime() - date.getTimezoneOffset() * 60000)
+    .toISOString()
+    .slice(0, 16);
+}
+
+export default function MeetingDetailsSection({
+  conclaveId,
+  meetingId,
+  data = {},
+  fetchData,
+}) {
   const toast = useToast();
-
-  const meetingId = params?.eventId;
-  const conclaveId = searchParams.get("conclaveId");
-
-  const [loading, setLoading] = useState(true);
-
+  const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({
     meetingName: "",
     datetime: "",
@@ -36,72 +42,29 @@ export default function EditMeetingPage() {
     venue: "",
   });
 
-  /* ================= FETCH ================= */
-
   useEffect(() => {
-    if (!meetingId || !conclaveId) return;
-
-    const fetchMeeting = async () => {
-      try {
-        const ref = doc(
-          db,
-          COLLECTIONS.conclaves,
-          conclaveId,
-          "meetings",
-          meetingId
-        );
-
-        const snap = await getDoc(ref);
-
-        if (snap.exists()) {
-          const data = snap.data();
-
-          setForm({
-            meetingName: data.meetingName || "",
-            datetime: data.datetime?.seconds
-              ? new Date(
-                  data.datetime.seconds * 1000
-                ).toISOString().slice(0, 16)
-              : "",
-            agenda: data.agenda || "",
-            mode: data.mode || "online",
-            link: data.link || "",
-            venue: data.venue || "",
-          });
-        } else {
-          toast.error("Meeting not found");
-        }
-      } catch (err) {
-        toast.error("Failed to load meeting");
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchMeeting();
-  }, [meetingId, conclaveId]);
-
-  /* ================= HANDLERS ================= */
+    setForm({
+      meetingName: data.meetingName || "",
+      datetime: toDatetimeLocal(data.datetime),
+      agenda: data.agenda || "",
+      mode: data.mode || "online",
+      link: data.link || "",
+      venue: data.venue || "",
+    });
+  }, [data]);
 
   const handleChange = (name, value) => {
-    setForm((p) => ({ ...p, [name]: value }));
+    setForm((prev) => ({ ...prev, [name]: value }));
   };
 
-  const handleUpdate = async (e) => {
-    e.preventDefault();
+  const handleUpdate = async (event) => {
+    event.preventDefault();
+    setSaving(true);
 
     try {
-      const ref = doc(
-        db,
-        COLLECTIONS.conclaves,
-        conclaveId,
-        "meetings",
-        meetingId
-      );
-
-      await updateDoc(ref, {
+      await updateAdminConclaveMeeting(conclaveId, meetingId, {
         meetingName: form.meetingName,
-        datetime: Timestamp.fromDate(new Date(form.datetime)),
+        datetime: form.datetime,
         agenda: form.agenda,
         mode: form.mode,
         link: form.mode === "online" ? form.link : "",
@@ -109,35 +72,23 @@ export default function EditMeetingPage() {
       });
 
       toast.success("Meeting updated successfully");
-      router.back();
-    } catch (err) {
+      await fetchData?.();
+    } catch (error) {
+      console.error(error);
       toast.error("Update failed");
+    } finally {
+      setSaving(false);
     }
   };
 
-  if (loading) {
-    return <Card>Loading...</Card>;
-  }
-
   return (
     <div className="space-y-6">
-
-      {/* Header */}
-      <Card>
-        <Text variant="h1">Edit Meeting</Text>
-        <Text variant="muted">Conclave ID: {conclaveId}</Text>
-      </Card>
-
-      {/* Form */}
       <Card>
         <form onSubmit={handleUpdate} className="space-y-6">
-
           <FormField label="Meeting Name" required>
             <Input
               value={form.meetingName}
-              onChange={(e) =>
-                handleChange("meetingName", e.target.value)
-              }
+              onChange={(e) => handleChange("meetingName", e.target.value)}
             />
           </FormField>
 
@@ -145,18 +96,14 @@ export default function EditMeetingPage() {
             <DateInput
               type="datetime-local"
               value={form.datetime}
-              onChange={(v) =>
-                handleChange("datetime", v)
-              }
+              onChange={(value) => handleChange("datetime", value)}
             />
           </FormField>
 
           <FormField label="Agenda" required>
             <Textarea
               value={form.agenda}
-              onChange={(e) =>
-                handleChange("agenda", e.target.value)
-              }
+              onChange={(e) => handleChange("agenda", e.target.value)}
             />
           </FormField>
 
@@ -167,7 +114,7 @@ export default function EditMeetingPage() {
                 { label: "Offline", value: "offline" },
               ]}
               value={form.mode}
-              onChange={(v) => handleChange("mode", v)}
+              onChange={(value) => handleChange("mode", value)}
             />
           </FormField>
 
@@ -175,9 +122,7 @@ export default function EditMeetingPage() {
             <FormField label="Meeting Link" required>
               <Input
                 value={form.link}
-                onChange={(e) =>
-                  handleChange("link", e.target.value)
-                }
+                onChange={(e) => handleChange("link", e.target.value)}
               />
             </FormField>
           )}
@@ -186,23 +131,20 @@ export default function EditMeetingPage() {
             <FormField label="Venue" required>
               <Input
                 value={form.venue}
-                onChange={(e) =>
-                  handleChange("venue", e.target.value)
-                }
+                onChange={(e) => handleChange("venue", e.target.value)}
               />
             </FormField>
           )}
 
           <div className="flex justify-end">
-            <Button type="submit">
-              Update Meeting
+            <Button type="submit" disabled={saving}>
+              {saving ? "Saving..." : "Save Changes"}
             </Button>
           </div>
-
         </form>
       </Card>
-
     </div>
   );
 }
+
 

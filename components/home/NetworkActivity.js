@@ -59,3 +59,4 @@ export default function NetworkActivity({ activities }) {
     </div>
   );
 }
+

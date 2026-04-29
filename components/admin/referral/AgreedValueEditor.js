@@ -178,3 +178,4 @@ export default function AgreedValueEditor({ value, onChange, label = "Agreed Val
     </div>
   );
 }
+

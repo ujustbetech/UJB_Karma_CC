@@ -111,3 +111,4 @@ export default function Topbar({ collapsed, setCollapsed }) {
     </header>
   );
 }
+

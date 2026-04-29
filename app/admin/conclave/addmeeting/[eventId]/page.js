@@ -2,9 +2,7 @@
 
 import { useParams, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
-import { doc, getDoc } from "firebase/firestore";
-import { db } from "@/lib/firebase/firebaseClient";
-import { COLLECTIONS } from "@/lib/utility_collection";
+import { fetchAdminConclaveMeetingDetails } from "@/services/adminConclaveService";
 
 import Card from "@/components/ui/Card";
 import Text from "@/components/ui/Text";
@@ -48,16 +46,8 @@ export default function ConclaveMeetingDetailsPage() {
     setLoading(true);
 
     try {
-      const ref = doc(
-        db,
-        COLLECTIONS.conclaves,
-        conclaveId,
-        "meetings",
-        meetingId
-      );
-
-      const snap = await getDoc(ref);
-      setData(snap.exists() ? snap.data() : {});
+      const meeting = await fetchAdminConclaveMeetingDetails(conclaveId, meetingId);
+      setData(meeting || {});
     } catch (error) {
       console.error(error);
     } finally {
@@ -231,3 +221,5 @@ export default function ConclaveMeetingDetailsPage() {
     </div>
   );
 }
+
+

@@ -1,22 +1,8 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import {
-    collection,
-    addDoc,
-    deleteDoc,
-    doc,
-    onSnapshot,
-    updateDoc,
-    Timestamp,
-    query,
-    orderBy,
-    arrayUnion,
-    where,
-    getDocs
-} from 'firebase/firestore';
+import { collection, addDoc, deleteDoc, doc, onSnapshot, updateDoc, Timestamp, query, orderBy, arrayUnion, where, getDocs, auth, db } from '@/services/adminDewdropCategoryFirebaseService';
 
-import { auth, db } from '@/lib/firebase/firebaseClient';
 
 import Card from '@/components/ui/Card';
 import Text from '@/components/ui/Text';
@@ -408,4 +394,7 @@ export default function ContentCategoryPage() {
         </>
     );
 }
+
+
+
 

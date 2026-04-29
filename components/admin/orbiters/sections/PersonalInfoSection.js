@@ -297,3 +297,4 @@ export default function PersonalInfoSection({ profile }) {
     </Card>
   );
 }
+

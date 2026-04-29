@@ -387,3 +387,5 @@ function EditableField({ label, value, onChange, type = "text", placeholder }) {
     </div>
   );
 }
+
+

@@ -9,3 +9,5 @@ export default function OrbitersListingPage({ params }) {
   const ujbcode = resolvedParams.ujbcode;
   return <OrbiterProfilePage ujbcode={ujbcode} />;
 }
+
+

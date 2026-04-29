@@ -1,13 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
 
 import {
+  createContentEntry,
   fetchContentReferenceData,
   fetchPartnerDetails,
-  publishContent,
-  saveContentDraft,
-  validateContentForm,
-  validateFileSizes,
-} from "@/services/contentService";
+} from "@/services/adminContentService";
+import { validateContentForm, validateFileSizes } from "@/services/contentShared";
+import { uploadContentFiles } from "@/services/contentUploadService";
 
 export function useContentForm({ admin, toast }) {
   const [categories, setCategories] = useState([]);
@@ -45,9 +44,12 @@ export function useContentForm({ admin, toast }) {
       setLoading(true);
 
       try {
-        await saveContentDraft({
+        await createContentEntry({
           ...formData,
           adminName: admin?.name || "",
+          contentFileImages: [],
+          Thumbnail: [],
+          status: "draft",
         });
         toast?.success("Draft saved successfully");
       } catch (error) {
@@ -75,13 +77,19 @@ export function useContentForm({ admin, toast }) {
           throw new Error(contentSizeError || thumbnailSizeError);
         }
 
-        await publishContent(
-          {
-            ...formData,
-            adminName: admin?.name || "",
-          },
-          setProgress
-        );
+        const [contentFileImages, thumbnail] = await Promise.all([
+          uploadContentFiles(formData.contentFiles, setProgress),
+          uploadContentFiles(formData.thumbnailFiles, setProgress),
+        ]);
+
+        await createContentEntry({
+          ...formData,
+          adminName: admin?.name || "",
+          contentFileImages,
+          thumbnail,
+          Thumbnail: thumbnail,
+          status: formData.status || "published",
+        });
       } finally {
         setUploading(false);
         setLoading(false);

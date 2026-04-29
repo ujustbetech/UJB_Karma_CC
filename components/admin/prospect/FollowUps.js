@@ -1370,3 +1370,5 @@ const Followup = ({ id, data = { comments: [], event: [] } }) => {
 };
 
 export default Followup;
+
+

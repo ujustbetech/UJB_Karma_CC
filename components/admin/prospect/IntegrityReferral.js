@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { doc, updateDoc, getDoc } from "firebase/firestore";
-import { db } from "@/lib/firebase/firebaseClient";
+import { doc, updateDoc, getDoc, db } from "@/services/adminProspectJourneyFirebaseService";
 import { COLLECTIONS } from "@/lib/utility_collection";
 import Swal from "sweetalert2";
 
@@ -160,3 +159,5 @@ const Day24IntegrityReferral = ({ id, fetchData }) => {
 };
 
 export default Day24IntegrityReferral;
+
+

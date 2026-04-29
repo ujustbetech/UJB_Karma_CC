@@ -1,15 +1,10 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
-import { db } from "@/lib/firebase/firebaseClient";
 import {
-    collection,
-    getDocs,
-    deleteDoc,
-    doc
-} from "firebase/firestore";
-import { COLLECTIONS } from "@/lib/utility_collection";
+    deleteAdminMonthlyMeeting,
+    fetchAdminMonthlyMeetings,
+} from "@/services/adminMonthlyMeetingService";
 
-import Text from "@/components/ui/Text";
 import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
 import ActionButton from "@/components/ui/ActionButton";
@@ -59,58 +54,8 @@ export default function EventsListingPage() {
         setLoading(true);
 
         try {
-            const snap = await getDocs(
-                collection(db, COLLECTIONS.monthlyMeeting)
-            );
-
-            const list = await Promise.all(
-                snap.docs.map(async (d) => {
-                    const data = d.data();
-                    const rawTime = data.time;
-
-                    let registeredCount = 0;
-
-                    try {
-                        const regSnap = await getDocs(
-                            collection(
-                                db,
-                                COLLECTIONS.monthlyMeeting,
-                                d.id,
-                                "registeredUsers"
-                            )
-                        );
-                        registeredCount = regSnap.size;
-                    } catch (e) {
-                        console.warn("Subcollection read failed:", d.id);
-                    }
-
-                    return {
-                        id: d.id,
-                        name: data.Eventname || data.eventName || "Untitled",
-                        time: rawTime || "",
-                        zoom: data.zoomLink || "",
-                        registeredCount,
-                        status: data.status || getEventStatus(rawTime),
-                    };
-                })
-            );
-
-      // sort latest first (newest date on top)
-const sorted = list.sort((a, b) => {
-    const getTime = (t) => {
-        if (!t) return 0;
-
-        if (t?.seconds) return t.seconds * 1000;
-        if (typeof t === "string" || typeof t === "number") return new Date(t).getTime();
-        if (t instanceof Date) return t.getTime();
-
-        return 0;
-    };
-
-    return getTime(b.time) - getTime(a.time); // DESC (latest first)
-});
-
-setEvents(sorted);
+            const list = await fetchAdminMonthlyMeetings();
+            setEvents(list);
         } catch (err) {
             console.error("Fetch events error:", err);
             toast.error("Failed to fetch events");
@@ -131,7 +76,6 @@ setEvents(sorted);
         );
     }, [events, nameFilter]);
 
-    const totalPages = Math.max(1, Math.ceil(filtered.length / perPage));
     const paginated = filtered.slice(
         (page - 1) * perPage,
         page * perPage
@@ -162,9 +106,7 @@ setEvents(sorted);
         if (!eventToDelete) return;
 
         try {
-            await deleteDoc(
-                doc(db, COLLECTIONS.monthlyMeeting, eventToDelete.id)
-            );
+            await deleteAdminMonthlyMeeting(eventToDelete.id);
             toast.success("Event deleted");
             setDeleteOpen(false);
             fetchEvents();
@@ -201,32 +143,6 @@ setEvents(sorted);
             minute: "2-digit",
         });
     };
-
-
-    const getEventStatus = (time) => {
-        if (!time) return "draft";
-
-        let eventDate;
-
-        if (time?.seconds) {
-            eventDate = new Date(time.seconds * 1000);
-        } else if (typeof time === "string" || typeof time === "number") {
-            eventDate = new Date(time);
-        } else if (time instanceof Date) {
-            eventDate = time;
-        }
-
-        if (!eventDate || isNaN(eventDate.getTime())) return "draft";
-
-        const now = new Date();
-        const diff = eventDate - now;
-
-        if (Math.abs(diff) < 3 * 60 * 60 * 1000) return "live";
-        if (diff > 0) return "upcoming";
-        return "completed";
-    };
-
-
 
     return (
         <>
@@ -388,4 +304,7 @@ setEvents(sorted);
         </>
     );
 }
+
+
+
 

@@ -7,17 +7,10 @@ import {
   useImperativeHandle,
   useRef
 } from 'react';
-import {
-  doc,
-  getDoc,
-  updateDoc,
-  collection,
-  getDocs
-} from 'firebase/firestore';
+import { doc, getDoc, updateDoc, collection, getDocs, db } from '@/services/adminMonthlyMeetingFirebaseService';
 
 import { Users, Trash2 } from 'lucide-react';
 
-import { db } from '@/lib/firebase/firebaseClient';
 import { COLLECTIONS } from '@/lib/utility_collection';
 
 import Card from '@/components/ui/Card';
@@ -463,4 +456,6 @@ const ParticipantSection = forwardRef(function ParticipantSection(
 });
 
 export default ParticipantSection;
+
+
 

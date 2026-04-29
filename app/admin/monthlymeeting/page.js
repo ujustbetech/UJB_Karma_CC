@@ -6,3 +6,5 @@ import AnalyticsPage from "@/components/admin/monthlymeeting/MonthlyMeetingDashb
 export default function Page() {
   return <AnalyticsPage />;
 }
+
+

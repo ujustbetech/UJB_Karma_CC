@@ -492,3 +492,4 @@ export default function ServicesSection({ profile }) {
     </Card>
   );
 }
+

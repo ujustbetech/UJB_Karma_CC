@@ -230,3 +230,4 @@ export default function Sidebar({ collapsed }) {
     </aside>
   );
 }
+

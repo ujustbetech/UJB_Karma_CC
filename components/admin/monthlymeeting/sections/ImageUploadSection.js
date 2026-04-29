@@ -1,14 +1,9 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { db, storage } from '@/lib/firebase/firebaseClient';
-import {
-  ref,
-  uploadBytesResumable,
-  getDownloadURL,
-  deleteObject,
-} from 'firebase/storage';
-import { doc, updateDoc, arrayUnion, getDoc } from 'firebase/firestore';
+
+import { ref, uploadBytesResumable, getDownloadURL, deleteObject, storage } from '@/services/adminMonthlyMeetingStorageService';
+import { doc, updateDoc, arrayUnion, getDoc, db } from '@/services/adminMonthlyMeetingFirebaseService';
 import { COLLECTIONS } from '@/lib/utility_collection';
 
 import Card from '@/components/ui/Card';
@@ -403,4 +398,7 @@ export default function ImageUploadSection({ eventID, fetchData }) {
     </div>
   );
 }
+
+
+
 

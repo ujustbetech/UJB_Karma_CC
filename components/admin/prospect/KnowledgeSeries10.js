@@ -1,12 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { doc, updateDoc, getDoc,collection,
-  query,
-  where,
-  getDocs,
-  setDoc,
-  addDoc,
-  serverTimestamp, } from "firebase/firestore";
-import { db } from "@/lib/firebase/firebaseClient";
+import { doc, updateDoc, getDoc, collection, query, where, getDocs, setDoc, addDoc, serverTimestamp, db } from "@/services/adminProspectJourneyFirebaseService";
 import emailjs from "@emailjs/browser";
 import { COLLECTIONS } from "@/lib/utility_collection";
 import Swal from "sweetalert2";
@@ -400,4 +393,6 @@ return (
 };
 
 export default KnowledgeSeries10;
+
+
 

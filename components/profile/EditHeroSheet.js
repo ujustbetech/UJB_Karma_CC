@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { X, Upload } from "lucide-react";
 import { updateUserProfile } from "@/services/profileService";
-import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import { getStorage, ref, uploadBytes, getDownloadURL } from "@/services/profileAssetStorageService";
 
 export default function EditHeroSheet({ open, setOpen, user, setUser, ujbCode }) {
 
@@ -212,4 +212,6 @@ export default function EditHeroSheet({ open, setOpen, user, setUser, ujbCode })
     </>
   );
 }
+
+
 

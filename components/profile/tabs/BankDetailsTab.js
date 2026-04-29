@@ -67,3 +67,4 @@ function SecureRow({ label, value, masked = false }) {
     </div>
   );
 }
+

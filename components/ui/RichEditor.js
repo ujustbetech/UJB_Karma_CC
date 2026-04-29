@@ -26,3 +26,4 @@ export default function RichEditor({ value, onChange }) {
     </div>
   );
 }
+

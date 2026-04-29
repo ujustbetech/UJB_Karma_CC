@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { X } from "lucide-react";
 import { updateUserProfile } from "@/services/profileService";
-import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import { getStorage, ref, uploadBytes, getDownloadURL } from "@/services/profileAssetStorageService";
 import { encryptData } from "@/utils/encryption";
 
 export default function EditBankDetailsSheet({
@@ -173,4 +173,6 @@ function SelectField({ label, value, onChange, options }) {
     </div>
   );
 }
+
+
 

@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { X } from "lucide-react";
 import { updateUserProfile } from "@/services/profileService";
-import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import { getStorage, ref, uploadBytes, getDownloadURL } from "@/services/profileAssetStorageService";
 
 const BUSINESS_DOCS = [
   { key: "gst", label: "GST Certificate" },
@@ -134,4 +134,6 @@ export default function EditBusinessKycSheet({
     </>
   );
 }
+
+
 

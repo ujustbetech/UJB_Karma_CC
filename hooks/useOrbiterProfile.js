@@ -1,9 +1,8 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { db, storage } from '@/lib/firebase/firebaseClient';
 import { encryptData, decryptData } from '@/utils/encryption';
+import { uploadOrbiterProfileAsset } from '@/services/orbiterProfileAssetService';
 
 /* ---------------- FILE HELPERS ---------------- */
 
@@ -28,14 +27,7 @@ function getBasePath(ujbcode, mobile) {
 }
 
 async function uploadWithMeta(file, fullPath) {
-  const fileRef = ref(storage, fullPath);
-  await uploadBytes(fileRef, file);
-  const url = await getDownloadURL(fileRef);
-  return {
-    url,
-    path: fullPath,
-    fileName: fullPath.split('/').pop()
-  };
+  return uploadOrbiterProfileAsset(file, fullPath);
 }
 
 /* ---------------- MAIN HOOK ---------------- */

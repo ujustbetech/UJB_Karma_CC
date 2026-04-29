@@ -2,8 +2,7 @@
 
 import { useParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { doc, getDoc, collection, onSnapshot } from "firebase/firestore";
-import { db } from "@/lib/firebase/firebaseClient";
+import { doc, getDoc, collection, onSnapshot, db } from "@/services/adminMonthlyMeetingFirebaseService";
 import { COLLECTIONS } from "@/lib/utility_collection";
 
 import TopicSection from "@/components/admin/monthlymeeting/sections/TopicSection";
@@ -271,3 +270,6 @@ export default function MonthlyMeetingDetailsPage() {
     </div>
   );
 }
+
+
+

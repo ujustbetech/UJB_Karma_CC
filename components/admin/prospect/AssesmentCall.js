@@ -1,16 +1,8 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import {
-  doc,
-  getDoc,
-  updateDoc,
-  collection,
-  getDocs,
-  addDoc
-} from "firebase/firestore";
+import { doc, getDoc, updateDoc, collection, getDocs, addDoc, db } from "@/services/adminProspectJourneyFirebaseService";
 
-import { db } from "@/lib/firebase/firebaseClient";
 import { COLLECTIONS } from "@/lib/utility_collection";
 
 const Followup = ({ id, data = {} }) => {
@@ -443,3 +435,5 @@ const Followup = ({ id, data = {} }) => {
 };
 
 export default Followup;
+
+

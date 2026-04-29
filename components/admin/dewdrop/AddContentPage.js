@@ -1,1172 +1,357 @@
 "use client";
 
-import React, { useEffect, useRef, useState, useMemo } from "react";
-import AdminLayout from "@/components/layout/AdminLayout";
+import { useEffect, useMemo, useState } from "react";
 import Card from "@/components/ui/Card";
 import Text from "@/components/ui/Text";
 import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
 import Select from "@/components/ui/Select";
 import Textarea from "@/components/ui/Textarea";
-import Checkbox from "@/components/ui/Checkbox";
-import RadioGroup from "@/components/ui/RadioGroup";
 import FormField from "@/components/ui/FormField";
+import RadioGroup from "@/components/ui/RadioGroup";
 import TagsInput from "@/components/ui/TagsInput";
+import Checkbox from "@/components/ui/Checkbox";
 import { useToast } from "@/components/ui/ToastProvider";
-import FilePreview from "@/components/ui/FilePreview";
-import { COLLECTIONS } from "@/lib/utility_collection";
 import { useAdminSession } from "@/hooks/useAdminSession";
-import { Eye, User, Layers, Tag, Upload, Rocket, AlignLeft, Shapes, Type, Hash, FileText, Folder, Users, Video, Link } from "lucide-react";
+import {
+  createContentEntry,
+  fetchContentReferenceData,
+  fetchPartnerDetails,
+} from "@/services/adminContentService";
+import { validateContentForm, validateFileSizes } from "@/services/contentShared";
+import { uploadContentFiles } from "@/services/contentUploadService";
 
-import { db, storage } from "@/lib/firebase/firebaseClient";
-import {
-    collection,
-    addDoc,
-    getDocs,
-    doc,
-    getDoc,
-    Timestamp
-} from "firebase/firestore";
-import {
-    ref,
-    uploadBytesResumable,
-    getDownloadURL
-} from "firebase/storage";
+const CONTENT_TYPES = ["Normal", "Featured"];
+const CONTENT_FORMATS = ["Image", "Video", "Audio", "Text"];
 
 export default function AddContentPage() {
-    const toast = useToast(); // object-style API
-    const { admin } = useAdminSession();
+  const toast = useToast();
+  const { admin } = useAdminSession();
+  const [loading, setLoading] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const [categories, setCategories] = useState([]);
+  const [partners, setPartners] = useState([]);
+  const [errors, setErrors] = useState({});
 
-    const firstFieldRef = useRef(null);
-const [imageItems, setImageItems] = useState([]);
-    const [loading, setLoading] = useState(false);
-    const [uploading, setUploading] = useState(false);
-    const [progress, setProgress] = useState(0);
+  const [contentType, setContentType] = useState("Normal");
+  const [contentFormat, setContentFormat] = useState("");
+  const [contentName, setContentName] = useState("");
+  const [contDiscription, setContDiscription] = useState("");
+  const [contentCategoryId, setContentCategoryId] = useState("");
+  const [contentCategoryName, setContentCategoryName] = useState("");
+  const [ownershipType, setOwnershipType] = useState("UjustBe");
+  const [parternameId, setParternameId] = useState("");
+  const [partnerDesig, setPartnerDesig] = useState("");
+  const [lpProfile, setLpProfile] = useState("");
+  const [partnerNamelp, setPartnerNamelp] = useState("");
+  const [tags, setTags] = useState([]);
+  const [videoUrl, setVideoUrl] = useState("");
+  const [blogUrl, setBlogUrl] = useState("");
+  const [switchValue, setSwitchValue] = useState(true);
+  const [mainFile, setMainFile] = useState(null);
+  const [thumbnailFile, setThumbnailFile] = useState(null);
+  const [mainPreview, setMainPreview] = useState("");
+  const [thumbnailPreview, setThumbnailPreview] = useState("");
 
-    // Identity
-    const [contentType, setContentType] = useState("Normal");
-    const [contentFormat, setContentFormat] = useState("");
-    const [contentName, setContentName] = useState("");
-    const [contDiscription, setContDiscription] = useState("");
+  useEffect(() => {
+    fetchContentReferenceData()
+      .then((data) => {
+        setCategories(data.categories || []);
+        setPartners(data.partners || []);
+      })
+      .catch((error) => {
+        console.error(error);
+        toast.error("Failed to load content data");
+      });
+  }, [toast]);
 
-    // Classification
-    const [contentCategoryId, setContentCategoryId] = useState("");
-    const [contentCategoryName, setContentCategoryName] = useState("");
-    const [parternameId, setParternameId] = useState("");
-    const [partnerDesig, setPartnerDesig] = useState("");
-    const [lpProfile, setLpProfile] = useState("");
-    const [partnerNamelp, setPartnerNamelp] = useState("");
-    const [tags, setTags] = useState([]);
-    const [ownershipType, setOwnershipType] = useState("UjustBe");
-const [partnerSearch, setPartnerSearch] = useState("");
-const [filteredPartners, setFilteredPartners] = useState([]);
-    // Links
-    const [videoUrl, setVideoUrl] = useState("");
-    const [blogUrl, setBlogUrl] = useState("");
-
-    // Status
-    const [switchValue, setSwitchValue] = useState(true);
-
-    // Media
-    const [contentFiles, setContentFiles] = useState([]);
-    const [thumbnailFiles, setThumbnailFiles] = useState([]);
-    const [contentFileUrls, setContentFileUrls] = useState([]);
-    const [thumbnailUrls, setThumbnailUrls] = useState([]);
-
-    // Data sources
-    const [ContentData, setContentData] = useState([]);
-    const [Userdata, setUserdata] = useState([]);
-
-    const [errors, setErrors] = useState({});
-
-    const [contentStatus, setContentStatus] = useState("draft");
-
-    const [mainFile, setMainFile] = useState(null);
-    const [mainPreview, setMainPreview] = useState(null);
-
-    const [thumbnailFile, setThumbnailFile] = useState(null);
-    const [thumbnailPreview, setThumbnailPreview] = useState(null);
-
-    const [dragMain, setDragMain] = useState(false);
-    const [dragThumb, setDragThumb] = useState(false);
-
-    useEffect(() => {
-        firstFieldRef.current?.focus();
-    }, []);
-
-    // Parallel load
- useEffect(() => {
-  const fetchData = async () => {
-    const [contentSnap, userSnap] = await Promise.all([
-      getDocs(collection(db, "ContentCategory")),
-      getDocs(collection(db, COLLECTIONS.userDetail)) // ✅ usersdetail DB
-    ]);
-
-    setContentData(contentSnap.docs.map(d => ({ ...d.data(), id: d.id })));
-
-    setUserdata(userSnap.docs.map(doc => {
-      const data = doc.data();
-      return {
-        id: doc.id,
-        partnerName: data["Name"] || "",
-        PartnerType: data["Category"] || "",
-        lpProfileimg: data["ProfilePhotoURL"] || "", // ✅ YOUR FIELD
-        ujbCode: data["ujbCode"] || data["UJBCode"] || ""
-      };
-    }));
-  };
-
-  fetchData();
-}, []);
-const handlePartnerSearch = (value) => {
-  setPartnerSearch(value);
-
-  if (!value.trim()) {
-    setFilteredPartners([]);
-    return;
-  }
-
-  const filtered = Userdata.filter(u =>
-    u.partnerName.toLowerCase().includes(value.toLowerCase())
+  const categoryOptions = useMemo(
+    () => [
+      { label: "Select category", value: "" },
+      ...categories.map((item) => ({
+        label: item.contentCategory || item.name || item.id,
+        value: item.id,
+      })),
+    ],
+    [categories]
   );
 
-  setFilteredPartners(filtered);
-};
-const selectPartner = (u) => {
-  setParternameId(u.id);
-  setPartnerNamelp(u.partnerName);
-  setPartnerDesig(u.PartnerType);
-  setLpProfile(u.lpProfileimg);
+  const partnerOptions = useMemo(
+    () => [
+      { label: "Select partner", value: "" },
+      ...partners.map((item) => ({
+        label: item.partnerName || item.id,
+        value: item.id,
+      })),
+    ],
+    [partners]
+  );
 
-  setPartnerSearch(u.partnerName);
-  setFilteredPartners([]);
+  const setPartnerFromDetails = async (partnerId) => {
+    setParternameId(partnerId);
+    if (!partnerId) {
+      setPartnerDesig("");
+      setPartnerNamelp("");
+      setLpProfile("");
+      return;
+    }
 
-  setErrors(prev => ({ ...prev, parternameId: "" }));
-};
-    const categoryOptions = useMemo(
-        () => [
-            { label: "Select category", value: "" },
-            ...ContentData.map(c => ({ label: c.contentCategory, value: c.id }))
-        ],
-        [ContentData]
-    );
+    const partner = await fetchPartnerDetails(partnerId);
+    setPartnerDesig(partner?.partnerDesignation || "");
+    setPartnerNamelp(partner?.partnerName || "");
+    setLpProfile(partner?.lpProfile || "");
+  };
 
-    const partnerOptions = useMemo(
-        () => [
-            { label: "Select partner", value: "" },
-            ...Userdata.map(u => ({ label: u.partnerName, value: u.id }))
-        ],
-        [Userdata]
-    );
+  const resetForm = () => {
+    setContentType("Normal");
+    setContentFormat("");
+    setContentName("");
+    setContDiscription("");
+    setContentCategoryId("");
+    setContentCategoryName("");
+    setOwnershipType("UjustBe");
+    setParternameId("");
+    setPartnerDesig("");
+    setLpProfile("");
+    setPartnerNamelp("");
+    setTags([]);
+    setVideoUrl("");
+    setBlogUrl("");
+    setSwitchValue(true);
+    setMainFile(null);
+    setThumbnailFile(null);
+    setMainPreview("");
+    setThumbnailPreview("");
+    setErrors({});
+  };
 
-    const validate = () => {
-        const newErrors = {};
+  const buildFormData = () => ({
+    contentCategoryId,
+    contentFiles: mainFile ? [mainFile] : [],
+    contentFormat,
+    contentName,
+    contentType,
+    contDiscription,
+    ownershipType,
+    parternameId,
+    thumbnailFiles: thumbnailFile ? [thumbnailFile] : [],
+  });
 
-        if (!contentType) newErrors.contentType = "Required";
-        if (!contentFormat) newErrors.contentFormat = "Required";
-        if (!contentName) newErrors.contentName = "Required";
-        if (!contentCategoryId) newErrors.contentCategoryId = "Required";
-      if (ownershipType === "Partner" && !parternameId)
-  newErrors.parternameId = "Required";
-        if (!contDiscription) newErrors.contDiscription = "Required";
-        if (!contentFiles.length) newErrors.contentFiles = "Content file required";
-        if (!thumbnailFiles.length) newErrors.thumbnailFiles = "Thumbnail required";
+  const handleSave = async (status) => {
+    const formData = buildFormData();
+    const nextErrors = validateContentForm(formData);
 
-        setErrors(newErrors);
+    if (status === "draft") {
+      delete nextErrors.contentFiles;
+      delete nextErrors.thumbnailFiles;
+    }
 
-        const firstErrorKey = Object.keys(newErrors)[0];
-        if (firstErrorKey) {
-            const el = document.querySelector(
-                `[data-field="${firstErrorKey}"] input, [data-field="${firstErrorKey}"] textarea`
-            );
-            el?.focus();
+    setErrors(nextErrors);
+    if (Object.keys(nextErrors).length > 0) {
+      return;
+    }
+
+    setLoading(true);
+    setProgress(0);
+
+    try {
+      let contentFileImages = [];
+      let Thumbnail = [];
+
+      if (status !== "draft") {
+        const contentSizeError = validateFileSizes(formData.contentFiles, 25);
+        const thumbnailSizeError = validateFileSizes(formData.thumbnailFiles, 5);
+        if (contentSizeError || thumbnailSizeError) {
+          throw new Error(contentSizeError || thumbnailSizeError);
         }
-
-        return Object.keys(newErrors).length === 0;
-    };
-
-
-    const isValidMainFile = (file) => {
-        if (!contentFormat) return false;
-
-        if (contentFormat === "Image") return file.type.startsWith("image/");
-        if (contentFormat === "Video") return file.type.startsWith("video/");
-        if (contentFormat === "Audio") return file.type.startsWith("audio/");
-        if (contentFormat === "Text") return true;
-
-        return false;
-    };
-
-const handlePartnerChange = async (id) => {
-  setParternameId(id);
-
-  const docRef = doc(db, COLLECTIONS.userDetail, id);
-  const docSnap = await getDoc(docRef);
-
-  if (docSnap.exists()) {
-    const data = docSnap.data();
-
-    setLpProfile(data["ProfilePhotoURL"] || "");
-    setPartnerNamelp(data["Name"] || "");
-    setPartnerDesig(data["Category"] || "");
-  }
-
-  setErrors(prev => ({ ...prev, parternameId: "" }));
-};
-
-    const handleCategoryChange = (id) => {
-        setContentCategoryId(id);
-        const selected = ContentData.find(c => c.id === id);
-        setContentCategoryName(selected?.contentCategory || "");
-        setErrors(prev => ({ ...prev, contentCategoryId: "" }));
-    };
-
-    const validateFiles = (files, maxMB) => {
-        const maxBytes = maxMB * 1024 * 1024;
-        for (const f of files) {
-            if (f.size > maxBytes) return `File too large: ${f.name}`;
-        }
-        return null;
-    };
-
-const handleMainFile = (file) => {
-  if (!file || !isValidMainFile(file)) {
-    toast.error("Invalid file for selected format");
-    return;
-  }
-
-  setMainFile(file);
-  setContentFiles([file]); // ✅ VERY IMPORTANT
-
-  if (file.type.startsWith("image/") || file.type.startsWith("video/")) {
-    setMainPreview(URL.createObjectURL(file));
-  } else {
-    setMainPreview(null);
-  }
-
-  setErrors(prev => ({ ...prev, contentFiles: "" }));
-};
-
- const handleThumbnail = (file) => {
-  if (!file?.type.startsWith("image/")) {
-    toast.error("Thumbnail must be an image");
-    return;
-  }
-
-  setThumbnailFile(file);
-  setThumbnailFiles([file]); // ✅ VERY IMPORTANT
-  setThumbnailPreview(URL.createObjectURL(file));
-
-  setErrors(prev => ({ ...prev, thumbnailFiles: "" }));
-};
-
-    const uploadFiles = async (files) => {
-        if (!files.length) return [];
 
         setUploading(true);
-        const urls = [];
-
-        for (let file of files) {
-            const storageRef = ref(
-                storage,
-                `content/${Date.now()}-${file.name}`
-            );
-
-            const uploadTask = uploadBytesResumable(storageRef, file);
-
-            await new Promise((resolve, reject) => {
-                uploadTask.on(
-                    "state_changed",
-                    (snapshot) => {
-                        const pct = Math.round(
-                            (snapshot.bytesTransferred / snapshot.totalBytes) * 100
-                        );
-                        setProgress(pct);
-                    },
-                    reject,
-                    async () => {
-                        const url = await getDownloadURL(uploadTask.snapshot.ref);
-                        urls.push(url);
-                        resolve();
-                    }
-                );
-            });
-        }
-
-        setUploading(false);
-        return urls;
-    };
-
-   const resetForm = () => {
-  setContentName("");
-  setVideoUrl("");
-  setBlogUrl("");
-  setContDiscription("");
-  setTags([]);
-  setSwitchValue(true);
-
-  setMainFile(null);
-  setMainPreview(null);
-  setThumbnailFile(null);
-  setThumbnailPreview(null);
-
-  setContentFiles([]);
-  setThumbnailFiles([]);
-  setContentFileUrls([]);
-  setThumbnailUrls([]);
-};
-
-    const handleSubmit = async (e) => {
-        e.preventDefault();
-        if (!validate()) return;
-
-        setLoading(true);
-
-        try {
-            const err1 = validateFiles(contentFiles, 25);
-            const err2 = validateFiles(thumbnailFiles, 5);
-            if (err1 || err2) throw new Error(err1 || err2);
-
-            const contentUploads = await uploadFiles(contentFiles);
-            const thumbUploads = await uploadFiles(thumbnailFiles);
-
-            setContentFileUrls(prev => [...prev, ...contentUploads]);
-            setThumbnailUrls(prev => [...prev, ...thumbUploads]);
-
-            await addDoc(collection(db, "ContentData"), {
-                AdminName: admin?.name || "",
-                Thumbnail: thumbUploads,
-                contentFileImages: contentUploads,
-                contentFormat,
-                contentType,
-                contentName,
-                comments: [],
-                parternameId,
-                contDiscription,
-                contentCategoryId,
-                contentCategoryName,
-                partnerDesig,
-                inputTag: tags,
-                partnerNamelp,
-                lpProfile,
-                videoUrl,
-                blogUrl,
-                switchValue,
-                totallike: 0,
-                totalViews: 0,
-                totalCp: 0,
-                status: contentStatus,
-                AdminCreatedby: Timestamp.now(),
-            });
-
-            toast.success("Content submitted successfully");
-            resetForm();
-            window.scrollTo({ top: 0, behavior: "smooth" });
-        } catch (err) {
-            console.error("SAVE ERROR:", err);
-            toast.error("Submission failed");
-        }
-
-        setLoading(false);
-    };
-
-    const handleSaveDraft = async () => {
-        setContentStatus("draft");
-        setLoading(true);
-
-        try {
-            await addDoc(collection(db, "ContentData"), {
-                AdminName: admin?.name || "",
-                Thumbnail: [],
-                contentFileImages: [],
-                contentFormat,
-                contentType,
-                contentName,
-                comments: [],
-                parternameId,
-                contDiscription,
-                contentCategoryId,
-                contentCategoryName,
-                partnerDesig,
-                inputTag: tags,
-                partnerNamelp,
-                lpProfile,
-                videoUrl,
-                blogUrl,
-                switchValue,
-                status: "draft",
-                totallike: 0,
-                totalViews: 0,
-                totalCp: 0,
-                AdminCreatedby: Timestamp.now(),
-            });
-
-            toast.success("Draft Save successfully");
-        } catch (err) {
-            console.error(err);
-            toast.error("Failed to save draft");
-            // toast({ type: "error", message: "Failed to save draft" });
-        }
-
-        setLoading(false);
-    };
-
-
-    const handlePublish = async (e) => {
-        e.preventDefault();
-        if (!validate()) return;
-
-        setContentStatus("published");
-        setLoading(true);
-
-        try {
-            const contentUploads = await uploadFiles(contentFiles);
-            const thumbUploads = await uploadFiles(thumbnailFiles);
-
-            await addDoc(collection(db, "ContentData"), {
-                AdminName: admin?.name || "",
-                Thumbnail: thumbUploads,
-                contentFileImages: contentUploads,
-                contentFormat,
-                contentType,
-                contentName,
-                comments: [],
-              ownershipType,
-parternameId: ownershipType === "Partner" ? parternameId : "",
-partnerNamelp: ownershipType === "Partner" ? partnerNamelp : "UjustBe",
-lpProfile: ownershipType === "Partner" ? lpProfile : "",
-                contDiscription,
-                contentCategoryId,
-                contentCategoryName,
-                partnerDesig,
-                inputTag: tags,
-                partnerNamelp,
-                lpProfile,
-                videoUrl,
-                blogUrl,
-                switchValue,
-                status: "published",
-                totallike: 0,
-                totalViews: 0,
-                totalCp: 0,
-                AdminCreatedby: Timestamp.now(),
-            });
-            toast.success("Content published");
-            // toast({ type: "success", message: "Content published" });
-            resetForm();
-
-        } catch (err) {
-            console.error(err);
-            toast.error("Failed to publish");
-            // toast({ type: "error", message: "Failed to publish" });
-        }
-
-        setLoading(false);
-    };
-
-
-    const handleImageSelect = (files) => {
-        const validImages = Array.from(files).filter(file =>
-            file.type.startsWith("image/")
-        );
-
-        const mapped = validImages.map(file => ({
-            id: `${file.name}-${file.size}`,
-            file,
-            preview: URL.createObjectURL(file),
-            sizeMB: (file.size / 1024 / 1024).toFixed(2)
-        }));
-
-        setImageItems(prev => [...prev, ...mapped]);
-        setContentFiles(prev => [...prev, ...validImages]); // keep your original upload flow
-    };
-
-    const removeImage = (id) => {
-        setImageItems(prev => prev.filter(img => img.id !== id));
-        setContentFiles(prev =>
-            prev.filter(file => `${file.name}-${file.size}` !== id)
-        );
-    };
-
-
-    return (
-        <>
-            {/* <Text as="h1">Add Content</Text> */}
-
-            <Card className="p-4 mb-5">
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-
-                    <div className="flex items-center gap-2">
-                        <FileText className="w-4 h-4 text-muted-foreground" />
-                        <div>
-                            <Text variant="muted" className="text-xs">Files</Text>
-                            <Text className="font-medium">{contentFiles.length}</Text>
-                        </div>
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                        <Folder className="w-4 h-4 text-muted-foreground" />
-                        <div>
-                            <Text variant="muted" className="text-xs">Category</Text>
-                            <Text className="font-medium">{contentCategoryName || "-"}</Text>
-                        </div>
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                        <Users className="w-4 h-4 text-muted-foreground" />
-                        <div>
-                            <Text variant="muted" className="text-xs">Partner</Text>
-                            <Text className="font-medium">{partnerNamelp || "-"}</Text>
-                        </div>
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                        <Tag className="w-4 h-4 text-muted-foreground" />
-                        <div>
-                            <Text variant="muted" className="text-xs">Tags</Text>
-                            <Text className="font-medium">{tags.length}</Text>
-                        </div>
-                    </div>
-
-                </div>
-            </Card>
-
-
-
-
-            <form onSubmit={handleSubmit}>
-                <div
-                    style={{
-                        display: "grid",
-                        gridTemplateColumns: "1.6fr 1fr",
-                        gap: 24,
-                        alignItems: "start"
-                    }}
-                >
-                    <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
-                        <Card className="p-6 space-y-6">
-
-                            {/* Header */}
-                            <div className="flex items-center gap-2 pb-3">
-                                <FileText className="w-5 h-5 text-muted-foreground" />
-                                <Text as="h2" className="font-semibold">Content Identity</Text>
-                            </div>
-
-                            {/* Grid Layout */}
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-
-                                {/* LEFT COLUMN */}
-
-                                <FormField
-                                    label={
-                                        <div className="flex items-center gap-2">
-                                            <Type className="w-4 h-4 text-muted-foreground" />
-                                            Content Name
-                                        </div>
-                                    }
-                                    error={errors.contentName}
-                                    required
-                                    data-field="contentName"
-                                >
-                                    <Input
-                                        ref={firstFieldRef}
-                                        value={contentName}
-                                        onChange={(e) => setContentName(e.target.value)}
-                                        error={!!errors.contentName}
-                                        placeholder="Enter content name"
-                                    />
-                                </FormField>
-
-                                <FormField
-                                    label={
-                                        <div className="flex items-center gap-2">
-                                            <Shapes className="w-4 h-4 text-muted-foreground" />
-                                            Content Type
-                                        </div>
-                                    }
-                                    error={errors.contentType}
-                                    required
-                                >
-                                    <RadioGroup
-                                        value={contentType}
-                                        onChange={setContentType}
-                                        options={[
-                                            { label: "Exclusive", value: "Exclusive" },
-                                            { label: "Normal", value: "Normal" }
-                                        ]}
-                                    />
-                                </FormField>
-
-                                {/* RIGHT COLUMN */}
-
-                                <FormField
-                                    label={
-                                        <div className="flex items-center gap-2">
-                                            <FileText className="w-4 h-4 text-muted-foreground" />
-                                            Content Format
-                                        </div>
-                                    }
-                                    error={errors.contentFormat}
-                                    required
-                                >
-                                    <RadioGroup
-                                        value={contentFormat}
-                                        onChange={setContentFormat}
-                                        options={[
-                                            { label: "Text", value: "Text" },
-                                            { label: "Audio", value: "Audio" },
-                                            { label: "Image", value: "Image" },
-                                            { label: "Video", value: "Video" }
-                                        ]}
-                                    />
-                                </FormField>
-
-                                <FormField
-                                    label={
-                                        <div className="flex items-center gap-2">
-                                            <AlignLeft className="w-4 h-4 text-muted-foreground" />
-                                            Description
-                                        </div>
-                                    }
-                                    error={errors.contDiscription}
-                                    required
-                                    data-field="contDiscription"
-                                >
-                                    <Textarea
-                                        value={contDiscription}
-                                        onChange={(e) => setContDiscription(e.target.value)}
-                                        error={!!errors.contDiscription}
-                                        placeholder="Write a short description..."
-                                        rows={4}
-                                    />
-                                </FormField>
-
-                            </div>
-                        </Card>
-                        <Card>
-                            <Text as="h2">Main Content</Text>
-
-                            <div
-                                onDragOver={(e) => {
-                                    e.preventDefault();
-                                    setDragMain(true);
-                                }}
-                                onDragLeave={() => setDragMain(false)}
-                                onDrop={(e) => {
-                                    e.preventDefault();
-                                    setDragMain(false);
-                                    handleMainFile(e.dataTransfer.files[0]);
-                                }}
-                                style={{
-                                    border: dragMain ? "2px dashed #3b82f6" : "2px dashed #d0d5dd",
-                                    background: dragMain ? "#eff6ff" : "#fafafa",
-                                    padding: 20,
-                                    borderRadius: 10,
-                                    textAlign: "center",
-                                    marginBottom: 12
-                                }}
-                            >
-                                <Text>
-                                    {contentFormat
-                                        ? `Drop ${contentFormat.toLowerCase()} file here`
-                                        : "Select content format first"}
-                                </Text>
-                            </div>
-
-                            <Input
-                                type="file"
-                                disabled={!contentFormat}
-                                accept={
-                                    contentFormat === "Image"
-                                        ? "image/*"
-                                        : contentFormat === "Video"
-                                            ? "video/*"
-                                            : contentFormat === "Audio"
-                                                ? "audio/*"
-                                                : "*"
-                                }
-                                onChange={(e) => handleMainFile(e.target.files[0])}
-                            />
-
-                            {mainFile && (
-                                <div
-                                    style={{
-                                        marginTop: 12,
-                                        display: "flex",
-                                        alignItems: "center",
-                                        gap: 12,
-                                        border: "1px solid #e5e7eb",
-                                        padding: 8,
-                                        borderRadius: 8,
-                                        background: "#fafafa",
-                                        width: "fit-content"
-                                    }}
-                                >
-                                    {/* Small Preview */}
-                                    {mainPreview ? (
-                                        contentFormat === "Video" ? (
-                                            <video
-                                                src={mainPreview}
-                                                style={{
-                                                    width: 70,
-                                                    height: 50,
-                                                    objectFit: "cover",
-                                                    borderRadius: 6
-                                                }}
-                                            />
-                                        ) : (
-                                            <img
-                                                src={mainPreview}
-                                                style={{
-                                                    width: 70,
-                                                    height: 50,
-                                                    objectFit: "cover",
-                                                    borderRadius: 6
-                                                }}
-                                            />
-                                        )
-                                    ) : (
-                                        <div
-                                            style={{
-                                                width: 70,
-                                                height: 50,
-                                                display: "flex",
-                                                alignItems: "center",
-                                                justifyContent: "center",
-                                                fontSize: 11,
-                                                border: "1px dashed #ccc",
-                                                borderRadius: 6
-                                            }}
-                                        >
-                                            FILE
-                                        </div>
-                                    )}
-
-                                    {/* File Info */}
-                                    <div>
-                                        <Text className="text-xs">{mainFile.name}</Text>
-                                        <Text className="text-xs text-muted-foreground">
-                                            {(mainFile.size / 1024 / 1024).toFixed(2)} MB
-                                        </Text>
-                                    </div>
-
-                                    {/* Remove */}
-                                    <button
-                                        type="button"
-                                        onClick={() => {
-                                            setMainFile(null);
-                                            setMainPreview(null);
-                                        }}
-                                        style={{
-                                            marginLeft: 8,
-                                            background: "#ef4444",
-                                            color: "#fff",
-                                            border: "none",
-                                            borderRadius: 6,
-                                            padding: "2px 8px",
-                                            fontSize: 11,
-                                            cursor: "pointer"
-                                        }}
-                                    >
-                                        Remove
-                                    </button>
-                                </div>
-                            )}
-
-                        </Card>
-                        <Card>
-                            <Text as="h2">Thumbnail</Text>
-
-                            <div
-                                onDragOver={(e) => {
-                                    e.preventDefault();
-                                    setDragThumb(true);
-                                }}
-                                onDragLeave={() => setDragThumb(false)}
-                                onDrop={(e) => {
-                                    e.preventDefault();
-                                    setDragThumb(false);
-                                    handleThumbnail(e.dataTransfer.files[0]);
-                                }}
-                                style={{
-                                    border: dragThumb ? "2px dashed #10b981" : "2px dashed #d0d5dd",
-                                    background: dragThumb ? "#ecfdf5" : "#fafafa",
-                                    padding: 20,
-                                    borderRadius: 10,
-                                    textAlign: "center",
-                                    marginBottom: 12
-                                }}
-                            >
-                                <Text>Drop thumbnail image here</Text>
-                            </div>
-
-                            <Input
-                                type="file"
-                                accept="image/*"
-                                onChange={(e) => handleThumbnail(e.target.files[0])}
-                            />
-
-                            {thumbnailFile && (
-                                <div
-                                    style={{
-                                        marginTop: 12,
-                                        display: "flex",
-                                        alignItems: "center",
-                                        gap: 12,
-                                        border: "1px solid #e5e7eb",
-                                        padding: 8,
-                                        borderRadius: 8,
-                                        background: "#f0fdf4",
-                                        width: "fit-content"
-                                    }}
-                                >
-                                    <img
-                                        src={thumbnailPreview}
-                                        style={{
-                                            width: 70,
-                                            height: 50,
-                                            objectFit: "cover",
-                                            borderRadius: 6
-                                        }}
-                                    />
-
-                                    <div>
-                                        <Text className="text-xs">{thumbnailFile.name}</Text>
-                                        <Text className="text-xs text-muted-foreground">
-                                            {(thumbnailFile.size / 1024 / 1024).toFixed(2)} MB
-                                        </Text>
-                                    </div>
-
-                                    <button
-                                        type="button"
-                                        onClick={() => {
-                                            setThumbnailFile(null);
-                                            setThumbnailPreview(null);
-                                        }}
-                                        style={{
-                                            marginLeft: 8,
-                                            background: "#ef4444",
-                                            color: "#fff",
-                                            border: "none",
-                                            borderRadius: 6,
-                                            padding: "2px 8px",
-                                            fontSize: 11,
-                                            cursor: "pointer"
-                                        }}
-                                    >
-                                        Remove
-                                    </button>
-                                </div>
-                            )}
-                        </Card>
-
-
-
-                        <Card className="p-6 space-y-6">
-
-                            {/* Header */}
-                            <div className="flex items-center gap-2 pb-3">
-                                <Folder className="w-5 h-5 text-muted-foreground" />
-                                <Text as="h2" className="font-semibold">Classification</Text>
-  
-                            </div>
-                              <FormField
-  label={
-    <div className="flex items-center gap-2">
-      <Rocket className="w-4 h-4 text-muted-foreground" />
-      Content Ownership
-    </div>
-  }
-  required
->
-  <RadioGroup
-    value={ownershipType}
-    onChange={(val) => {
-      setOwnershipType(val);
-
-      if (val === "UjustBe") {
-        setParternameId("");
-        setPartnerNamelp("");
-        setPartnerDesig("");
-        setLpProfile("");
-        setPartnerSearch("");
+        [contentFileImages, Thumbnail] = await Promise.all([
+          uploadContentFiles(formData.contentFiles, setProgress),
+          uploadContentFiles(formData.thumbnailFiles, setProgress),
+        ]);
       }
-    }}
-    options={[
-      { label: "UjustBe", value: "UjustBe" },
-      { label: "Partner", value: "Partner" }
-    ]}
-  />
-</FormField>
-                            {/* Grid */}
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
 
-                                {/* Category */}
-                                <FormField
-                                    label={
-                                        <div className="flex items-center gap-2">
-                                            <Folder className="w-4 h-4 text-muted-foreground" />
-                                            Category
-                                        </div>
-                                    }
-                                    error={errors.contentCategoryId}
-                                    required
-                                >
-                                    <Select
-                                        value={contentCategoryId}
-                                        onChange={handleCategoryChange}
-                                        options={categoryOptions}
-                                    />
-                                </FormField>
+      await createContentEntry({
+        adminName: admin?.name || "",
+        Thumbnail,
+        contentFileImages,
+        contentFormat,
+        contentType,
+        contentName,
+        comments: [],
+        ownershipType,
+        parternameId: ownershipType === "Partner" ? parternameId : "",
+        contDiscription,
+        contentCategoryId,
+        contentCategoryName,
+        partnerDesig: ownershipType === "Partner" ? partnerDesig : "",
+        inputTag: tags,
+        partnerNamelp: ownershipType === "Partner" ? partnerNamelp : "UjustBe",
+        lpProfile: ownershipType === "Partner" ? lpProfile : "",
+        videoUrl,
+        blogUrl,
+        switchValue,
+        status,
+        totallike: 0,
+        totalViews: 0,
+        totalCp: 0,
+        AdminCreatedby: new Date(),
+      });
 
-                                {/* Partner */}
-                           {ownershipType === "Partner" && (
-<FormField
-  label={
-    <div className="flex items-center gap-2">
-      <Users className="w-4 h-4 text-muted-foreground" />
-      Select Partner
+      toast.success(status === "draft" ? "Draft saved successfully" : "Content published");
+      resetForm();
+    } catch (error) {
+      console.error(error);
+      toast.error(error?.message || "Failed to save content");
+    } finally {
+      setUploading(false);
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      <Card className="space-y-6">
+        <Text variant="h1">Add Content</Text>
+
+        <div className="grid gap-4 md:grid-cols-2">
+          <FormField label="Content Name" error={errors.contentName} required>
+            <Input value={contentName} onChange={(e) => setContentName(e.target.value)} />
+          </FormField>
+
+          <FormField label="Content Type" error={errors.contentType} required>
+            <Select
+              value={contentType}
+              onChange={setContentType}
+              options={CONTENT_TYPES.map((value) => ({ label: value, value }))}
+            />
+          </FormField>
+
+          <FormField label="Content Format" error={errors.contentFormat} required>
+            <Select
+              value={contentFormat}
+              onChange={setContentFormat}
+              options={[
+                { label: "Select format", value: "" },
+                ...CONTENT_FORMATS.map((value) => ({ label: value, value })),
+              ]}
+            />
+          </FormField>
+
+          <FormField label="Category" error={errors.contentCategoryId} required>
+            <Select
+              value={contentCategoryId}
+              onChange={(value) => {
+                setContentCategoryId(value);
+                const selected = categories.find((item) => item.id === value);
+                setContentCategoryName(selected?.contentCategory || "");
+              }}
+              options={categoryOptions}
+            />
+          </FormField>
+        </div>
+
+        <FormField label="Ownership" error={errors.parternameId}>
+          <RadioGroup
+            value={ownershipType}
+            onChange={(value) => {
+              setOwnershipType(value);
+              if (value !== "Partner") {
+                setPartnerFromDetails("");
+              }
+            }}
+            options={[
+              { label: "UjustBe", value: "UjustBe" },
+              { label: "Partner", value: "Partner" },
+            ]}
+          />
+        </FormField>
+
+        {ownershipType === "Partner" && (
+          <FormField label="Partner" error={errors.parternameId} required>
+            <Select
+              value={parternameId}
+              onChange={setPartnerFromDetails}
+              options={partnerOptions}
+            />
+          </FormField>
+        )}
+
+        <FormField label="Description" error={errors.contDiscription} required>
+          <Textarea
+            value={contDiscription}
+            onChange={(e) => setContDiscription(e.target.value)}
+            rows={5}
+          />
+        </FormField>
+
+        <FormField label="Tags">
+          <TagsInput value={tags} onChange={setTags} />
+        </FormField>
+
+        <div className="grid gap-4 md:grid-cols-2">
+          <FormField label="Video URL">
+            <Input value={videoUrl} onChange={(e) => setVideoUrl(e.target.value)} />
+          </FormField>
+
+          <FormField label="Blog URL">
+            <Input value={blogUrl} onChange={(e) => setBlogUrl(e.target.value)} />
+          </FormField>
+        </div>
+
+        <div className="grid gap-4 md:grid-cols-2">
+          <FormField label="Main File" error={errors.contentFiles} required={ownershipType !== "draft"}>
+            <Input
+              type="file"
+              onChange={(e) => {
+                const file = e.target.files?.[0] || null;
+                setMainFile(file);
+                setMainPreview(file ? URL.createObjectURL(file) : "");
+              }}
+            />
+            {mainFile && <Text variant="muted">{mainFile.name}</Text>}
+          </FormField>
+
+          <FormField label="Thumbnail" error={errors.thumbnailFiles} required={ownershipType !== "draft"}>
+            <Input
+              type="file"
+              accept="image/*"
+              onChange={(e) => {
+                const file = e.target.files?.[0] || null;
+                setThumbnailFile(file);
+                setThumbnailPreview(file ? URL.createObjectURL(file) : "");
+              }}
+            />
+            {thumbnailFile && <Text variant="muted">{thumbnailFile.name}</Text>}
+          </FormField>
+        </div>
+
+        <Checkbox
+          checked={switchValue}
+          onChange={(e) => setSwitchValue(e.target.checked)}
+          label="Active"
+        />
+
+        {uploading ? (
+          <Text variant="muted">Uploading... {progress}%</Text>
+        ) : null}
+
+        {thumbnailPreview ? (
+          <img src={thumbnailPreview} alt="Thumbnail preview" className="h-40 rounded-xl object-cover" />
+        ) : null}
+
+        <div className="flex justify-end gap-3">
+          <Button variant="outline" onClick={() => handleSave("draft")} disabled={loading}>
+            {loading ? "Saving..." : "Save Draft"}
+          </Button>
+          <Button onClick={() => handleSave("published")} disabled={loading || uploading}>
+            {loading ? "Publishing..." : "Publish Now"}
+          </Button>
+        </div>
+      </Card>
     </div>
-  }
-  error={errors.parternameId}
-  required
->
-  <div className="relative">
-    <Input
-      value={partnerSearch}
-      onChange={(e) => handlePartnerSearch(e.target.value)}
-      error={!!errors.parternameId}
-      placeholder="Type partner name"
-    />
-
-    {filteredPartners.length > 0 && (
-      <div className="absolute z-20 w-full mt-2 bg-white border border-slate-200 rounded-lg shadow max-h-56 overflow-auto">
-
-        {filteredPartners.map((u) => (
-          <div
-            key={u.id}
-            onClick={() => selectPartner(u)}
-            className="px-4 py-2 cursor-pointer hover:bg-gray-50 flex items-center gap-2"
-          >
-
-            {u.lpProfileimg && (
-              <img
-                src={u.lpProfileimg}
-                className="w-7 h-7 rounded-full object-cover"
-              />
-            )}
-
-            <div>
-              <div className="text-sm font-medium">{u.partnerName}</div>
-              <div className="text-xs text-gray-500">{u.ujbCode}</div>
-            </div>
-
-          </div>
-        ))}
-
-      </div>
-    )}
-  </div>
-</FormField>
-)}
-                                {/* Hashtags - Full Width */}
-                                <FormField
-                                    className="md:col-span-2"
-                                    label={
-                                        <div className="flex items-center gap-2">
-                                            <Hash className="w-4 h-4 text-muted-foreground" />
-                                            Hashtags
-                                        </div>
-                                    }
-                                >
-                                    <TagsInput value={tags} onChange={setTags} />
-                                </FormField>
-
-                            </div>
-                        </Card>
-
-                    </div>
-                    <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
-                        <Card>
-                            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
-                                <Eye size={18} />
-                                <Text as="h2">Preview</Text>
-                            </div>
-
-                            {/* Thumbnail */}
-                           <div style={{ marginBottom: 12 }}>
-  {thumbnailPreview ? (
-    <img
-      src={thumbnailPreview}
-      alt="thumbnail preview"
-      style={{
-        width: "100%",
-        borderRadius: 8,
-        objectFit: "cover",
-        maxHeight: 220
-      }}
-    />
-  ) : (
-    <div
-      style={{
-        width: "100%",
-        height: 180,
-        borderRadius: 8,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        border: "1px dashed #d0d5dd"
-      }}
-    >
-      <Text variant="muted">Thumbnail preview will appear here</Text>
-    </div>
-  )}
-</div>
-
-                            {/* Title */}
-                            <Text as="h3">
-                                {contentName || "Content title will appear here"}
-                            </Text>
-
-                            {/* Description */}
-                            <Text variant="muted" style={{ marginTop: 8 }}>
-                                {contDiscription
-                                    ? contDiscription.slice(0, 140)
-                                    : "Description preview will appear here…"}
-                            </Text>
-
-                            {/* Meta info */}
-                        <div style={{ marginTop: 14, display: "flex", flexDirection: "column", gap: 6 }}>
-
-  {/* Partner Name */}
-  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-    <User size={14} />
-    <Text variant="muted">
-      {partnerNamelp || "Partner name"}
-    </Text>
-  </div>
-
-  {/* ⭐⭐⭐ ADD THIS LP PROFILE IMAGE HERE ⭐⭐⭐ */}
-  {lpProfile && (
-    <img
-      src={lpProfile}
-      alt="Partner Profile"
-      style={{
-        width: 36,
-        height: 36,
-        borderRadius: "50%",
-        objectFit: "cover",
-        marginTop: 6
-      }}
-    />
-  )}
-
-  {/* Category */}
-  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-    <Layers size={14} />
-    <Text variant="muted">
-      {contentCategoryName || "Category"}
-    </Text>
-  </div>
-
-  {/* Tags */}
-  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-    <Tag size={14} />
-    <Text variant="muted">
-      {tags && tags.length ? tags.join(", ") : "No tags added"}
-    </Text>
-  </div>
-
-</div>
-                        </Card>
-
-                        <Card className="p-6 space-y-6">
-
-                            {/* Header */}
-                            <div className="flex items-center gap-2 pb-3">
-                                <Link className="w-5 h-5 text-muted-foreground" />
-                                <Text as="h2" className="font-semibold">Distribution Links</Text>
-                            </div>
-
-                            {/* Grid */}
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-
-                                <FormField
-                                    label={
-                                        <div className="flex items-center gap-2">
-                                            <Video className="w-4 h-4 text-muted-foreground" />
-                                            Video URL
-                                        </div>
-                                    }
-                                >
-                                    <Input
-                                        value={videoUrl}
-                                        onChange={(e) => setVideoUrl(e.target.value)}
-                                        placeholder="https://youtube.com/..."
-                                    />
-                                </FormField>
-
-                                <FormField
-                                    label={
-                                        <div className="flex items-center gap-2">
-                                            <FileText className="w-4 h-4 text-muted-foreground" />
-                                            Blog URL
-                                        </div>
-                                    }
-                                >
-                                    <Input
-                                        value={blogUrl}
-                                        onChange={(e) => setBlogUrl(e.target.value)}
-                                        placeholder="https://yourblog.com/article"
-                                    />
-                                </FormField>
-
-                            </div>
-                        </Card>
-
-
-                    </div>
-                </div>
-
-                <div
-                    style={{
-                        position: "sticky",
-                        bottom: 0,
-                        background: "#fff",
-                        borderTop: "1px solid #e5e7eb",
-                        padding: "12px 16px",
-                        display: "flex",
-                        justifyContent: "flex-end",
-                        gap: 12,
-                        zIndex: 50
-                    }}
-                >
-                    <Button
-                        type="button"
-                        variant="outline"
-                        onClick={handleSaveDraft}
-                        disabled={loading}
-                    >
-                        {loading ? "Saving…" : "Save Draft"}
-                    </Button>
-
-                    <Button
-                        type="button"
-                        variant="primary"
-                        onClick={handlePublish}
-                        disabled={loading || uploading}
-                    >
-                        {loading || uploading ? "Publishing…" : "Publish Now"}
-                    </Button>
-                </div>
-
-            </form>
-
-
-
-
-
-        </>
-    );
+  );
 }
 

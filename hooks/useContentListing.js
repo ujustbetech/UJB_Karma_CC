@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   deleteContentEntry,
   fetchContentListing,
-} from "@/services/contentService";
+} from "@/services/adminContentService";
 
 export function useContentListing(toast) {
   const [content, setContent] = useState([]);

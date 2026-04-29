@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { COLLECTIONS } from "@/lib/utility_collection";
 import emailjs from '@emailjs/browser';
-import { doc, getDoc, updateDoc, collection, getDocs, addDoc,deleteDoc } from "firebase/firestore";
-import { db } from '@/lib/firebase/firebaseClient';
+import { doc, getDoc, updateDoc, collection, getDocs, addDoc, deleteDoc, db } from "@/services/adminProspectJourneyFirebaseService";
 import { sendWhatsAppTemplateRequest } from '@/utils/whatsappClient';
 
 const Followup = ({ id, data = { followups: [], comments: [] ,event: [] }, fetchData }) => {
@@ -1196,4 +1195,6 @@ Send
 };
 
 export default Followup;
+
+
 

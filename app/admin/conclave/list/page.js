@@ -1,14 +1,10 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { db } from "@/lib/firebase/firebaseClient";
 import {
-  collection,
-  getDocs,
-  deleteDoc,
-  doc,
-} from "firebase/firestore";
-import { COLLECTIONS } from "@/lib/utility_collection";
+  deleteAdminConclave,
+  fetchAdminConclaves,
+} from "@/services/adminConclaveService";
 
 import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
@@ -47,30 +43,13 @@ export default function ConclavesListingPage() {
     { key: "actions", label: "Actions" },
   ];
 
-  const fetchConclaves = async () => {
+  const fetchConclavesData = async () => {
     setLoading(true);
     try {
-      const snap = await getDocs(
-        collection(db, COLLECTIONS.conclaves)
-      );
-
-      const list = snap.docs.map((d) => {
-        const data = d.data();
-
-        return {
-          id: d.id,
-          name: data.conclaveStream || "—",
-          leader: data.leader || "—",
-          startDate: data.startDate,
-          initiationDate: data.initiationDate,
-          ntMembers: data.ntMembers || [],
-          orbiters: data.orbiters || [],
-        };
-      });
-
+      const list = await fetchAdminConclaves();
       setConclaves(list);
-    } catch (err) {
-      console.error(err);
+    } catch (error) {
+      console.error(error);
       toast.error("Failed to fetch conclaves");
     } finally {
       setLoading(false);
@@ -78,51 +57,44 @@ export default function ConclavesListingPage() {
   };
 
   useEffect(() => {
-    fetchConclaves();
+    fetchConclavesData();
   }, []);
 
   const filtered = useMemo(() => {
     const search = nameFilter.toLowerCase();
-    return conclaves.filter((c) =>
-      (c.name || "").toLowerCase().includes(search)
+    return conclaves.filter((item) =>
+      String(item.name || "").toLowerCase().includes(search)
     );
   }, [conclaves, nameFilter]);
 
-  const paginated = filtered.slice(
-    (page - 1) * perPage,
-    page * perPage
-  );
+  const paginated = filtered.slice((page - 1) * perPage, page * perPage);
 
   useEffect(() => {
     setPage(1);
   }, [nameFilter]);
 
-  const openDelete = (c) => {
-    setConclaveToDelete(c);
-    setDeleteOpen(true);
-  };
-
   const confirmDelete = async () => {
-    if (!conclaveToDelete) return;
+    if (!conclaveToDelete?.id) {
+      return;
+    }
 
     try {
-      await deleteDoc(
-        doc(db, COLLECTIONS.conclaves, conclaveToDelete.id)
-      );
-
+      await deleteAdminConclave(conclaveToDelete.id);
       toast.success("Conclave deleted");
       setDeleteOpen(false);
-      fetchConclaves();
-    } catch {
+      setConclaveToDelete(null);
+      await fetchConclavesData();
+    } catch (error) {
+      console.error(error);
       toast.error("Delete failed");
     }
   };
 
   const formatDate = (value) => {
-    if (!value) return "—";
+    if (!value) return "-";
 
     const dateObj = new Date(value);
-    if (isNaN(dateObj.getTime())) return "—";
+    if (Number.isNaN(dateObj.getTime())) return "-";
 
     return dateObj.toLocaleDateString("en-IN", {
       day: "2-digit",
@@ -133,16 +105,10 @@ export default function ConclavesListingPage() {
 
   return (
     <>
-      {/* Filter Bar */}
       <div className="sticky top-0 z-30 bg-white mb-4">
         <Card>
           <div className="flex items-center justify-between gap-4">
-            <Button
-              onClick={() =>
-                            (window.location.href =
-                              `/admin/conclave/add`)
-              }
-            >
+            <Button onClick={() => (window.location.href = "/admin/conclave/add")}>
               Add Conclave
             </Button>
 
@@ -150,22 +116,18 @@ export default function ConclavesListingPage() {
               <Input
                 placeholder="Search Conclave"
                 value={nameFilter}
-                onChange={(e) =>
-                  setNameFilter(e.target.value)
-                }
+                onChange={(e) => setNameFilter(e.target.value)}
               />
             </div>
           </div>
         </Card>
       </div>
 
-      {/* Table */}
       <Card>
         <Table>
           <TableHeader columns={columns} />
 
           <tbody>
-            {/* ✅ Skeleton Loader */}
             {loading &&
               Array.from({ length: 8 }).map((_, i) => (
                 <TableRow key={i}>
@@ -175,49 +137,25 @@ export default function ConclavesListingPage() {
                     </td>
                   ))}
                 </TableRow>
-              ))
-            }
+              ))}
 
-            {/* ✅ Actual Data */}
             {!loading &&
-              paginated.map((c, i) => (
-                <TableRow key={c.id}>
-                  <td className="px-4 py-3">
-                    {(page - 1) * perPage + i + 1}
-                  </td>
-
-                  <td className="px-4 py-3 font-medium">
-                    {c.name}
-                  </td>
-
-                  <td className="px-4 py-3">
-                    {c.leader}
-                  </td>
-
-                  <td className="px-4 py-3">
-                    {formatDate(c.startDate)}
-                  </td>
-
-                  <td className="px-4 py-3">
-                    {formatDate(c.initiationDate)}
-                  </td>
-
-                  <td className="px-4 py-3">
-                    {c.ntMembers.length}
-                  </td>
-
-                  <td className="px-4 py-3 font-semibold">
-                    {c.orbiters.length}
-                  </td>
-
+              paginated.map((item, i) => (
+                <TableRow key={item.id}>
+                  <td className="px-4 py-3">{(page - 1) * perPage + i + 1}</td>
+                  <td className="px-4 py-3 font-medium">{item.name}</td>
+                  <td className="px-4 py-3">{item.leader}</td>
+                  <td className="px-4 py-3">{formatDate(item.startDate)}</td>
+                  <td className="px-4 py-3">{formatDate(item.initiationDate)}</td>
+                  <td className="px-4 py-3">{item.ntMembers.length}</td>
+                  <td className="px-4 py-3 font-semibold">{item.orbiters.length}</td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2">
                       <Tooltip content="Edit Conclave">
                         <ActionButton
                           icon={Pencil}
                           onClick={() =>
-                            (window.location.href =
-                              `/admin/conclave/edit/${c.id}`)
+                            (window.location.href = `/admin/conclave/edit/${item.id}`)
                           }
                         />
                       </Tooltip>
@@ -226,7 +164,10 @@ export default function ConclavesListingPage() {
                         <ActionButton
                           icon={Trash2}
                           variant="danger"
-                          onClick={() => openDelete(c)}
+                          onClick={() => {
+                            setConclaveToDelete(item);
+                            setDeleteOpen(true);
+                          }}
                         />
                       </Tooltip>
                     </div>
@@ -256,3 +197,5 @@ export default function ConclavesListingPage() {
     </>
   );
 }
+
+

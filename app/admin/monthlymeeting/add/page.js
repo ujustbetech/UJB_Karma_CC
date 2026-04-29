@@ -2,11 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { addDoc, collection, Timestamp } from "firebase/firestore";
-import { db } from "@/lib/firebase/firebaseClient";
-import { COLLECTIONS } from "@/lib/utility_collection";
-
-import { CalendarPlus } from "lucide-react";
+import { createAdminMonthlyMeeting } from "@/services/adminMonthlyMeetingService";
 
 import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
@@ -44,32 +40,14 @@ export default function AddEventPage() {
     setLoading(true);
 
     try {
-      const docRef = await addDoc(
-        collection(db, COLLECTIONS.monthlyMeeting),
-        {
-          Eventname: eventName,
-          time: Timestamp.fromDate(new Date(eventTime)),
-          zoomLink: zoomLink || "",
-          agenda: [],
-
-          topicSections: [],
-          facilitatorSections: [],
-          referralSections: [],
-          sections: [],
-          e2aSections: [],
-          prospectSections: [],
-          knowledgeSections: [],
-          requirementSections: [],
-          documentUploads: [],
-          imageUploads: [],
-          invitedUsers: [],
-
-          createdAt: new Date(),
-        }
-      );
+      const id = await createAdminMonthlyMeeting({
+        eventName,
+        eventTime,
+        zoomLink,
+      });
 
       toast.success("Event created successfully");
-      router.push(`/admin/event/edit/${docRef.id}`);
+      router.push(`/admin/monthlymeeting/${id}`);
     } catch (err) {
       console.error(err);
       toast.error("Failed to create event");
@@ -132,4 +110,7 @@ export default function AddEventPage() {
     </div>
   );
 }
+
+
+
 

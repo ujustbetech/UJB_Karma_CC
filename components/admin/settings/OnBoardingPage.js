@@ -1250,3 +1250,4 @@ export default function OnBoardingPage() {
     </div>
   );
 }
+

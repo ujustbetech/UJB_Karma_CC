@@ -19,3 +19,4 @@ export default function TableSkeleton({ rows = 6, columns = 4 }) {
     </div>
   );
 }
+

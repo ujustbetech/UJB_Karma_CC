@@ -47,3 +47,4 @@ export default function PerformanceSnapshot({ stats }) {
     </div>
   );
 }
+

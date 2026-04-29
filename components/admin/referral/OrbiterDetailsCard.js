@@ -102,3 +102,4 @@ export default function OrbiterDetailsCard({ orbiter, referralData }) {
     </div>
   );
 }
+

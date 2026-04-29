@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { X } from "lucide-react";
 import { updateUserProfile } from "@/services/profileService";
-import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import { getStorage, ref, uploadBytes, getDownloadURL } from "@/services/profileAssetStorageService";
 
 const PERSONAL_KYC_FIELDS = [
   { key: "panCard", label: "Upload PAN Card" },
@@ -166,4 +166,6 @@ function InputField({ label, value, onChange }) {
     </div>
   );
 }
+
+
 

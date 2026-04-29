@@ -367,3 +367,5 @@ export default function ContributionPointActivityManagePage() {
     </div>
   );
 }
+
+

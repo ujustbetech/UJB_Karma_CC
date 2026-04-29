@@ -1,15 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import {
-  doc,
-  getDoc,
-  getDocs,
-  updateDoc,
-  collection,
-  arrayUnion
-} from 'firebase/firestore';
-import { db } from '@/lib/firebase/firebaseClient';
+import { doc, getDoc, getDocs, updateDoc, collection, arrayUnion, db } from '@/services/adminMonthlyMeetingFirebaseService';
 import { COLLECTIONS } from '@/lib/utility_collection';
 
 import Card from '@/components/ui/Card';
@@ -370,4 +362,6 @@ export default function ConclaveSection({ eventId, fetchData }) {
 
   return <Tabs tabs={tabs} />;
 }
+
+
 

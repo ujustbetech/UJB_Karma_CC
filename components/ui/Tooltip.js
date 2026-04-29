@@ -28,3 +28,4 @@ export default function Tooltip({ content, children }) {
     </span>
   );
 }
+

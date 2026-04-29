@@ -99,3 +99,4 @@ export default function ServiceDetailModal({ item, onClose }) {
     </div>
   );
 }
+

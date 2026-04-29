@@ -148,3 +148,4 @@ export default function EducationSection({ profile }) {
     </Card>
   );
 }
+

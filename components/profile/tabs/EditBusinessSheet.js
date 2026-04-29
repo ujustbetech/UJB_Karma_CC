@@ -3,12 +3,8 @@
 import { useState, useEffect } from "react";
 import { X } from "lucide-react";
 import { updateUserProfile } from "@/services/profileService";
-import {
-    ref,
-    uploadBytes,
-    getDownloadURL,
-} from "firebase/storage";
-import { storage } from "@/lib/firebase/firebaseClient";
+import { ref, uploadBytes, getDownloadURL, storage } from "@/services/profileAssetStorageService";
+
 
 
 export default function EditBusinessSheet({
@@ -409,4 +405,8 @@ function Textarea({ label, value, onChange }) {
         </div>
     );
 }
+
+
+
+
 

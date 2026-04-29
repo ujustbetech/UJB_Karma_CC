@@ -250,3 +250,4 @@ function LongTextCard({ label, text }) {
     </div>
   );
 }
+

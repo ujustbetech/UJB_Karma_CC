@@ -46,3 +46,4 @@ function TagCard({ title, items }) {
   const values = Array.isArray(items) ? items : typeof items === "string" && items ? items.split(",").map((item) => item.trim()).filter(Boolean) : [];
   return <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5"><h3 className="font-semibold text-gray-800 mb-3">{title}</h3>{values.length ? <div className="flex flex-wrap gap-2">{values.map((item, index) => <span key={`${item}-${index}`} className="px-3 py-1 text-xs rounded-full bg-orange-100 text-orange-600">{item}</span>)}</div> : <p className="text-xs text-gray-400">No information added yet</p>}</div>;
 }
+
