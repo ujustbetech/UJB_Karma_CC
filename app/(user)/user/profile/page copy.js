@@ -1,9 +1,6 @@
 "use client";
 
 import { useEffect, useState, useMemo } from "react";
-import { doc, getDoc } from "firebase/firestore";
-import { db } from "@/lib/firebase/firebaseClient";
-import { COLLECTIONS } from "@/lib/utility_collection";
 import Image from "next/image";
 import {
   MapPin,
@@ -12,6 +9,7 @@ import {
   Mail,
   CheckCircle,
 } from "lucide-react";
+import { fetchUserProfile } from "@/services/profileService";
 
 function getSafeImageSrc(value) {
   if (typeof value !== "string") return "/placeholder.jpg";
@@ -41,16 +39,12 @@ export default function ModernProfilePage() {
 
   useEffect(() => {
     const fetchUser = async () => {
-      const storedUjbCode = localStorage.getItem("mmUJBCode");
-      if (!storedUjbCode) return;
-
-      const snap = await getDoc(
-        doc(db, COLLECTIONS.userDetail, storedUjbCode)
-      );
-
-      if (snap.exists()) {
-        setUser(snap.data());
-      }
+      try {
+        const profile = await fetchUserProfile();
+        if (profile) {
+          setUser(profile);
+        }
+      } catch {}
     };
 
     fetchUser();

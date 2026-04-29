@@ -69,6 +69,45 @@ Firestore access to authenticated API routes backed by portable repositories.
 - `npm.cmd run build` passed after the implemented changes.
 - Graphify was rebuilt after code changes.
 
+### User home and discovery migration implemented
+- User home/dashboard aggregation route added:
+  - `app/api/user/home/route.js`
+- User notifications route added:
+  - `app/api/user/notifications/route.js`
+- CosmOrbiter client services added:
+  - `services/homeService.js`
+  - `services/cosmorbitersService.js`
+  - `services/userNotificationApiService.js`
+- Protected home/dashboard UI migrated to authenticated API calls:
+  - `app/(user)/user/page.js`
+  - `components/home/NetworkOverview.js`
+  - `components/home/EventEnrollmentCard.js`
+  - `components/home/RecentReferrals.js`
+  - `components/home/RecommendedServices.js`
+  - `components/home/DewdropLearningSection.js`
+  - `components/home/PerformanceSnapshot.js`
+  - `components/home/NetworkActivity.js`
+  - `components/home/NewlyAddedSection.js`
+  - `components/home/TopOrbitersLeaderboard.js`
+- Protected `cosmorbiters` UI migrated to authenticated API calls:
+  - `app/(user)/user/cosmorbiters/page.js`
+  - `app/(user)/user/cosmorbiters/[id]/page.js`
+- Shared user shell/header migrated away from protected Firestore reads:
+  - `components/mobile/MobileHeader.js`
+  - `hooks/useUserNotifications.js`
+- Cleanup completed for a leftover non-primary profile page:
+  - `app/(user)/user/profile/page copy.js`
+- Result: protected client Firestore usage has been removed from the active
+  `/user` home/dashboard path, `/user/cosmorbiters` list/detail path, and
+  shared notification/header read path.
+
+### Verification updated
+- `npm.cmd run build` passed after the latest user-surface migration changes.
+- `npm.cmd test` currently fails in the existing Node test environment because
+  `lib/referrals/referralServerWorkflow.mjs` imports `@/utils/*` aliases that
+  are not resolved by the direct Node runner.
+- Graphify was rebuilt after the latest code changes.
+
 ### Prospects migration implemented
 - User prospects API route added:
   - `app/api/user/prospects/route.js`
@@ -185,6 +224,14 @@ Firestore access to authenticated API routes backed by portable repositories.
 - [x] Inventory direct client Firestore usage for `dewdrop`.
 - [x] Migrate `dewdrop` UI to `/api/user/dewdrop`.
 - [x] Remove protected client Firestore usage from `dewdrop`.
+- [x] Inventory direct client Firestore usage for the user home/dashboard path.
+- [x] Migrate active `/user` dashboard widgets to authenticated API routes.
+- [x] Remove protected client Firestore usage from the active `/user` home path.
+- [x] Inventory direct client Firestore usage for `cosmorbiters`.
+- [x] Migrate `cosmorbiters` UI to `/api/user/cosmorbiters`.
+- [x] Remove protected client Firestore usage from `cosmorbiters`.
+- [x] Migrate shared user notification/header reads to authenticated APIs.
+- [x] Remove protected client Firestore usage from the shared user shell path.
 
 ## Phase C: Admin Hardening
 - [x] Inventory direct client Firestore usage for admin `orbiters`.

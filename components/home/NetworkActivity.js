@@ -1,62 +1,29 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { db } from "@/lib/firebase/firebaseClient";
-import { collection, getDocs, query, orderBy, limit } from "firebase/firestore";
-import { COLLECTIONS } from "@/lib/utility_collection";
 import { useRouter } from "next/navigation";
 import { Users } from "lucide-react";
 
-export default function NetworkActivity() {
+export default function NetworkActivity({ activities }) {
   const router = useRouter();
-  const [activities, setActivities] = useState([]);
+  const safeActivities = (activities || []).map((item) => ({
+    ...item,
+    createdAt: item?.createdAt ? new Date(item.createdAt) : null,
+  }));
 
-  useEffect(() => {
-    async function fetchRecentReferrals() {
-      try {
-        const q = query(
-          collection(db, COLLECTIONS.referral),
-          orderBy("createdAt", "desc"),
-          limit(5)
-        );
-
-        const snap = await getDocs(q);
-
-        const data = snap.docs.map((doc) => {
-          const d = doc.data();
-
-          return {
-            id: doc.id,
-            orbiterName: d.cosmoOrbiter?.name || "Orbiter",
-            serviceName: d.serviceName || "a service",
-            createdAt: d.createdAt?.toDate?.(),
-          };
-        });
-
-        setActivities(data);
-      } catch {
-        setActivities([]);
-      }
-    }
-
-    fetchRecentReferrals();
-  }, []);
-
-  if (activities.length === 0) return null;
+  if (!safeActivities.length) return null;
 
   const timeAgo = (date) => {
     if (!date) return "";
     const seconds = Math.floor((new Date() - date) / 1000);
-
     const intervals = [
       { label: "d", value: 86400 },
       { label: "h", value: 3600 },
       { label: "m", value: 60 },
     ];
 
-    for (let i of intervals) {
-      const interval = Math.floor(seconds / i.value);
-      if (interval >= 1) return `${interval}${i.label} ago`;
+    for (const item of intervals) {
+      const interval = Math.floor(seconds / item.value);
+      if (interval >= 1) return `${interval}${item.label} ago`;
     }
 
     return "just now";
@@ -70,7 +37,7 @@ export default function NetworkActivity() {
       </div>
 
       <div className="space-y-3">
-        {activities.map((item) => (
+        {safeActivities.map((item) => (
           <div key={item.id} className="flex justify-between items-center text-sm">
             <div>
               <span className="font-medium text-slate-800">{item.orbiterName}</span>{" "}

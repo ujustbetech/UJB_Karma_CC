@@ -1,9 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useMemo, useState } from "react";
 import Slider from "react-slick";
-import { db } from "@/lib/firebase/firebaseClient";
-import { collection, getDocs } from "firebase/firestore";
 import { Droplet, PlayCircle, Image as ImageIcon } from "lucide-react";
 import { Forum } from "next/font/google";
 import StoryViewer from "@/components/story/StoryViewer";
@@ -13,41 +11,11 @@ const forum = Forum({
   weight: "400",
 });
 
-export default function DewdropLearningSection() {
-  const [contents, setContents] = useState([]);
-  const [loading, setLoading] = useState(true);
+export default function DewdropLearningSection({ stories }) {
   const [viewerOpen, setViewerOpen] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(0);
-
-  useEffect(() => {
-    async function fetchContent() {
-      try {
-        const snap = await getDocs(collection(db, "ContentData"));
-
-        const data = snap.docs
-          .map((doc) => ({
-            id: doc.id,
-            ...doc.data(),
-          }))
-          .filter((item) => item.switchValue === true)
-          .sort((a, b) => {
-            const valueA = String(a.AdminCreatedby || "");
-            const valueB = String(b.AdminCreatedby || "");
-
-            return valueB.localeCompare(valueA);
-          })
-          .slice(0, 8);
-
-        setContents(data);
-      } catch {
-        setContents([]);
-      } finally {
-        setLoading(false);
-      }
-    }
-
-    fetchContent();
-  }, []);
+  const contents = useMemo(() => stories || [], [stories]);
+  const loading = !stories;
 
   const settings = {
     dots: false,
@@ -69,8 +37,6 @@ export default function DewdropLearningSection() {
 
   return (
     <div className="space-y-4">
-
-      {/* Heading */}
       <div className="flex items-center gap-2">
         <Droplet size={18} className="text-orange-500" />
         <h3
@@ -81,12 +47,11 @@ export default function DewdropLearningSection() {
         </h3>
       </div>
 
-      {/* Skeleton */}
       {loading && (
         <div className="flex gap-4">
-          {[...Array(2)].map((_, i) => (
+          {[...Array(2)].map((_, index) => (
             <div
-              key={i}
+              key={index}
               className="h-64 w-48 rounded-3xl bg-slate-200 animate-pulse"
             />
           ))}
@@ -104,7 +69,6 @@ export default function DewdropLearningSection() {
                 }}
                 className="relative h-64 rounded-3xl overflow-hidden cursor-pointer group active:scale-[0.97] transition"
               >
-                {/* Background */}
                 {item.Thumbnail?.[0] ? (
                   <img
                     src={item.Thumbnail[0]}
@@ -117,10 +81,8 @@ export default function DewdropLearningSection() {
                   </div>
                 )}
 
-                {/* Gradient */}
                 <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent" />
 
-                {/* Badge */}
                 <div className="absolute top-4 right-4">
                   <span className="text-[10px] bg-black/60 text-white px-2 py-1 rounded-full flex items-center gap-1">
                     {item.contentType === "video" ? (
@@ -137,20 +99,17 @@ export default function DewdropLearningSection() {
                   </span>
                 </div>
 
-                {/* Title */}
                 <div className="absolute bottom-4 left-4 right-4">
                   <h4 className="text-white text-sm font-semibold line-clamp-2">
                     {item.contentName}
                   </h4>
                 </div>
-
               </div>
             </div>
           ))}
         </Slider>
       )}
 
-      {/* Story Viewer */}
       {viewerOpen && (
         <StoryViewer
           stories={contents}
@@ -158,8 +117,6 @@ export default function DewdropLearningSection() {
           onClose={() => setViewerOpen(false)}
         />
       )}
-
     </div>
   );
 }
-
