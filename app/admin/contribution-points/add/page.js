@@ -8,7 +8,7 @@ import {
   assignCpActivityToMember,
   fetchActiveCpActivityDefinitions,
   searchCpMembersByName,
-} from "@/services/contributionPointService";
+} from "@/services/adminContributionPointService";
 
 export default function ContributionPointAddPage() {
   const [cpActivities, setCpActivities] = useState([]);

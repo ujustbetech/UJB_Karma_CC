@@ -6,8 +6,8 @@ import Text from "@/components/ui/Text";
 import Button from "@/components/ui/Button";
 import {
   importCpActivities,
-  parseCpActivityWorkbook,
-} from "@/services/contributionPointService";
+} from "@/services/adminContributionPointService";
+import { parseCpActivityWorkbook } from "@/services/contributionPointShared";
 
 export default function ContributionPointActivityImportPage() {
   const [rows, setRows] = useState([]);

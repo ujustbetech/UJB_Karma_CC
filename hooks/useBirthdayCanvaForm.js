@@ -3,9 +3,10 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   checkBirthdayEntryExists,
   fetchBirthdayUserOptions,
-  getBirthdayDobInfo,
   saveBirthdayEntry,
-} from "@/services/birthdayService";
+} from "@/services/adminBirthdayService";
+import { uploadBirthdayImage } from "@/services/birthdayImageUploadService";
+import { getBirthdayDobInfo } from "@/services/birthdayShared";
 
 export function useBirthdayCanvaForm(toast) {
   const [users, setUsers] = useState([]);
@@ -99,10 +100,11 @@ export function useBirthdayCanvaForm(toast) {
     setSaving(true);
 
     try {
+      const imageUrl = await uploadBirthdayImage(selectedUserData.value, image);
       await saveBirthdayEntry({
         selectedUserData,
         dob,
-        image,
+        imageUrl,
       });
 
       toast?.success("Saved successfully");

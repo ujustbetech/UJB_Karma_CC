@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import Card from "@/components/ui/Card";
 import Text from "@/components/ui/Text";
 import Button from "@/components/ui/Button";
-import { fetchCpBoardMembers } from "@/services/contributionPointService";
+import { fetchCpBoardMembers } from "@/services/adminContributionPointService";
 
 export default function AdminContributionPointsPage() {
   const [members, setMembers] = useState([]);

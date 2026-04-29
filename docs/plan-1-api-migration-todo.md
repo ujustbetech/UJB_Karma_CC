@@ -190,6 +190,126 @@ Firestore access to authenticated API routes backed by portable repositories.
 - Result: protected client Firestore usage has been removed from the
   `/user/dewdrop/content` list/detail path, including view/like updates.
 
+### User deals, redeem, and payments migration implemented
+- User deals and redeem API routes added:
+  - `app/api/user/deals/route.js`
+  - `app/api/user/deals/[id]/route.js`
+  - `app/api/user/redeem/route.js`
+  - `app/api/user/payments/route.js`
+- Shared user redemption workflows/services added:
+  - `lib/redeem/userRedeemApiWorkflow.mjs`
+  - `services/userCcMarketplaceService.js`
+  - `services/userRedeemService.js`
+- Protected user deals, redeem, and payments UI migrated to authenticated API calls:
+  - `app/(user)/user/deals/page.js`
+  - `app/(user)/user/deals/[id]/page.js`
+  - `app/(user)/user/redeem/page.js`
+  - `app/(user)/user/payments/page.js`
+- Result: protected client Firestore usage has been removed from the active
+  `/user/deals`, `/user/redeem`, and `/user/payments` flow.
+
+### Shared cleanup advanced
+- Shared notification hook cleanup completed:
+  - `hooks/useUserNotifications.js`
+  - `services/userNotificationApiService.js`
+  - `services/userNotificationReadState.js`
+- Unused protected client Firestore helpers removed:
+  - `services/notificationService.js`
+  - `hooks/useContentUpload.js`
+  - `hooks/useEventDoc.js`
+  - `hooks/useUsers.js`
+- Result: the shared user notifications path now depends on authenticated API
+  responses plus explicit local read-state storage, and dead Firestore-only
+  helpers no longer remain in the active shared surface.
+
+### Remaining public Firebase usage isolation started
+- Removed an unused duplicate hook with direct Firestore/Storage access:
+  - `hooks/useOrbiterSearch.js`
+- Result: one misleading client-Firebase path has been eliminated, leaving the
+  remaining intentional browser Firebase usage easier to inventory and migrate
+  in later Phase D steps.
+
+### Active user deals and redemption service cleanup implemented
+- Active user marketplace and redemption pages rewired to API-backed user services:
+  - `app/(user)/user/deals/page.js`
+  - `app/(user)/user/deals/[id]/page.js`
+  - `app/(user)/user/redeem/page.js`
+  - `app/(user)/user/payments/page.js`
+- User-facing API services confirmed as the active path:
+  - `services/userCcMarketplaceService.js`
+  - `services/userRedeemService.js`
+- Result: the active user deals, redeem, and payments screens no longer depend
+  on the legacy Firestore-backed `ccMarketplaceService` and `redeemService`.
+
+### Admin redeem migration implemented
+- Admin redeem API routes added:
+  - `app/api/admin/redeem/route.js`
+  - `app/api/admin/redeem/[id]/route.js`
+- Admin redeem workflow/service added:
+  - `lib/redeem/adminRedeemApiWorkflow.mjs`
+  - `services/adminRedeemService.js`
+- Admin redeem pages migrated to authenticated API calls:
+  - `app/admin/redeem/add/page.js`
+  - `app/admin/redeem/manage/page.js`
+- Unused legacy shared services removed:
+  - `services/redeemService.js`
+  - `services/ccMarketplaceService.js`
+- Result: the active admin redeem add/manage flow no longer depends on the
+  legacy Firestore-backed redeem/marketplace services.
+
+### Contribution points migration implemented
+- User contribution point API routes added:
+  - `app/api/user/contribution-points/route.js`
+  - `app/api/user/contribution-points/[ujbCode]/route.js`
+- Admin contribution point API routes added:
+  - `app/api/admin/contribution-points/route.js`
+  - `app/api/admin/contribution-points/[ujbCode]/route.js`
+  - `app/api/admin/contribution-points/activities/route.js`
+  - `app/api/admin/contribution-points/activities/[id]/route.js`
+  - `app/api/admin/contribution-points/members/search/route.js`
+  - `app/api/admin/contribution-points/assign/route.js`
+- Contribution point workflow/services added:
+  - `lib/contribution-points/apiWorkflow.mjs`
+  - `services/userContributionPointService.js`
+  - `services/adminContributionPointService.js`
+  - `services/contributionPointShared.js`
+- Unused legacy shared service removed:
+  - `services/contributionPointService.js`
+- Active user/admin contribution point screens migrated to authenticated API calls:
+  - `app/(user)/user/contribuitionpoint/page.js`
+  - `app/(user)/user/contribuitionpoint/[ujbCode]/page.js`
+  - `app/admin/contribution-points/page.js`
+  - `app/admin/contribution-points/activity/page.js`
+  - `app/admin/contribution-points/add/page.js`
+  - `app/admin/contribution-points/manage/page.js`
+  - `app/admin/contribution-points/[ujbCode]/page.js`
+- Result: the active contribution point user/admin screens no longer depend on
+  the shared Firestore-backed `contributionPointService`.
+
+### Birthday migration implemented
+- Admin birthday API routes added:
+  - `app/api/admin/birthday/route.js`
+  - `app/api/admin/birthday/messages/route.js`
+  - `app/api/admin/birthday/options/route.js`
+  - `app/api/admin/birthday/[id]/route.js`
+  - `app/api/admin/birthday/[id]/exists/route.js`
+  - `app/api/admin/birthday/[id]/mark-sent/route.js`
+- Birthday workflow/services added:
+  - `lib/birthday/adminBirthdayApiWorkflow.mjs`
+  - `services/adminBirthdayService.js`
+  - `services/birthdayShared.js`
+  - `services/birthdayImageUploadService.js`
+- Unused legacy shared service removed:
+  - `services/birthdayService.js`
+- Active admin birthday hooks/components migrated away from browser Firestore:
+  - `hooks/useBirthdayAdmin.js`
+  - `hooks/useBirthdayCanvaForm.js`
+  - `components/admin/birthday/BirthdayListClient.js`
+  - `components/admin/birthday/BirthdayEditClient.js`
+- Result: the active admin birthday list/add/edit/message flows now use
+  authenticated API routes for Firestore reads/writes, while image upload stays
+  isolated in a clearly named client storage helper.
+
 ## Phase A: Foundation
 - [x] Add shared API response helpers.
 - [x] Add shared user auth guard: `requireUserSession(req)`.
@@ -247,8 +367,16 @@ Firestore access to authenticated API routes backed by portable repositories.
 - [x] Centralize admin role checks in access-control services.
 
 ## Phase D: Shared Cleanup
-- [ ] Refactor shared hooks to fetch through APIs or accept server data.
-- [ ] Remove unused protected client Firestore helpers.
+- [x] Rewire active user `deals` pages to API-backed marketplace services.
+- [x] Rewire active user `redeem` and `payments` pages to API-backed redemption services.
+- [x] Migrate active admin `redeem` add/manage pages to authenticated API services.
+- [x] Migrate active user/admin contribution point screens to authenticated API services.
+- [x] Migrate active admin birthday flows to authenticated API services.
+- [x] Refactor shared hooks to fetch through APIs or accept server data.
+- [x] Remove unused protected client Firestore helpers.
+- [x] Remove unused legacy marketplace/redemption shared services.
+- [x] Remove unused legacy contribution point shared service.
+- [x] Remove unused legacy birthday shared service.
 - [ ] Isolate any remaining public Firebase usage behind clearly named hooks.
 - [ ] Verify fresh user OTP-only login across migrated features.
 - [ ] Verify fresh admin-only login across migrated admin flows.

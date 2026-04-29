@@ -9,10 +9,10 @@ import Card from "@/components/ui/Card";
 import Text from "@/components/ui/Text";
 import Button from "@/components/ui/Button";
 import {
-  fetchCpBoardSummary,
   filterCpActivities,
   getCpCategoryLabel,
-} from "@/services/contributionPointService";
+} from "@/services/contributionPointShared";
+import { fetchCpBoardSummary } from "@/services/userContributionPointService";
 import UserPageHeader from "@/components/user/UserPageHeader";
 
 export default function ContributionPointPage() {

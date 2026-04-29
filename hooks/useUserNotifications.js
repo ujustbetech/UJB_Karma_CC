@@ -5,7 +5,7 @@ import {
   getReadNotificationIds,
   markAllNotificationsAsRead,
   markNotificationAsRead,
-} from "@/services/notificationService";
+} from "@/services/userNotificationReadState";
 import { fetchApiUserNotifications } from "@/services/userNotificationApiService";
 
 const refreshIntervalMs = 30000;
