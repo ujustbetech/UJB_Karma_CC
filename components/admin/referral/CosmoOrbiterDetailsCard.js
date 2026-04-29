@@ -54,7 +54,7 @@ export default function CosmoOrbiterDetailsCard({
       {/* EARNINGS HIGHLIGHT */}
       <div className="mt-4 p-5 rounded-xl bg-emerald-50">
         <Text variant="caption" className="text-gray-500">
-          Total Earned (Cosmo Mentor)
+          Total Earned (CosmOrbiter Mentor)
         </Text>
 
         <Text as="h2" className="text-emerald-700 font-semibold">

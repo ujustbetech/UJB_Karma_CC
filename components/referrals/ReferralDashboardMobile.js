@@ -48,7 +48,7 @@ export default function ReferralDashboardMobile({
     );
     const roleLabel =
         userRole === "cosmo"
-            ? "COSM"
+            ? "CosmOrbiter"
             : userRole === "orbiter"
                 ? "Orbiter"
                 : "Viewer";
@@ -112,9 +112,9 @@ export default function ReferralDashboardMobile({
                                         Your Role: {roleLabel}
                                     </span>
                                     <span className="inline-flex items-center rounded-full bg-orange-100 px-2.5 py-1 text-[11px] font-medium text-orange-700">
-                                        {userRole === "viewer"
-                                            ? "Read only"
-                                            : "Can update deal status"}
+                                        {userRole === "cosmo"
+                                            ? "Can update deal status"
+                                            : "Read only"}
                                     </span>
                                 </div>
                             </div>

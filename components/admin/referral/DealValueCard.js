@@ -95,7 +95,7 @@ export default function DealValueCard({
                   {dist.orbiterMentorShare.toFixed(2)}
                 </p>
                 <p>
-                  <strong>Cosmo Mentor:</strong> ₹
+                  <strong>CosmOrbiter Mentor:</strong> ₹
                   {dist.cosmoMentorShare.toFixed(2)}
                 </p>
                 <p>

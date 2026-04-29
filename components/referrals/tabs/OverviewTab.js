@@ -102,14 +102,13 @@ export default function OverviewTab({
 
     const documentURL = referral?.dealDocumentURL;
     const isPDF = documentURL?.toLowerCase().includes(".pdf");
-    const canUpdateStatus =
-        userRole === "cosmo" || userRole === "orbiter";
+    const canUpdateStatus = userRole === "cosmo";
     const currentStatus =
         referral?.dealStatus || REFERRAL_STATUSES.PENDING;
     const hasStatusChange = selectedStatus !== currentStatus;
     const roleLabel =
         userRole === "cosmo"
-            ? "COSM"
+            ? "CosmOrbiter"
             : userRole === "orbiter"
                 ? "Orbiter"
                 : "Viewer";
@@ -216,7 +215,7 @@ export default function OverviewTab({
                             title={
                                 canUpdateStatus
                                     ? "Select a new deal status"
-                                    : "Only COSM or the assigned Orbiter can change deal status."
+                                    : "Only CosmOrbiter can change deal status."
                             }
                             className="w-full rounded-xl border border-slate-300 px-3 py-3 text-sm focus:ring-2 focus:ring-indigo-500 disabled:cursor-not-allowed disabled:bg-slate-100"
                         >
@@ -234,7 +233,7 @@ export default function OverviewTab({
                             onClick={() => {
                                 if (!canUpdateStatus) {
                                     setStatusError(
-                                        "Only COSM or the assigned Orbiter can change deal status."
+                                        "Only CosmOrbiter can change deal status."
                                     );
                                     return;
                                 }
@@ -259,7 +258,7 @@ export default function OverviewTab({
 
                         {!canUpdateStatus && (
                             <p className="text-xs text-amber-700">
-                                Only COSM or the assigned Orbiter can change deal status.
+                                Only CosmOrbiter can change deal status.
                             </p>
                         )}
                     </div>

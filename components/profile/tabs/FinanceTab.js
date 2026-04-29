@@ -84,7 +84,7 @@ export default function FinanceTab({ user = {} }) {
         <div className="bg-white rounded-2xl shadow-sm">
 
           <InfoItem
-            label="Cosmo Payment"
+            label="CosmOrbiter Payment"
             value={payment?.cosmo?.status}
             isStatus
           />

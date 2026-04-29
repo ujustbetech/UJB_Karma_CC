@@ -75,7 +75,7 @@ export default function PaymentDrawer({
 
           <div className="settlementGrid">
             <SummaryItem label="Agreed Amount" value={agreedAmount} />
-            <SummaryItem label="Cosmo Paid" value={cosmoPaid} />
+            <SummaryItem label="CosmOrbiter Paid" value={cosmoPaid} />
             <SummaryItem
               label="Remaining"
               value={agreedRemaining}
@@ -97,14 +97,14 @@ export default function PaymentDrawer({
             disabled={!dealEverWon || agreedRemaining <= 0}
             onClick={payment.openPaymentModal}
           >
-            + Add Cosmo Payment
+            + Add CosmOrbiter Payment
           </button>
         </section>
 
         {/* ---------- COSMO PAYMENTS ---------- */}
         <section className="drawerSection">
           <h4 className="sectionTitle">
-            Cosmo Payments & UJB Payouts
+            CosmOrbiter Payments & UJB Payouts
           </h4>
 
           {cosmoPayments.map((cp) => {
@@ -202,7 +202,7 @@ export default function PaymentDrawer({
                   />
 
                   <SlotPayoutRow
-                    label="Cosmo Mentor"
+                    label="CosmOrbiter Mentor"
                     slotKey="CosmoMentor"
                     totalShare={cmShare}
                     paidSoFar={cmPaid}

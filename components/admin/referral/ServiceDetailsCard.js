@@ -193,7 +193,7 @@ export default function ServiceDetailsCard({
               <div className="flex justify-between border border-slate-200 rounded px-3 py-2">
                 <div className="flex items-center gap-2">
                   <Users size={14} />
-                  <Text variant="body">Cosmo Mentor</Text>
+                  <Text variant="body">CosmOrbiter Mentor</Text>
                 </div>
                 <Text variant="body">
                   ₹{previewDistribution.cosmoMentorShare}
