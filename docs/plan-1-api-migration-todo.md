@@ -411,6 +411,60 @@ Firestore access to authenticated API routes backed by portable repositories.
 - Result: the main migrated user surfaces work with a fresh OTP-only login
   session in the current development environment.
 
+### Fresh admin login verified
+- Verified a fresh admin login against the live local dev app on `http://127.0.0.1:3000`.
+- Used a short-lived verification-only Firebase Auth user plus matching
+  `AdminUsers` record to exercise the real admin login path:
+  `signInWithPassword -> /api/admin/session/login -> admin session cookie`.
+- Confirmed the fresh admin session returns `200` for:
+  - `/api/admin/session/validate`
+  - `/admin/orbiters`
+  - `/admin/prospect/manage`
+  - `/admin/referral/manage`
+  - `/admin/settings/users`
+  - `/admin/settings/roles`
+  - `/admin/redeem/manage`
+  - `/admin/contribution-points`
+  - `/admin/dewdrop/manage`
+  - `/admin/monthlymeeting/list`
+  - `/admin/conclave/list`
+- Result: the main migrated admin surfaces work with a fresh admin-only login
+  session in the current development environment.
+
+### Expired and stale session behavior verified
+- Verified stale user-session behavior against the live local dev app on
+  `http://127.0.0.1:3000` by completing a real OTP login, expiring the backing
+  `user_sessions` document, and reusing the original `crm_token` cookie.
+- Confirmed the stale user session returns `401` with `{"message":"Session invalid"}`
+  from `/api/session/validate`.
+- Verified stale admin-session behavior by creating a real admin session and
+  then replacing the `admin_token` cookie with an expired token signed with the
+  local dev secret.
+- Confirmed the stale admin session returns `401` with
+  `{"message":"Unauthorized"}` from `/api/admin/session/validate`.
+- Confirmed the current page-shell behavior for `/user` and `/admin/orbiters`
+  remains client-guarded rather than middleware-redirected: the initial page
+  request still returns `200`, and the corresponding React layout/auth context
+  handles redirecting away after session validation fails.
+- Result: stale session cookies are rejected correctly at the API boundary for
+  both user and admin flows, and the current UI shells fail closed through their
+  client-side route guards.
+
+### Route and service test isolation verified
+- Scanned the route/service test entrypoints and supporting workflow tests for
+  direct Firebase SDK type coupling.
+- Confirmed the active tests exercise plain workflow modules with simple object
+  doubles and serialized sentinel values rather than importing or requiring
+  Firebase SDK types such as Firestore snapshots, Auth user records, or storage
+  classes.
+- Fixed an unrelated cookie-helper drift in `lib/auth/userSessionWorkflow.mjs`
+  so the production `secure` flag now respects the `isProduction` argument in
+  both user-session and logout cookie helpers.
+- Ran `npm.cmd test` successfully after that fix; the suite completed with
+  `18/18 checks passed`.
+- Result: the current route/service test coverage is not coupled to Firebase SDK
+  runtime types, and the local workflow suite passes cleanly.
+
 ## Phase A: Foundation
 - [x] Add shared API response helpers.
 - [x] Add shared user auth guard: `requireUserSession(req)`.
@@ -485,6 +539,6 @@ Firestore access to authenticated API routes backed by portable repositories.
 - [x] Remove unused legacy content shared service.
 - [x] Isolate any remaining public Firebase usage behind clearly named hooks.
 - [x] Verify fresh user OTP-only login across migrated features.
-- [ ] Verify fresh admin-only login across migrated admin flows.
-- [ ] Verify expired/stale session failure behavior.
-- [ ] Verify route/service tests do not depend on Firebase SDK types.
+- [x] Verify fresh admin-only login across migrated admin flows.
+- [x] Verify expired/stale session failure behavior.
+- [x] Verify route/service tests do not depend on Firebase SDK types.
