@@ -26,16 +26,18 @@ function validateAdmin(req) {
   return { ok: true };
 }
 
-export async function PATCH(req, { params }) {
+export async function PATCH(req, context) {
   const guard = validateAdmin(req);
   if (!guard.ok) {
     return guard.response;
   }
 
   try {
+    const params = await context.params;
     const conclaveId = String(params?.id || "").trim();
     const meetingId = String(params?.meetingId || "").trim();
     const userId = String(params?.userId || "").trim();
+    if (!conclaveId || !meetingId || !userId) throw new Error("Missing IDs");
     const body = await req.json();
 
     await adminDb

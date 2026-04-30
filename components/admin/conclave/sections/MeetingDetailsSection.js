@@ -33,6 +33,7 @@ export default function MeetingDetailsSection({
 }) {
   const toast = useToast();
   const [saving, setSaving] = useState(false);
+  const [errors, setErrors] = useState({});
   const [form, setForm] = useState({
     meetingName: "",
     datetime: "",
@@ -55,10 +56,28 @@ export default function MeetingDetailsSection({
 
   const handleChange = (name, value) => {
     setForm((prev) => ({ ...prev, [name]: value }));
+    setErrors((prev) => ({ ...prev, [name]: "" }));
+  };
+
+  const validate = () => {
+    const nextErrors = {};
+
+    if (!form.meetingName.trim()) nextErrors.meetingName = "Meeting name is required";
+    if (!form.datetime) nextErrors.datetime = "Date and time are required";
+    if (!form.agenda.trim()) nextErrors.agenda = "Agenda is required";
+    if (form.mode === "online" && !form.link.trim()) nextErrors.link = "Meeting link is required";
+    if (form.mode === "offline" && !form.venue.trim()) nextErrors.venue = "Venue is required";
+
+    setErrors(nextErrors);
+    return Object.keys(nextErrors).length === 0;
   };
 
   const handleUpdate = async (event) => {
     event.preventDefault();
+    if (!validate()) {
+      toast.error("Please complete the required fields");
+      return;
+    }
     setSaving(true);
 
     try {
@@ -85,25 +104,28 @@ export default function MeetingDetailsSection({
     <div className="space-y-6">
       <Card>
         <form onSubmit={handleUpdate} className="space-y-6">
-          <FormField label="Meeting Name" required>
+          <FormField label="Meeting Name" required error={errors.meetingName}>
             <Input
               value={form.meetingName}
               onChange={(e) => handleChange("meetingName", e.target.value)}
+              error={!!errors.meetingName}
             />
           </FormField>
 
-          <FormField label="Date & Time" required>
+          <FormField label="Date & Time" required error={errors.datetime}>
             <DateInput
               type="datetime-local"
               value={form.datetime}
-              onChange={(value) => handleChange("datetime", value)}
+              onChange={(event) => handleChange("datetime", event?.target?.value || "")}
+              error={!!errors.datetime}
             />
           </FormField>
 
-          <FormField label="Agenda" required>
+          <FormField label="Agenda" required error={errors.agenda}>
             <Textarea
               value={form.agenda}
               onChange={(e) => handleChange("agenda", e.target.value)}
+              error={!!errors.agenda}
             />
           </FormField>
 
@@ -119,19 +141,21 @@ export default function MeetingDetailsSection({
           </FormField>
 
           {form.mode === "online" && (
-            <FormField label="Meeting Link" required>
+            <FormField label="Meeting Link" required error={errors.link}>
               <Input
                 value={form.link}
                 onChange={(e) => handleChange("link", e.target.value)}
+                error={!!errors.link}
               />
             </FormField>
           )}
 
           {form.mode === "offline" && (
-            <FormField label="Venue" required>
+            <FormField label="Venue" required error={errors.venue}>
               <Input
                 value={form.venue}
                 onChange={(e) => handleChange("venue", e.target.value)}
+                error={!!errors.venue}
               />
             </FormField>
           )}

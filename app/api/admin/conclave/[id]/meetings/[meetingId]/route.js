@@ -38,15 +38,17 @@ function getMeetingRef(conclaveId, meetingId) {
     .doc(meetingId);
 }
 
-export async function GET(req, { params }) {
+export async function GET(req, context) {
   const guard = validateAdmin(req);
   if (!guard.ok) {
     return guard.response;
   }
 
   try {
+    const params = await context.params;
     const conclaveId = String(params?.id || "").trim();
     const meetingId = String(params?.meetingId || "").trim();
+    if (!conclaveId || !meetingId) throw new Error("Missing IDs");
     const snap = await getMeetingRef(conclaveId, meetingId).get();
 
     if (!snap.exists) {
@@ -64,15 +66,17 @@ export async function GET(req, { params }) {
   }
 }
 
-export async function PATCH(req, { params }) {
+export async function PATCH(req, context) {
   const guard = validateAdmin(req);
   if (!guard.ok) {
     return guard.response;
   }
 
   try {
+    const params = await context.params;
     const conclaveId = String(params?.id || "").trim();
     const meetingId = String(params?.meetingId || "").trim();
+    if (!conclaveId || !meetingId) throw new Error("Missing IDs");
     const body = await req.json();
     const payload = buildConclaveMeetingPayload(body);
 

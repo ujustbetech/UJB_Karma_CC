@@ -32,12 +32,12 @@ export default function AddBirthdayClient() {
   return (
     <>
       <Card className="space-y-6">
-        <Text variant="h1">Add Birthday Canva</Text>
+        <Text variant="h1">Add Birthday Creative</Text>
 
         <FormField label="Search User">
           <input
             className="w-full border px-3 py-2 rounded"
-            placeholder="Search user..."
+            placeholder="Search user by name"
             value={search}
             onChange={(e) => {
               setSearch(e.target.value);
@@ -87,7 +87,9 @@ export default function AddBirthdayClient() {
           </div>
         )}
 
-        <input type="file" accept="image/*" onChange={handleFileChange} />
+        <FormField label="Birthday Image" required>
+          <input type="file" accept="image/*" onChange={handleFileChange} />
+        </FormField>
 
         {preview && (
           <img
@@ -102,12 +104,12 @@ export default function AddBirthdayClient() {
           onClick={() => setShowConfirm(true)}
         >
           {!selectedUser
-            ? "Select user"
+            ? "Select a user"
             : !dob
-            ? "DOB missing"
+            ? "Date of birth missing"
             : existing
-            ? "Already exists"
-            : "Save"}
+            ? "Creative already exists"
+            : "Save Birthday Creative"}
         </Button>
       </Card>
 
@@ -115,6 +117,8 @@ export default function AddBirthdayClient() {
         open={showConfirm}
         onConfirm={handleSave}
         onClose={() => setShowConfirm(false)}
+        title="Save birthday creative?"
+        description="This will create the birthday entry for the selected user."
       />
     </>
   );

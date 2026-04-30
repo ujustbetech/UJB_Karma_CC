@@ -2,7 +2,13 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { collection, getDocs, doc, setDoc, db } from '@/services/adminMonthlyMeetingFirebaseService';
+import {
+  collection,
+  getDocs,
+  doc,
+  setDoc,
+  db,
+} from '@/services/adminMonthlyMeetingFirebaseService';
 import { COLLECTIONS } from '@/lib/utility_collection';
 
 import Text from '@/components/ui/Text';
@@ -13,7 +19,7 @@ import { useToast } from '@/components/ui/ToastProvider';
 
 import FormField from '@/components/ui/FormField';
 import Select from '@/components/ui/Select';
-import { User, UserPlus } from 'lucide-react';
+import { UserPlus } from 'lucide-react';
 import { sendWhatsAppTemplateRequest } from '@/utils/whatsappClient';
 
 export default function AddUserSection({ eventId: propEventId }) {
@@ -40,38 +46,38 @@ export default function AddUserSection({ eventId: propEventId }) {
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
 
-  /* ---------------- Load Users ---------------- */
   useEffect(() => {
     const fetchUsers = async () => {
       try {
         const userRef = collection(db, COLLECTIONS.userDetail);
         const snapshot = await getDocs(userRef);
 
-        const users = snapshot.docs.map((doc) => ({
-          ujbCode: doc.id,
-          name: doc.data()['Name'] || '',
-          phone: doc.data().MobileNo || '',
+        const users = snapshot.docs.map((item) => ({
+          ujbCode: item.id,
+          name: item.data().Name || '',
+          phone: item.data().MobileNo || '',
         }));
 
         setUserList(users);
-      } catch (err) {
+      } catch (error) {
+        console.error(error);
         toast.error('Failed to load users');
       }
     };
 
     fetchUsers();
-  }, []);
+  }, [toast]);
 
   const clearError = (field) => {
-    setErrors((prev) => ({ ...prev, [field]: undefined }));
+    setErrors((previous) => ({ ...previous, [field]: undefined }));
   };
 
   const handleSearchUser = (value) => {
     setUserSearch(value);
     clearError('name');
 
-    const filtered = userList.filter((u) =>
-      u.name?.toLowerCase().includes(value.toLowerCase())
+    const filtered = userList.filter((user) =>
+      user.name?.toLowerCase().includes(value.toLowerCase())
     );
 
     setFilteredUsers(filtered);
@@ -83,33 +89,34 @@ export default function AddUserSection({ eventId: propEventId }) {
     setUserSearch('');
     setFilteredUsers([]);
     clearError('name');
+    clearError('phone');
   };
 
   const handleInterestChange = (key, checked) => {
-    setInterests((prev) => ({ ...prev, [key]: checked }));
+    setInterests((previous) => ({ ...previous, [key]: checked }));
   };
 
   const validate = () => {
-    const newErrors = {};
+    const nextErrors = {};
 
-    if (!name) newErrors.name = 'User is required';
-    if (!phone) newErrors.phone = 'Phone missing';
-    if (!type) newErrors.type = 'Type required';
+    if (!name) nextErrors.name = 'User is required';
+    if (!phone) nextErrors.phone = 'Phone missing';
 
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
+    setErrors(nextErrors);
+    return Object.keys(nextErrors).length === 0;
   };
 
-  const sendWhatsAppMessage = async (userPhone, eventId) => {
+  const sendWhatsAppMessage = async (userPhone, currentEventId) => {
     await sendWhatsAppTemplateRequest({
       phone: userPhone,
       templateName: 'register_mm',
-      parameters: [`https://uspacex.vercel.app/events/${eventId}`],
+      parameters: [`https://uspacex.vercel.app/events/${currentEventId}`],
     });
   };
 
   const handleSubmit = async () => {
     if (!validate()) return;
+
     if (!eventId) {
       toast.error('Event ID missing');
       return;
@@ -127,61 +134,50 @@ export default function AddUserSection({ eventId: propEventId }) {
         name,
         phone,
         interestedIn: interests,
-        type,
+        type: type || '',
         registeredAt: new Date(),
       });
 
       await sendWhatsAppMessage(phone, eventId);
 
-      toast.success('User registered & message sent');
-
-      router.push(`/admin/event/RegisteredUser/${eventId}`);
-    } catch (err) {
+      toast.success('User registered and message sent');
+      router.push(`/admin/monthlymeeting/${eventId}`);
+    } catch (error) {
+      console.error(error);
       toast.error('Failed to register user');
+    } finally {
+      setLoading(false);
     }
-
-    setLoading(false);
   };
 
   return (
-    <Card className="p-6 space-y-6">
-      {/* Header */}
-      
+    <Card className="space-y-6 p-6">
       <div className="flex items-center gap-3">
-        <UserPlus className="w-5 h-5 text-blue-600" />
+        <UserPlus className="h-5 w-5 text-blue-600" />
         <Text as="h2">Add User to Event</Text>
-        {/* <Text className="text-sm text-gray-500">
-          Search and register members for this monthly meeting
-        </Text> */}
       </div>
 
       <div className="space-y-5">
-
-        {/* Search User */}
         <FormField label="Search Member" error={errors.name} required>
           <div className="relative">
             <Input
               value={userSearch}
-              onChange={(e) => handleSearchUser(e.target.value)}
+              onChange={(event) => handleSearchUser(event.target.value)}
               placeholder="Type member name"
               error={!!errors.name}
               autoFocus
             />
 
             {filteredUsers.length > 0 && (
-              <div className="absolute z-30 w-full mt-2 bg-white border border-slate-200 rounded-xl shadow-lg max-h-56 overflow-y-auto">
-                {filteredUsers.map((u) => (
+              <div className="absolute z-30 mt-2 max-h-56 w-full overflow-y-auto rounded-xl border border-slate-200 bg-white shadow-lg">
+                {filteredUsers.map((user) => (
                   <div
-                    key={u.phone}
-                    onClick={() => handleSelectUser(u)}
-                    className="px-4 py-2.5 cursor-pointer hover:bg-blue-50 transition"
+                    key={user.phone}
+                    onClick={() => handleSelectUser(user)}
+                    className="cursor-pointer px-4 py-2.5 transition hover:bg-blue-50"
                   >
-                    <div className="text-sm font-medium text-slate-800">
-                      {u.name}
-                    </div>
-                    <div className="text-xs text-slate-500">
-                      {u.phone}
-                    </div>
+                    <div className="text-sm font-medium text-slate-800">{user.name}</div>
+                    <div className="text-xs text-slate-500">{user.phone}</div>
                   </div>
                 ))}
               </div>
@@ -189,110 +185,89 @@ export default function AddUserSection({ eventId: propEventId }) {
           </div>
         </FormField>
 
-        {/* Selected Member */}
         <FormField label="Selected Member" required>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <Input value={name} readOnly error={!!errors.name} />
             <Input value={phone} readOnly error={!!errors.phone} />
           </div>
         </FormField>
 
-        {/* Interests (Chip Style) */}
         <FormField label="Interested In">
           <div className="flex flex-wrap gap-2">
-
             <button
               type="button"
               onClick={() =>
-                handleInterestChange(
-                  'knowledgeSharing',
-                  !interests.knowledgeSharing
-                )
+                handleInterestChange('knowledgeSharing', !interests.knowledgeSharing)
               }
-              className={`px-3 py-1.5 rounded-full text-sm border ${interests.knowledgeSharing
-                ? 'bg-green-100 text-green-700 border-green-200'
-                : 'bg-white border-gray-300'
-                }`}
+              className={`rounded-full border px-3 py-1.5 text-sm ${
+                interests.knowledgeSharing
+                  ? 'border-green-200 bg-green-100 text-green-700'
+                  : 'border-gray-300 bg-white'
+              }`}
             >
               Knowledge Sharing
             </button>
 
             <button
               type="button"
-              onClick={() =>
-                handleInterestChange('e2a', !interests.e2a)
-              }
-              className={`px-3 py-1.5 rounded-full text-sm border ${interests.e2a
-                ? 'bg-blue-100 text-blue-700 border-blue-200'
-                : 'bg-white border-gray-300'
-                }`}
+              onClick={() => handleInterestChange('e2a', !interests.e2a)}
+              className={`rounded-full border px-3 py-1.5 text-sm ${
+                interests.e2a
+                  ? 'border-blue-200 bg-blue-100 text-blue-700'
+                  : 'border-gray-300 bg-white'
+              }`}
             >
               E2A
             </button>
 
             <button
               type="button"
-              onClick={() =>
-                handleInterestChange('oneToOne', !interests.oneToOne)
-              }
-              className={`px-3 py-1.5 rounded-full text-sm border ${interests.oneToOne
-                ? 'bg-purple-100 text-purple-700 border-purple-200'
-                : 'bg-white border-gray-300'
-                }`}
+              onClick={() => handleInterestChange('oneToOne', !interests.oneToOne)}
+              className={`rounded-full border px-3 py-1.5 text-sm ${
+                interests.oneToOne
+                  ? 'border-purple-200 bg-purple-100 text-purple-700'
+                  : 'border-gray-300 bg-white'
+              }`}
             >
               1:1
             </button>
 
             <button
               type="button"
-              onClick={() =>
-                handleInterestChange('none', !interests.none)
-              }
-              className={`px-3 py-1.5 rounded-full text-sm border ${interests.none
-                ? 'bg-gray-100 text-gray-700 border-gray-200'
-                : 'bg-white border-gray-300'
-                }`}
+              onClick={() => handleInterestChange('none', !interests.none)}
+              className={`rounded-full border px-3 py-1.5 text-sm ${
+                interests.none
+                  ? 'border-gray-200 bg-gray-100 text-gray-700'
+                  : 'border-gray-300 bg-white'
+              }`}
             >
               None
             </button>
-
           </div>
         </FormField>
 
-        {/* Type */}
-        <FormField label="Type" error={errors.type} required>
+        <FormField label="Type (Optional)">
           <Select
             value={type}
-            onChange={(val) => {
-              setType(val);
+            onChange={(value) => {
+              setType(value);
               clearError('type');
             }}
-            error={!!errors.type}
             options={[
               { label: 'Select Type', value: '' },
-              { label: 'Type A', value: 'A' },
-              { label: 'Type B', value: 'B' },
-              { label: 'Type C', value: 'C' },
+              { label: 'Member', value: 'member' },
+              { label: 'Guest', value: 'guest' },
+              { label: 'Speaker', value: 'speaker' },
             ]}
           />
-
         </FormField>
 
-        {/* CTA */}
-        <div className="flex justify-end pt-4 border-t">
-          <Button
-            variant="primary"
-            onClick={handleSubmit}
-            disabled={loading}
-          >
-            {loading ? 'Registering…' : 'Register & Send'}
+        <div className="flex justify-end border-t pt-4">
+          <Button variant="primary" onClick={handleSubmit} disabled={loading}>
+            {loading ? 'Registering...' : 'Register & Send'}
           </Button>
         </div>
-
       </div>
     </Card>
   );
 }
-
-
-

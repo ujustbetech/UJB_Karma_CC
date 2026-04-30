@@ -27,14 +27,16 @@ function validateAdmin(req) {
   return { ok: true };
 }
 
-export async function POST(req, { params }) {
+export async function POST(req, context) {
   const guard = validateAdmin(req);
   if (!guard.ok) {
     return guard.response;
   }
 
   try {
+    const params = await context.params;
     const id = String(params?.id || "").trim();
+    if (!id) throw new Error("ID is required");
     const body = await req.json();
 
     if (!body?.meetingName || !body?.datetime) {

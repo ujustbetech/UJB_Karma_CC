@@ -20,6 +20,7 @@ export default function MeetingsSection({ data }) {
     const interval = setInterval(() => {
       setNow(new Date());
     }, 60000);
+
     return () => clearInterval(interval);
   }, []);
 
@@ -86,16 +87,23 @@ export default function MeetingsSection({ data }) {
     ],
   };
 
+  const getDestination = (event) => {
+    if (activeTab === "monthly") {
+      return `/user/monthlymeeting/${event.id}`;
+    }
+
+    return `/user/conclave/meeting/${event.id}`;
+  };
+
   const renderCard = (event) => {
     const isUpcoming = event.time > now;
 
     return (
       <div key={event.id} className="px-2">
         <div
-          className={`relative rounded-xl overflow-hidden border transition-all duration-300
-          hover:shadow-lg hover:-translate-y-1
-          ${isUpcoming ? "border-blue-200" : "border-slate-200"}
-          bg-white`}
+          className={`relative overflow-hidden rounded-xl border bg-white transition-all duration-300 hover:-translate-y-1 hover:shadow-lg ${
+            isUpcoming ? "border-blue-200" : "border-slate-200"
+          }`}
         >
           <div
             className={`h-1 w-full ${
@@ -107,14 +115,15 @@ export default function MeetingsSection({ data }) {
 
           <div className="flex gap-4 p-4">
             <div
-              className={`w-16 h-16 rounded-lg flex items-center justify-center flex-shrink-0
-              ${isUpcoming ? "bg-blue-50 text-blue-600" : "bg-slate-100 text-slate-500"}`}
+              className={`flex h-16 w-16 flex-shrink-0 items-center justify-center rounded-lg ${
+                isUpcoming ? "bg-blue-50 text-blue-600" : "bg-slate-100 text-slate-500"
+              }`}
             >
               {event.image ? (
                 <img
                   src={event.image}
                   alt={event.title}
-                  className="w-full h-full object-cover rounded-lg"
+                  className="h-full w-full rounded-lg object-cover"
                 />
               ) : (
                 <CalendarDays size={22} />
@@ -122,17 +131,17 @@ export default function MeetingsSection({ data }) {
             </div>
 
             <div className="flex-1">
-              <p className="text-xs uppercase tracking-wide text-slate-400 font-medium">
+              <p className="text-xs font-medium uppercase tracking-wide text-slate-400">
                 {activeTab === "monthly" ? "Event" : "Conclave"}
               </p>
 
-              <h3 className="text-sm font-semibold text-slate-900 mt-1 leading-snug">
+              <h3 className="mt-1 text-sm font-semibold leading-snug text-slate-900">
                 {event.title || "Community Event"}
               </h3>
             </div>
           </div>
 
-          <div className="grid grid-cols-3 text-center border-t border-slate-200">
+          <div className="grid grid-cols-3 border-t border-slate-200 text-center">
             <div className="py-3">
               <p className="text-sm font-semibold text-slate-900">
                 {event.time.toLocaleDateString("en-IN", {
@@ -140,17 +149,17 @@ export default function MeetingsSection({ data }) {
                   month: "short",
                 })}
               </p>
-              <p className="text-xs text-slate-400 mt-1">Date</p>
+              <p className="mt-1 text-xs text-slate-400">Date</p>
             </div>
 
-            <div className="py-3 border-l border-r border-slate-200">
+            <div className="border-x border-slate-200 py-3">
               <p className="text-sm font-semibold text-slate-900">
                 {event.time.toLocaleTimeString("en-IN", {
                   hour: "2-digit",
                   minute: "2-digit",
                 })}
               </p>
-              <p className="text-xs text-slate-400 mt-1">Time</p>
+              <p className="mt-1 text-xs text-slate-400">Time</p>
             </div>
 
             <div className="py-3">
@@ -161,20 +170,16 @@ export default function MeetingsSection({ data }) {
               >
                 {isUpcoming ? "Open" : "Closed"}
               </p>
-              <p className="text-xs text-slate-400 mt-1">Status</p>
+              <p className="mt-1 text-xs text-slate-400">Status</p>
             </div>
           </div>
 
           <div className="border-t border-slate-200">
             <button
-              onClick={() =>
-                router.push(
-                  activeTab === "monthly" ? "/Monthlymeetdetails" : "/ConclaveMeeting"
-                )
-              }
-              className="w-full py-3 text-sm font-medium text-blue-600 hover:bg-blue-50 transition"
+              onClick={() => router.push(getDestination(event))}
+              className="w-full py-3 text-sm font-medium text-blue-600 transition hover:bg-blue-50"
             >
-              View event â†’
+              View Details
             </button>
           </div>
         </div>
@@ -184,18 +189,18 @@ export default function MeetingsSection({ data }) {
 
   const SkeletonCard = () => (
     <div className="px-2">
-      <div className="bg-white border border-slate-200 rounded-xl p-4 animate-pulse">
+      <div className="animate-pulse rounded-xl border border-slate-200 bg-white p-4">
         <div className="flex gap-4">
-          <div className="w-16 h-16 bg-slate-200 rounded-lg" />
+          <div className="h-16 w-16 rounded-lg bg-slate-200" />
           <div className="flex-1 space-y-2">
-            <div className="h-3 bg-slate-200 rounded w-20" />
-            <div className="h-4 bg-slate-200 rounded w-3/4" />
+            <div className="h-3 w-20 rounded bg-slate-200" />
+            <div className="h-4 w-3/4 rounded bg-slate-200" />
           </div>
         </div>
-        <div className="grid grid-cols-3 gap-2 mt-4">
-          <div className="h-6 bg-slate-200 rounded" />
-          <div className="h-6 bg-slate-200 rounded" />
-          <div className="h-6 bg-slate-200 rounded" />
+        <div className="mt-4 grid grid-cols-3 gap-2">
+          <div className="h-6 rounded bg-slate-200" />
+          <div className="h-6 rounded bg-slate-200" />
+          <div className="h-6 rounded bg-slate-200" />
         </div>
       </div>
     </div>
@@ -213,17 +218,16 @@ export default function MeetingsSection({ data }) {
         </h3>
       </div>
 
-      <div className="flex gap-4">
+      <div className="flex flex-wrap gap-3">
         {["monthly", "conclave"].map((tab) => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
-            className={`px-4 py-2 rounded-full text-sm font-medium transition-all duration-200
-        ${
-          activeTab === tab
-            ? "bg-orange-500 text-white shadow-md"
-            : "bg-blue-50 text-blue-600 hover:bg-blue-100"
-        }`}
+            className={`min-w-[140px] rounded-full px-4 py-2 text-sm font-medium transition-all duration-200 ${
+              activeTab === tab
+                ? "bg-orange-500 text-white shadow-md"
+                : "bg-blue-50 text-blue-600 hover:bg-blue-100"
+            }`}
           >
             {tab === "monthly" ? "Monthly Meetings" : "Conclaves"}
           </button>
@@ -243,4 +247,3 @@ export default function MeetingsSection({ data }) {
     </div>
   );
 }
-

@@ -31,14 +31,16 @@ function validateAdmin(req) {
   return { ok: true };
 }
 
-export async function GET(req, { params }) {
+export async function GET(req, context) {
   const guard = validateAdmin(req);
   if (!guard.ok) {
     return guard.response;
   }
 
   try {
+    const params = await context.params;
     const id = String(params?.id || "").trim();
+    if (!id) throw new Error("ID is required");
     const docRef = adminDb.collection(COLLECTIONS.conclaves).doc(id);
     const [conclaveSnap, meetingsSnap] = await Promise.all([
       docRef.get(),
@@ -67,14 +69,16 @@ export async function GET(req, { params }) {
   }
 }
 
-export async function PATCH(req, { params }) {
+export async function PATCH(req, context) {
   const guard = validateAdmin(req);
   if (!guard.ok) {
     return guard.response;
   }
 
   try {
+    const params = await context.params;
     const id = String(params?.id || "").trim();
+    if (!id) throw new Error("ID is required");
     const body = await req.json();
     const payload = buildConclaveUpdatePayload(body);
 
@@ -95,14 +99,16 @@ export async function PATCH(req, { params }) {
   }
 }
 
-export async function DELETE(req, { params }) {
+export async function DELETE(req, context) {
   const guard = validateAdmin(req);
   if (!guard.ok) {
     return guard.response;
   }
 
   try {
+    const params = await context.params;
     const id = String(params?.id || "").trim();
+    if (!id) throw new Error("ID is required");
     await adminDb.collection(COLLECTIONS.conclaves).doc(id).delete();
     return NextResponse.json({ success: true });
   } catch (error) {

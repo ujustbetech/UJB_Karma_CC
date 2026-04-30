@@ -13,7 +13,7 @@ import {
   Handshake,
   Briefcase,
   Activity,
-  BarChart3
+  BarChart3,
 } from 'lucide-react';
 
 import {
@@ -23,7 +23,7 @@ import {
   XAxis,
   YAxis,
   Tooltip,
-  CartesianGrid
+  CartesianGrid,
 } from 'recharts';
 
 export default function MonthlyMeetingDashboard() {
@@ -33,13 +33,10 @@ export default function MonthlyMeetingDashboard() {
   const regListenersRef = useRef({});
   const meetingMapRef = useRef({});
 
-  /* ================= REALTIME FIRESTORE ================= */
-
   useEffect(() => {
     const unsubMeetings = onSnapshot(
       collection(db, COLLECTIONS.monthlyMeeting),
       (snapshot) => {
-
         const memberStats = {};
 
         snapshot.docs.forEach((docSnap) => {
@@ -48,40 +45,36 @@ export default function MonthlyMeetingDashboard() {
 
           const interactions = data?.sections?.length || 0;
           const referrals = data?.referralSections?.length || 0;
-
           const dealsWon =
-            data?.referralSections?.filter(r => r.status === 'Deal Won').length || 0;
+            data?.referralSections?.filter((item) => item.status === 'Deal Won').length || 0;
 
-          /* ===== BUILD MEMBER STATS ===== */
-
-          (data?.sections || []).forEach(s => {
-            addMember(memberStats, s.selectedParticipant1, 'interactions');
-            addMember(memberStats, s.selectedParticipant2, 'interactions');
+          (data?.sections || []).forEach((section) => {
+            addMember(memberStats, section.selectedParticipant1, 'interactions');
+            addMember(memberStats, section.selectedParticipant2, 'interactions');
           });
 
-          (data?.referralSections || []).forEach(r => {
-            addMember(memberStats, r.referralFrom, 'referrals');
+          (data?.referralSections || []).forEach((section) => {
+            addMember(memberStats, section.referralFrom, 'referrals');
           });
 
-          (data?.knowledgeSections || []).forEach(k => {
-            addMember(memberStats, k.name, 'knowledge');
+          (data?.knowledgeSections || []).forEach((section) => {
+            addMember(memberStats, section.name, 'knowledge');
           });
 
-          (data?.requirementSections || []).forEach(r => {
-            addMember(memberStats, r.reqfrom, 'requirements');
+          (data?.requirementSections || []).forEach((section) => {
+            addMember(memberStats, section.reqfrom, 'requirements');
           });
-
-          /* ===== REGISTERED USERS LISTENER ===== */
 
           if (!regListenersRef.current[eventId]) {
             regListenersRef.current[eventId] = onSnapshot(
               collection(db, COLLECTIONS.monthlyMeeting, eventId, 'registeredUsers'),
               (regSnap) => {
-
                 let present = 0;
 
-                regSnap.forEach(d => {
-                  if (d.data()?.attendanceStatus) present++;
+                regSnap.forEach((item) => {
+                  if (item.data()?.attendanceStatus) {
+                    present++;
+                  }
                 });
 
                 const registered = regSnap.size;
@@ -97,7 +90,7 @@ export default function MonthlyMeetingDashboard() {
                   attendancePercent,
                   interactions,
                   referrals,
-                  dealsWon
+                  dealsWon,
                 };
 
                 setMeetings(Object.values(meetingMapRef.current));
@@ -106,40 +99,41 @@ export default function MonthlyMeetingDashboard() {
           }
         });
 
-        /* ===== CREATE LEADERBOARD ===== */
+        const nextLeaderboard = Object.entries(memberStats)
+          .map(([name, stats]) => ({
+            name,
+            ...stats,
+            score:
+              stats.interactions * 3 +
+              stats.referrals * 5 +
+              stats.knowledge * 4 +
+              stats.requirements * 2,
+          }))
+          .sort((left, right) => right.score - left.score);
 
-        const lb = Object.entries(memberStats).map(([name, stats]) => {
-          const score =
-            stats.interactions * 3 +
-            stats.referrals * 5 +
-            stats.knowledge * 4 +
-            stats.requirements * 2;
-
-          return { name, ...stats, score };
-        });
-
-        lb.sort((a, b) => b.score - a.score);
-        setLeaderboard(lb);
+        setLeaderboard(nextLeaderboard);
       }
     );
 
     return () => {
       unsubMeetings();
-      Object.values(regListenersRef.current).forEach(unsub => unsub());
+      Object.values(regListenersRef.current).forEach((unsubscribe) => unsubscribe());
     };
   }, []);
 
-  /* ================= KPI TOTALS ================= */
-
   const totals = useMemo(() => {
-    let reg = 0, pre = 0, ref = 0, deals = 0, inter = 0;
+    let reg = 0;
+    let pre = 0;
+    let ref = 0;
+    let deals = 0;
+    let inter = 0;
 
-    meetings.forEach(m => {
-      reg += m.registered;
-      pre += m.present;
-      ref += m.referrals;
-      deals += m.dealsWon;
-      inter += m.interactions;
+    meetings.forEach((meeting) => {
+      reg += meeting.registered;
+      pre += meeting.present;
+      ref += meeting.referrals;
+      deals += meeting.dealsWon;
+      inter += meeting.interactions;
     });
 
     return {
@@ -148,33 +142,29 @@ export default function MonthlyMeetingDashboard() {
       attendance: reg ? Math.round((pre / reg) * 100) : 0,
       referrals: ref,
       dealsWon: deals,
-      engagement: inter
+      engagement: inter,
     };
   }, [meetings]);
 
   return (
-    <div className="p-6 space-y-6">
-
-      {/* HEADER */}
+    <div className="space-y-6 p-6">
       <div className="flex items-center gap-2">
         <BarChart3 size={22} />
         <Text variant="h1">Enterprise Analytics</Text>
       </div>
 
-      {/* KPI STRIP */}
-      <div className="grid grid-cols-5 gap-4">
-
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
         <KPI title="Attendance %" value={`${totals.attendance}%`} icon={Percent} color="green" />
         <KPI title="Referrals" value={totals.referrals} icon={Handshake} color="blue" />
         <KPI title="Deals Won" value={totals.dealsWon} icon={Briefcase} color="purple" />
         <KPI title="Member Growth" value={totals.registered} icon={Users} color="orange" />
         <KPI title="Engagement" value={totals.engagement} icon={Activity} color="pink" />
-
       </div>
 
-      {/* ATTENDANCE TREND */}
       <Card className="p-6">
-        <Text variant="h3" className="mb-4">Attendance Trend</Text>
+        <Text variant="h3" className="mb-4">
+          Attendance Trend
+        </Text>
 
         <ResponsiveContainer width="100%" height={300}>
           <LineChart data={meetings}>
@@ -187,43 +177,43 @@ export default function MonthlyMeetingDashboard() {
         </ResponsiveContainer>
       </Card>
 
-      {/* TOP ACTIVE MEMBERS */}
       <Card className="p-6">
-        <Text variant="h3" className="mb-4">🏆 Top Active Members</Text>
+        <Text variant="h3" className="mb-4">
+          Top Orbiters
+        </Text>
 
         <div className="space-y-3">
-          {(leaderboard || []).slice(0, 5).map((m, index) => (
+          {(leaderboard || []).slice(0, 5).map((member, index) => (
             <div
               key={index}
-              className="flex items-center justify-between p-3 rounded-xl bg-gray-50"
+              className="flex items-center justify-between rounded-xl bg-gray-50 p-3"
             >
               <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-full bg-slate-800 text-white flex items-center justify-center text-sm font-bold">
+                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-800 text-sm font-bold text-white">
                   {index + 1}
                 </div>
 
                 <div>
-                  <Text className="font-semibold">{m.name}</Text>
+                  <Text className="font-semibold">{member.name}</Text>
                   <Text variant="muted" className="text-xs">
-                    {m.interactions} 121 • {m.referrals} referrals
+                    {member.interactions} 1:1 • {member.referrals} referrals
                   </Text>
                 </div>
               </div>
 
               <div className="text-right">
-                <Text className="font-bold text-lg">{m.score}</Text>
-                <Text variant="muted" className="text-xs">Score</Text>
+                <Text className="text-lg font-bold">{member.score}</Text>
+                <Text variant="muted" className="text-xs">
+                  Score
+                </Text>
               </div>
             </div>
           ))}
         </div>
       </Card>
-
     </div>
   );
 }
-
-/* ================= KPI COMPONENT ================= */
 
 function KPI({ title, value, icon: Icon, color }) {
   const colors = {
@@ -231,12 +221,12 @@ function KPI({ title, value, icon: Icon, color }) {
     blue: 'bg-blue-50 text-blue-700',
     purple: 'bg-purple-50 text-purple-700',
     orange: 'bg-orange-50 text-orange-700',
-    pink: 'bg-pink-50 text-pink-700'
+    pink: 'bg-pink-50 text-pink-700',
   };
 
   return (
-    <Card className="p-4 flex items-center gap-4">
-      <div className={`p-3 rounded-xl ${colors[color]}`}>
+    <Card className="flex items-center gap-4 p-4">
+      <div className={`rounded-xl p-3 ${colors[color]}`}>
         <Icon size={22} />
       </div>
 
@@ -248,22 +238,17 @@ function KPI({ title, value, icon: Icon, color }) {
   );
 }
 
-/* ================= HELPER ================= */
-
-function addMember(obj, name, field) {
+function addMember(statsMap, name, field) {
   if (!name) return;
 
-  if (!obj[name]) {
-    obj[name] = {
+  if (!statsMap[name]) {
+    statsMap[name] = {
       interactions: 0,
       referrals: 0,
       knowledge: 0,
-      requirements: 0
+      requirements: 0,
     };
   }
 
-  obj[name][field]++;
+  statsMap[name][field]++;
 }
-
-
-

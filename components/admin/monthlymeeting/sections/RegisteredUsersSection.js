@@ -1,8 +1,19 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { collection, query, orderBy, onSnapshot, doc, updateDoc, arrayUnion, serverTimestamp, getDocs, setDoc, getDoc, db } from '@/services/adminMonthlyMeetingFirebaseService';
-
+import {
+  collection,
+  query,
+  orderBy,
+  onSnapshot,
+  doc,
+  updateDoc,
+  serverTimestamp,
+  getDocs,
+  setDoc,
+  getDoc,
+  db,
+} from '@/services/adminMonthlyMeetingFirebaseService';
 
 import { COLLECTIONS } from '@/lib/utility_collection';
 
@@ -12,107 +23,104 @@ import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
 import ActionButton from '@/components/ui/ActionButton';
 import Modal from '@/components/ui/Modal';
-import { FormField, Textarea, Select } from '@/components/ui/form';
+import { FormField, Textarea } from '@/components/ui/form';
 import Table from '@/components/table/Table';
 import TableHeader from '@/components/table/TableHeader';
 import TableRow from '@/components/table/TableRow';
 import { useToast } from '@/components/ui/ToastProvider';
 
-import { Eye, Plus, Phone, MessageCircle, FileText, Users } from 'lucide-react';
+import { Eye, Plus, Phone, MessageCircle, Users } from 'lucide-react';
 
 export default function RegisteredUsersSection({ eventId }) {
   const toast = useToast();
 
   const [users, setUsers] = useState([]);
-
   const [filters, setFilters] = useState({
     number: '',
     name: '',
     category: '',
     ujb: '',
-    presentOnly: false
+    presentOnly: false,
   });
 
   const [viewModalOpen, setViewModalOpen] = useState(false);
   const [feedbackModalOpen, setFeedbackModalOpen] = useState(false);
-
   const [selectedUserName, setSelectedUserName] = useState('');
   const [selectedFeedbacks, setSelectedFeedbacks] = useState([]);
   const [currentUserId, setCurrentUserId] = useState('');
-
   const [predefinedFeedback, setPredefinedFeedback] = useState('');
   const [customFeedback, setCustomFeedback] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
-  const usersPerPage = 10;
   const [loading, setLoading] = useState(true);
 
-
+  const usersPerPage = 10;
 
   const predefinedFeedbacks = [
-    "Available",
-    "Not Available",
-    "Not Connected Yet",
-    "Called but no response",
-    "Tentative",
-    "Other response",
+    'Available',
+    'Not Available',
+    'Not Connected Yet',
+    'Called but no response',
+    'Tentative',
+    'Other response',
   ];
 
   useEffect(() => {
     if (!eventId) return;
 
-    const ref = collection(
-      db,
-      `${COLLECTIONS.monthlyMeeting}/${eventId}/registeredUsers`
-    );
+    const ref = collection(db, `${COLLECTIONS.monthlyMeeting}/${eventId}/registeredUsers`);
+    const registeredUsersQuery = query(ref, orderBy('registeredAt', 'desc'));
 
-    const q = query(ref, orderBy('registeredAt', 'desc'));
-
-    const unsubscribe = onSnapshot(q, async (snapshot) => {
-      const rawUsers = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
+    const unsubscribe = onSnapshot(registeredUsersQuery, async (snapshot) => {
+      const rawUsers = snapshot.docs.map((item) => ({
+        id: item.id,
+        ...item.data(),
       }));
 
-      // Pull all user details once
       const userSnap = await getDocs(collection(db, COLLECTIONS.userDetail));
-
       const userMap = {};
-      userSnap.forEach(doc => {
-        const d = doc.data();
-        userMap[d.MobileNo] = d;
+
+      userSnap.forEach((item) => {
+        const details = item.data();
+        userMap[details.MobileNo] = details;
       });
 
-      const enriched = rawUsers.map(user => {
-        const d = userMap[user.id] || {};
+      const enriched = rawUsers.map((user) => {
+        const details = userMap[user.id] || {};
+
         return {
           ...user,
-          name: d.Name || "Unknown",
-          category: d.Category || "",
-          ujbcode: d.UJBCode || "",
-          feedback: user.feedback || []
+          name: details.Name || user.name || 'Unknown',
+          category: details.Category || '',
+          ujbcode: details.UJBCode || '',
+          feedback: user.feedback || [],
         };
       });
 
       setUsers(enriched);
-      setLoading(false);   // ← ADD THIS
+      setLoading(false);
     });
 
     return () => unsubscribe();
   }, [eventId]);
 
+  const filteredUsers = useMemo(
+    () =>
+      users.filter(
+        (user) =>
+          user.id.includes(filters.number) &&
+          (user.name || '').toLowerCase().includes(filters.name.toLowerCase()) &&
+          (user.category || '').toLowerCase().includes(filters.category.toLowerCase()) &&
+          (user.ujbcode || '').toLowerCase().includes(filters.ujb.toLowerCase()) &&
+          (!filters.presentOnly || user.attendanceStatus)
+      ),
+    [users, filters]
+  );
 
-  const filteredUsers = useMemo(() => {
-    return users.filter(u =>
-      u.id.includes(filters.number) &&
-      (u.name || '').toLowerCase().includes(filters.name.toLowerCase()) &&
-      (u.category || '').toLowerCase().includes(filters.category.toLowerCase()) &&
-      (u.ujbcode || '').toLowerCase().includes(filters.ujb.toLowerCase()) &&
-      (!filters.presentOnly || u.attendanceStatus)
-    );
-  }, [users, filters]);
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [filters, users.length]);
 
   const totalPages = Math.ceil(filteredUsers.length / usersPerPage);
-
   const paginatedUsers = filteredUsers.slice(
     (currentPage - 1) * usersPerPage,
     currentPage * usersPerPage
@@ -120,7 +128,7 @@ export default function RegisteredUsersSection({ eventId }) {
 
   const stats = useMemo(() => {
     const total = users.length;
-    const present = users.filter(u => u.attendanceStatus).length;
+    const present = users.filter((user) => user.attendanceStatus).length;
     const pending = total - present;
     const percent = total ? Math.round((present / total) * 100) : 0;
 
@@ -132,7 +140,7 @@ export default function RegisteredUsersSection({ eventId }) {
       doc(db, `${COLLECTIONS.monthlyMeeting}/${eventId}/registeredUsers`, phone),
       {
         attendanceStatus: true,
-        timestamp: serverTimestamp()
+        timestamp: serverTimestamp(),
       }
     );
 
@@ -153,12 +161,12 @@ export default function RegisteredUsersSection({ eventId }) {
 
   const submitFeedback = async () => {
     if (!currentUserId) {
-      toast.error("User not selected");
+      toast.error('User not selected');
       return;
     }
 
     if (!predefinedFeedback && !customFeedback) {
-      toast.error("Enter feedback");
+      toast.error('Enter feedback');
       return;
     }
 
@@ -167,19 +175,12 @@ export default function RegisteredUsersSection({ eventId }) {
       `${COLLECTIONS.monthlyMeeting}/${eventId}/registeredUsers`,
       currentUserId
     );
-
-    // Check if doc exists
     const snap = await getDoc(ref);
-
-    let existingFeedback = [];
-
-    if (snap.exists()) {
-      existingFeedback = snap.data().feedback || [];
-    }
+    const existingFeedback = snap.exists() ? snap.data().feedback || [] : [];
 
     const newEntry = {
-      predefined: predefinedFeedback || "None",
-      custom: customFeedback || "None",
+      predefined: predefinedFeedback || 'None',
+      custom: customFeedback || 'None',
       timestamp: new Date().toISOString(),
     };
 
@@ -192,174 +193,186 @@ export default function RegisteredUsersSection({ eventId }) {
       { merge: true }
     );
 
-    toast.success("Feedback saved");
-
+    toast.success('Feedback saved');
     setFeedbackModalOpen(false);
     setPredefinedFeedback('');
     setCustomFeedback('');
   };
 
-
   const SkeletonRow = () => (
     <TableRow>
-      <td><div className="h-4 w-6 bg-slate-200 rounded animate-pulse" /></td>
-      <td><div className="h-4 w-24 bg-slate-200 rounded animate-pulse" /></td>
-      <td><div className="h-4 w-32 bg-slate-200 rounded animate-pulse" /></td>
-      <td><div className="h-4 w-20 bg-slate-200 rounded animate-pulse" /></td>
-      <td><div className="h-8 w-32 bg-slate-200 rounded animate-pulse" /></td>
-      <td><div className="h-8 w-24 bg-slate-200 rounded animate-pulse" /></td>
+      <td><div className="h-4 w-6 animate-pulse rounded bg-slate-200" /></td>
+      <td><div className="h-4 w-24 animate-pulse rounded bg-slate-200" /></td>
+      <td><div className="h-4 w-32 animate-pulse rounded bg-slate-200" /></td>
+      <td><div className="h-4 w-20 animate-pulse rounded bg-slate-200" /></td>
+      <td><div className="h-8 w-32 animate-pulse rounded bg-slate-200" /></td>
+      <td><div className="h-8 w-24 animate-pulse rounded bg-slate-200" /></td>
     </TableRow>
   );
-
-
 
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-3">
-        <Users className="w-5 h-5 text-blue-600" />
+        <Users className="h-5 w-5 text-blue-600" />
         <Text as="h2">Register Orbiters</Text>
-        {/* <span className="bg-blue-100 text-blue-700 text-xs px-2 py-1 rounded-full">
-            {documentUploads.length}
-          </span> */}
       </div>
 
-      {/* STATS */}
-      <Card>
-
-
-        <div className="grid grid-cols-4 gap-4 text-center">
+      <Card className="p-4">
+        <div className="grid grid-cols-2 gap-4 text-center md:grid-cols-4">
           <div><Text>Total</Text><h2>{stats.total}</h2></div>
           <div><Text>Present</Text><h2>{stats.present}</h2></div>
           <div><Text>Pending</Text><h2>{stats.pending}</h2></div>
           <div><Text>Attendance</Text><h2>{stats.percent}%</h2></div>
         </div>
 
-        <div className="w-full bg-gray-200 h-2 mt-4 rounded">
-          <div
-            className="bg-green-500 h-2 rounded"
-            style={{ width: `${stats.percent}%` }}
-          />
+        <div className="mt-4 h-2 w-full rounded bg-gray-200">
+          <div className="h-2 rounded bg-green-500" style={{ width: `${stats.percent}%` }} />
         </div>
       </Card>
 
-      {/* FILTERS */}
-      <Card>
-        <div className="grid grid-cols-5 gap-4">
-          <Input placeholder="Number"
-            onChange={e => setFilters(f => ({ ...f, number: e.target.value }))} />
-          <Input placeholder="Name"
-            onChange={e => setFilters(f => ({ ...f, name: e.target.value }))} />
-          <Input placeholder="Category"
-            onChange={e => setFilters(f => ({ ...f, category: e.target.value }))} />
-          <Input placeholder="UJB"
-            onChange={e => setFilters(f => ({ ...f, ujb: e.target.value }))} />
+      <Card className="p-4">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-5">
+          <Input
+            placeholder="Number"
+            onChange={(event) =>
+              setFilters((previous) => ({ ...previous, number: event.target.value }))
+            }
+          />
+          <Input
+            placeholder="Name"
+            onChange={(event) =>
+              setFilters((previous) => ({ ...previous, name: event.target.value }))
+            }
+          />
+          <Input
+            placeholder="Category"
+            onChange={(event) =>
+              setFilters((previous) => ({ ...previous, category: event.target.value }))
+            }
+          />
+          <Input
+            placeholder="UJB"
+            onChange={(event) =>
+              setFilters((previous) => ({ ...previous, ujb: event.target.value }))
+            }
+          />
           <Button
-            variant={filters.presentOnly ? "primary" : "outline"}
-            onClick={() => setFilters(f => ({ ...f, presentOnly: !f.presentOnly }))}
+            variant={filters.presentOnly ? 'primary' : 'outline'}
+            onClick={() =>
+              setFilters((previous) => ({
+                ...previous,
+                presentOnly: !previous.presentOnly,
+              }))
+            }
           >
             Present Only
           </Button>
         </div>
       </Card>
 
-      {/* TABLE */}
-      <Card>
+      <Card className="overflow-hidden p-4">
         <div className="flex items-center gap-3 py-3">
           <Text as="h2">Registered Users</Text>
-
-          <span className="px-2.5 py-1 text-xs font-medium bg-blue-100 text-blue-700 rounded-full">
+          <span className="rounded-full bg-blue-100 px-2.5 py-1 text-xs font-medium text-blue-700">
             {filteredUsers.length}
           </span>
         </div>
 
-        <Table>
-          <TableHeader
-            columns={[
-              { key: 'index', label: '#' },
-              { key: 'number', label: 'Number' },
-              { key: 'name', label: 'Name' },
-              { key: 'category', label: 'Category' },
-              { key: 'actions', label: 'Actions' },
-              { key: 'attendance', label: 'Attendance' },
-            ]}
-          />
+        <div className="max-h-[60vh] overflow-auto">
+          <Table>
+            <TableHeader
+              columns={[
+                { key: 'index', label: '#' },
+                { key: 'number', label: 'Number' },
+                { key: 'name', label: 'Name' },
+                { key: 'category', label: 'Category' },
+                { key: 'actions', label: 'Actions' },
+                { key: 'attendance', label: 'Attendance' },
+              ]}
+            />
 
-          <tbody>
-            {loading
-              ? Array.from({ length: 8 }).map((_, i) => <SkeletonRow key={i} />)
-              : paginatedUsers.map((u, i) => (
-                <TableRow key={u.id}>
-                  <td className="py-3 px-4">{i + 1}</td>
-                  <td className="py-3 px-4">{u.id}</td>
-                  <td className="py-3 px-4">{u.name}</td>
-                  <td className="py-3 px-4">{u.category}</td>
+            <tbody>
+              {loading
+                ? Array.from({ length: 8 }).map((_, index) => <SkeletonRow key={index} />)
+                : paginatedUsers.map((user, index) => (
+                    <TableRow key={user.id}>
+                      <td className="px-4 py-3">
+                        {(currentPage - 1) * usersPerPage + index + 1}
+                      </td>
+                      <td className="px-4 py-3">{user.id}</td>
+                      <td className="px-4 py-3">{user.name}</td>
+                      <td className="px-4 py-3">{user.category}</td>
 
-                  <td className="flex gap-2 py-3 px-4">
-                    <ActionButton icon={Phone}
-                      onClick={() => window.open(`tel:${u.id}`)} />
+                      <td className="px-4 py-3">
+                        <div className="flex min-w-[180px] gap-2">
+                          <ActionButton icon={Phone} onClick={() => window.open(`tel:${user.id}`)} />
+                          <ActionButton
+                            icon={MessageCircle}
+                            onClick={() => window.open(`https://wa.me/91${user.id}`)}
+                          />
 
-                    <ActionButton icon={MessageCircle}
-                      onClick={() => window.open(`https://wa.me/91${u.id}`)} />
+                          <div className="relative inline-block">
+                            <ActionButton
+                              icon={Eye}
+                              label="View Feedback"
+                              onClick={() => openViewModal(user.feedback, user.name)}
+                            />
 
-                    <div className="relative inline-block">
-                      <ActionButton
-                        icon={Eye}
-                        label="View Feedback"
-                        onClick={() => openViewModal(u.feedback, u.name)}
-                      />
+                            {user.feedback?.length > 0 && (
+                              <span className="absolute -right-2 -top-2 rounded-full bg-green-600 px-1.5 py-0.5 text-[10px] text-white">
+                                {user.feedback.length}
+                              </span>
+                            )}
+                          </div>
 
-                      {(u.feedback?.length > 0) && (
-                        <span className="absolute -top-2 -right-2 text-[10px] px-1.5 py-0.5 bg-green-600 text-white rounded-full">
-                          {u.feedback.length}
-                        </span>
-                      )}
-                    </div>
+                          <ActionButton
+                            icon={Plus}
+                            label="Add Feedback"
+                            onClick={() => openAddFeedbackModal(user.id, user.name)}
+                          />
+                        </div>
+                      </td>
 
-                    <ActionButton
-                      icon={Plus}
-                      label="Add Feedback"
-                      onClick={() => openAddFeedbackModal(u.id, u.name)}
-                    />
-                  </td>
+                      <td className="px-4 py-3">
+                        {user.attendanceStatus ? (
+                          <Button variant="outline" disabled>
+                            Marked
+                          </Button>
+                        ) : (
+                          <Button variant="primary" onClick={() => markAttendance(user.id)}>
+                            Mark Present
+                          </Button>
+                        )}
+                      </td>
+                    </TableRow>
+                  ))}
+            </tbody>
+          </Table>
+        </div>
 
-                  <td className="py-3 px-4">
-                    {u.attendanceStatus ? (
-                      <Button variant="outline" disabled>Marked</Button>
-                    ) : (
-                      <Button variant="primary"
-                        onClick={() => markAttendance(u.id)}>
-                        Mark Present
-                      </Button>
-                    )}
-                  </td>
-                </TableRow>
-              ))}
-          </tbody>
-        </Table>
-        <div className="flex items-center justify-between mt-4">
+        <div className="mt-4 flex items-center justify-between">
           <Button
             variant="outline"
             disabled={currentPage === 1}
-            onClick={() => setCurrentPage((p) => p - 1)}
+            onClick={() => setCurrentPage((page) => page - 1)}
           >
             Previous
           </Button>
 
           <Text>
-            Page {currentPage} of {totalPages}
+            Page {totalPages ? currentPage : 0} of {totalPages}
           </Text>
 
           <Button
             variant="outline"
-            disabled={currentPage === totalPages}
-            onClick={() => setCurrentPage((p) => p + 1)}
+            disabled={currentPage === totalPages || totalPages === 0}
+            onClick={() => setCurrentPage((page) => page + 1)}
           >
             Next
           </Button>
         </div>
       </Card>
 
-      {/* Add Feedback Modal */}
       <Modal
         open={feedbackModalOpen}
         onClose={() => setFeedbackModalOpen(false)}
@@ -368,13 +381,15 @@ export default function RegisteredUsersSection({ eventId }) {
         <div className="space-y-4">
           <FormField label="Predefined Feedback">
             <select
-              className="w-full border border-slate-200 rounded-lg px-3 py-2"
+              className="w-full rounded-lg border border-slate-200 px-3 py-2"
               value={predefinedFeedback}
-              onChange={(e) => setPredefinedFeedback(e.target.value)}
+              onChange={(event) => setPredefinedFeedback(event.target.value)}
             >
               <option value="">Select</option>
-              {predefinedFeedbacks.map((f, i) => (
-                <option key={i} value={f}>{f}</option>
+              {predefinedFeedbacks.map((feedback, index) => (
+                <option key={index} value={feedback}>
+                  {feedback}
+                </option>
               ))}
             </select>
           </FormField>
@@ -382,7 +397,7 @@ export default function RegisteredUsersSection({ eventId }) {
           <FormField label="Custom Feedback">
             <Textarea
               value={customFeedback}
-              onChange={(e) => setCustomFeedback(e.target.value)}
+              onChange={(event) => setCustomFeedback(event.target.value)}
             />
           </FormField>
 
@@ -393,7 +408,6 @@ export default function RegisteredUsersSection({ eventId }) {
           </div>
         </div>
       </Modal>
-
 
       <Modal
         open={viewModalOpen}
@@ -413,12 +427,12 @@ export default function RegisteredUsersSection({ eventId }) {
             />
 
             <tbody>
-              {selectedFeedbacks.map((fb, i) => (
-                <TableRow key={i}>
-                  <td>{i + 1}</td>
-                  <td>{fb.predefined}</td>
-                  <td>{fb.custom}</td>
-                  <td>{fb.timestamp}</td>
+              {selectedFeedbacks.map((feedback, index) => (
+                <TableRow key={index}>
+                  <td>{index + 1}</td>
+                  <td>{feedback.predefined}</td>
+                  <td>{feedback.custom}</td>
+                  <td>{feedback.timestamp}</td>
                 </TableRow>
               ))}
             </tbody>
@@ -427,11 +441,6 @@ export default function RegisteredUsersSection({ eventId }) {
           <Text muted>No feedback available.</Text>
         )}
       </Modal>
-
-
     </div>
   );
 }
-
-
-

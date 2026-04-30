@@ -27,15 +27,17 @@ function validateAdmin(req) {
   return { ok: true };
 }
 
-export async function GET(req, { params }) {
+export async function GET(req, context) {
   const guard = validateAdmin(req);
   if (!guard.ok) {
     return guard.response;
   }
 
   try {
+    const params = await context.params;
     const conclaveId = String(params?.id || "").trim();
     const meetingId = String(params?.meetingId || "").trim();
+    if (!conclaveId || !meetingId) throw new Error("Missing IDs");
 
     const [registeredSnap, userSnap] = await Promise.all([
       adminDb
