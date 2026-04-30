@@ -2,8 +2,10 @@
 
 import { useEffect, useState } from "react";
 import { X } from "lucide-react";
-import { updateUserProfile } from "@/services/profileService";
-import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import {
+  updateUserProfile,
+  uploadUserProfileAsset,
+} from "@/services/profileService";
 
 export default function EditAdditionalInfoSheet({ open, setOpen, user, setUser = null, ujbCode }) {
   const [form, setForm] = useState({});
@@ -26,17 +28,17 @@ export default function EditAdditionalInfoSheet({ open, setOpen, user, setUser =
 
   const handleSave = async () => {
     try {
-      const userDocId = user?.__docId;
+      const userDocId = user?.__docId || user?.id || user?.UJBCode || user?.ujbCode;
       if (!userDocId) throw new Error("User profile document not found");
       setLoading(true);
 
       let nextCertificates = [...(form.achievementCertificates || [])];
       if (certificateFiles.length > 0) {
-        const storage = getStorage();
         for (const file of certificateFiles) {
-          const storageRef = ref(storage, `userProfile/${ujbCode}/achievements/${Date.now()}-${file.name}`);
-          await uploadBytes(storageRef, file);
-          const url = await getDownloadURL(storageRef);
+          const { url } = await uploadUserProfileAsset({
+            file,
+            folder: "achievements",
+          });
           nextCertificates.push({ fileName: file.name, url });
         }
       }

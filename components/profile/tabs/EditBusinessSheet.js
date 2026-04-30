@@ -2,13 +2,10 @@
 
 import { useState, useEffect } from "react";
 import { X } from "lucide-react";
-import { updateUserProfile } from "@/services/profileService";
 import {
-    ref,
-    uploadBytes,
-    getDownloadURL,
-} from "firebase/storage";
-import { storage } from "@/lib/firebase/firebaseClient";
+    updateUserProfile,
+    uploadUserProfileAsset,
+} from "@/services/profileService";
 
 
 export default function EditBusinessSheet({
@@ -77,13 +74,10 @@ export default function EditBusinessSheet({
 
             setUploadingLogo(true);
 
-            const fileRef = ref(
-                storage,
-                `businessLogos/${ujbCode}/${Date.now()}-${file.name}`
-            );
-
-            await uploadBytes(fileRef, file);
-            const downloadURL = await getDownloadURL(fileRef);
+            const { url: downloadURL } = await uploadUserProfileAsset({
+                file,
+                folder: "businessLogo",
+            });
 
             const freshURL = downloadURL + "?t=" + Date.now();
 
@@ -155,7 +149,7 @@ export default function EditBusinessSheet({
 
     const handleSave = async () => {
         try {
-            const userDocId = user?.__docId;
+            const userDocId = user?.__docId || user?.id || user?.UJBCode || user?.ujbCode;
             if (!userDocId) {
                 throw new Error("User profile document not found");
             }

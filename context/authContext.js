@@ -44,7 +44,7 @@ export function AuthProvider({ children }) {
       });
 
       setUser(null);
-      router.replace("/login");
+      router.replace("/");
     } catch (error) {
       console.error("Logout failed:", error);
     }

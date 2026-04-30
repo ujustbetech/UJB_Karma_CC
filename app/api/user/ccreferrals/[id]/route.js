@@ -44,7 +44,7 @@ async function requireCcReferralAccess(req, params) {
     };
   }
 
-  const id = String(params?.id || "").trim();
+  const id = String((await params)?.id || "").trim();
 
   if (!id) {
     return {

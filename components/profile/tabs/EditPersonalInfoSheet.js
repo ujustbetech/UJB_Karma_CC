@@ -82,7 +82,7 @@ export default function EditPersonalInfoSheet({
 
   const handleSave = async () => {
     try {
-      const userDocId = user?.__docId;
+      const userDocId = user?.__docId || user?.id || user?.UJBCode || user?.ujbCode;
       if (!userDocId) throw new Error("User profile document not found");
 
       setLoading(true);

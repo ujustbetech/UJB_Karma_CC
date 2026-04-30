@@ -47,13 +47,18 @@ function mapBusiness(data) {
 function mapOfferings(data) {
   const rawServices = Object.values(data.services || {});
   const rawProducts = Object.values(data.products || {});
+  const getCoverImage = (item) =>
+    item?.imageURL ||
+    item?.images?.find?.((image) => image?.isCover && image?.url)?.url ||
+    item?.images?.[0]?.url ||
+    "";
 
   return {
     services: rawServices.map((service, index) => ({
       id: `service_${index}`,
       label: service.name || "",
       description: service.description || "",
-      imageURL: service.imageURL || "",
+      imageURL: getCoverImage(service),
       type: "service",
       raw: service,
     })),
@@ -61,7 +66,7 @@ function mapOfferings(data) {
       id: `product_${index}`,
       label: product.name || "",
       description: product.description || "",
-      imageURL: product.imageURL || "",
+      imageURL: getCoverImage(product),
       type: "product",
       raw: product,
     })),

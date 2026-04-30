@@ -134,6 +134,12 @@ export default function ReferralDetails() {
     return [];
   };
 
+  const getCoverImage = (item) =>
+    item?.imageURL ||
+    item?.images?.find?.((image) => image?.isCover && image?.url)?.url ||
+    item?.images?.[0]?.url ||
+    "";
+
   useEffect(() => {
     if (!id) return;
 
@@ -175,7 +181,7 @@ export default function ReferralDetails() {
           id: `service_${index}`,
           label: s.name || "",
           description: s.description || "",
-          imageURL: s.imageURL || "",
+          imageURL: getCoverImage(s),
           type: "service",
           raw: s,
         }))
@@ -186,7 +192,7 @@ export default function ReferralDetails() {
           id: `product_${index}`,
           label: p.name || "",
           description: p.description || "",
-          imageURL: p.imageURL || "",
+          imageURL: getCoverImage(p),
           type: "product",
           raw: p,
         }))

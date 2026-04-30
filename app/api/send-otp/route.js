@@ -1,10 +1,26 @@
 import { NextResponse } from "next/server";
-import { adminDb } from "@/lib/firebase/firebaseAdmin";
+import {
+  adminDb,
+  getFirebaseAdminInitError,
+} from "@/lib/firebase/firebaseAdmin";
 import bcrypt from "bcryptjs";
 import { serverEnv } from "@/lib/config/serverEnv";
 
 export async function POST(req) {
   try {
+    const firebaseAdminInitError = getFirebaseAdminInitError();
+
+    if (firebaseAdminInitError || !adminDb) {
+      return NextResponse.json(
+        {
+          success: false,
+          message:
+            "Login is not configured. Missing or invalid Firebase Admin credentials.",
+        },
+        { status: 500 }
+      );
+    }
+
     const { phone } = await req.json();
     const mobile = phone?.toString().trim();
 

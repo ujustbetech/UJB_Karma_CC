@@ -41,7 +41,7 @@ async function requireChatAccess(req, params, otherUjbCode, route) {
     };
   }
 
-  const id = String(params?.id || "").trim();
+  const id = String((await params)?.id || "").trim();
 
   if (!id) {
     return {

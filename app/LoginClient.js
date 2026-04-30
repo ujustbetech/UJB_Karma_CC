@@ -85,18 +85,20 @@ export default function LoginClient() {
 
       console.log("SEND OTP STATUS:", res.status);
 
+      const responseText = await res.text();
       let data;
 
       try {
-        data = await res.json();
+        data = responseText ? JSON.parse(responseText) : null;
       } catch (jsonErr) {
         console.error("JSON Parse Error:", jsonErr);
+        console.error("Raw OTP response:", responseText);
         throw new Error("Invalid server response");
       }
 
       console.log("SEND OTP RESPONSE:", data);
 
-      if (!res.ok || !data.success) {
+      if (!res.ok || !data?.success) {
         setError(data.message || "Failed to send OTP");
         setLoading(false);
         return;

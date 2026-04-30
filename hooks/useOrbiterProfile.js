@@ -1,8 +1,6 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { db, storage } from '@/lib/firebase/firebaseClient';
 import { encryptData, decryptData } from '@/utils/encryption';
 
 /* ---------------- FILE HELPERS ---------------- */
@@ -27,14 +25,62 @@ function getBasePath(ujbcode, mobile) {
   return `UserAssets/${year}/${month}/${ujbcode}-${mobile}`;
 }
 
-async function uploadWithMeta(file, fullPath) {
-  const fileRef = ref(storage, fullPath);
-  await uploadBytes(fileRef, file);
-  const url = await getDownloadURL(fileRef);
+function normalizeOfferingImages(images, fallbackImageURL = '') {
+  const normalizedImages = Array.isArray(images)
+    ? images.filter((image) => image && (image.url || image.imageURL))
+    : [];
+
+  if (!normalizedImages.length && fallbackImageURL) {
+    return [
+      {
+        url: fallbackImageURL,
+        name: 'cover-image',
+        size: 0,
+        type: '',
+        isCover: true,
+      },
+    ];
+  }
+
+  return normalizedImages.map((image, index) => ({
+    ...image,
+    url: image.url || image.imageURL || '',
+    isCover: image.isCover === true || index === 0,
+  }));
+}
+
+function normalizeOfferingEntry(entry = {}) {
+  const images = normalizeOfferingImages(entry.images, entry.imageURL || '');
+  const coverImage = images.find((image) => image.isCover)?.url || images[0]?.url || entry.imageURL || '';
+
   return {
-    url,
-    path: fullPath,
-    fileName: fullPath.split('/').pop()
+    ...entry,
+    images,
+    imageURL: coverImage,
+  };
+}
+
+async function uploadWithMeta(file, fullPath, uploadEndpoint) {
+  const formData = new FormData();
+  formData.append('file', file);
+  formData.append('path', fullPath);
+
+  const response = await fetch(uploadEndpoint, {
+    method: 'POST',
+    credentials: 'include',
+    body: formData,
+  });
+
+  const payload = await response.json().catch(() => ({}));
+
+  if (!response.ok || !payload?.success) {
+    throw new Error(payload?.message || 'Failed to upload file');
+  }
+
+  return {
+    url: payload.url,
+    path: payload.path || fullPath,
+    fileName: payload.fileName || fullPath.split('/').pop()
   };
 }
 
@@ -43,6 +89,7 @@ async function uploadWithMeta(file, fullPath) {
 export default function useOrbiterProfile(ujbcode, toast, options = {}) {
   const {
     profileEndpoint = '/api/admin/orbiters',
+    uploadEndpoint = '/api/admin/orbiters/upload',
     includeCredentials = true,
   } = options;
   const [loading, setLoading] = useState(false);
@@ -122,9 +169,19 @@ export default function useOrbiterProfile(ujbcode, toast, options = {}) {
 
         if (userDoc) {
           const data = userDoc;
+          const normalizedServices = Array.isArray(data.services)
+            ? data.services.map((service) => normalizeOfferingEntry(service))
+            : [];
+          const normalizedProducts = Array.isArray(data.products)
+            ? data.products.map((product) => normalizeOfferingEntry(product))
+            : [];
 
           setDocId(userDoc.id || ujbcode);
-          setFormData(data);
+          setFormData({
+            ...data,
+            services: normalizedServices,
+            products: normalizedProducts,
+          });
 
           setResidentStatus(data.residentStatus || '');
           setTaxSlab(data.taxSlab || '');
@@ -423,7 +480,7 @@ const handleBankProofChange = (file) => {
       let profileURL = formData.ProfilePhotoURL || "";
       if (profilePic) {
         const fileName = generateFileName(ujbcode, 'profile', 'photo', profilePic);
-        const meta = await uploadWithMeta(profilePic, `${basePath}/profile/${fileName}`);
+        const meta = await uploadWithMeta(profilePic, `${basePath}/profile/${fileName}`, uploadEndpoint);
         profileURL = meta.url;
       }
 
@@ -435,7 +492,8 @@ const handleBankProofChange = (file) => {
           const fileName = generateFileName(ujbcode, "kyc", key, personalKYC[key]);
           personalKycData[key] = await uploadWithMeta(
             personalKYC[key],
-            `${basePath}/PersonalKYC/${fileName}`
+            `${basePath}/PersonalKYC/${fileName}`,
+            uploadEndpoint
           );
         }
       }
@@ -448,7 +506,8 @@ const handleBankProofChange = (file) => {
           const fileName = generateFileName(ujbcode, "businessKYC", key, businessKYC[key]);
           businessKycData[key] = await uploadWithMeta(
             businessKYC[key],
-            `${basePath}/BusinessKYC/${fileName}`
+            `${basePath}/BusinessKYC/${fileName}`,
+            uploadEndpoint
           );
         }
       }
@@ -480,7 +539,8 @@ if (bankProofFile) {
 
   const meta = await uploadWithMeta(
     bankProofFile,
-    `${basePath}/Bank/${fileName}`
+    `${basePath}/Bank/${fileName}`,
+    uploadEndpoint
   );
 
   encryptedBankDetails.proofFile = meta; // ✅ store metadata only
@@ -495,7 +555,7 @@ if (!bankProofFile && formData.bankDetails?.proofFile?.url) {
       const finalServices = await Promise.all(
         (formData.services || []).map(async (srv, index) => {
           const tempFiles = serviceImagesTemp[index] || [];
-          let uploadedImages = srv.images || [];
+          let uploadedImages = normalizeOfferingImages(srv.images, srv.imageURL || '');
 
           for (let i = 0; i < tempFiles.length; i++) {
             const file = tempFiles[i];
@@ -508,7 +568,7 @@ if (!bankProofFile && formData.bankDetails?.proofFile?.url) {
             );
 
             const path = `${basePath}/Services/${fileName}`;
-            const meta = await uploadWithMeta(file, path);
+            const meta = await uploadWithMeta(file, path, uploadEndpoint);
 
             uploadedImages.push({
               url: meta.url,
@@ -519,9 +579,16 @@ if (!bankProofFile && formData.bankDetails?.proofFile?.url) {
             });
           }
 
+          const normalizedImages = normalizeOfferingImages(uploadedImages, srv.imageURL || '');
+          const coverImage =
+            normalizedImages.find((image) => image.isCover)?.url ||
+            normalizedImages[0]?.url ||
+            '';
+
           return {
             ...srv,
-            images: uploadedImages
+            images: normalizedImages,
+            imageURL: coverImage,
           };
         })
       );
@@ -529,7 +596,7 @@ if (!bankProofFile && formData.bankDetails?.proofFile?.url) {
       const finalProducts = await Promise.all(
         (formData.products || []).map(async (product, index) => {
           const tempFiles = productImagesTemp[index] || [];
-          let uploadedImages = product.images || [];
+          let uploadedImages = normalizeOfferingImages(product.images, product.imageURL || '');
 
           for (let i = 0; i < tempFiles.length; i++) {
             const file = tempFiles[i];
@@ -542,7 +609,7 @@ if (!bankProofFile && formData.bankDetails?.proofFile?.url) {
             );
 
             const path = `${basePath}/Products/${fileName}`;
-            const meta = await uploadWithMeta(file, path);
+            const meta = await uploadWithMeta(file, path, uploadEndpoint);
 
             uploadedImages.push({
               url: meta.url,
@@ -553,9 +620,16 @@ if (!bankProofFile && formData.bankDetails?.proofFile?.url) {
             });
           }
 
+          const normalizedImages = normalizeOfferingImages(uploadedImages, product.imageURL || '');
+          const coverImage =
+            normalizedImages.find((image) => image.isCover)?.url ||
+            normalizedImages[0]?.url ||
+            '';
+
           return {
             ...product,
-            images: uploadedImages
+            images: normalizedImages,
+            imageURL: coverImage,
           };
         })
       );
@@ -593,7 +667,8 @@ if (!bankProofFile && formData.bankDetails?.proofFile?.url) {
 
         const meta = await uploadWithMeta(
           file,
-          `${basePath}/Achievements/${fileName}`
+          `${basePath}/Achievements/${fileName}`,
+          uploadEndpoint
         );
 
         finalAchievements.push({

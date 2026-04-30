@@ -29,6 +29,13 @@ export default function ServicesSection({ profile }) {
 
   const services = formData?.services || [];
 
+  const getSavedImages = (service) =>
+    Array.isArray(service?.images)
+      ? service.images.filter((image) => image?.url)
+      : service?.imageURL
+        ? [{ url: service.imageURL, name: service.name || "service-image" }]
+        : [];
+
   /* ---------------- HELPERS ---------------- */
 
   const normalizeTags = (v) => {
@@ -466,6 +473,18 @@ export default function ServicesSection({ profile }) {
             />
 
             <div className="grid grid-cols-5 gap-3 mt-4">
+              {getSavedImages(srv).map((image, i) => (
+                <div
+                  key={`saved-${index}-${i}`}
+                  className="bg-slate-50 p-2 rounded-lg text-xs"
+                >
+                  <img
+                    src={image.url}
+                    className="w-full h-20 object-cover rounded"
+                  />
+                  <div className="truncate">{image.name || `Saved ${i + 1}`}</div>
+                </div>
+              ))}
               {(serviceImagesTemp?.[index] || []).map((file, i) => (
                 <div
                   key={`temp-${index}-${i}`}

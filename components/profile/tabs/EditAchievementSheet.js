@@ -2,9 +2,10 @@
 
 import { useState, useEffect } from "react";
 import { X, Plus, Trash2, FileText } from "lucide-react";
-import { updateUserProfile } from "@/services/profileService";
-import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
-import { storage } from "@/lib/firebase/firebaseClient";
+import {
+  updateUserProfile,
+  uploadUserProfileAsset,
+} from "@/services/profileService";
 
 export default function EditAchievementSheet({
   open,
@@ -36,13 +37,10 @@ export default function EditAchievementSheet({
 
       setUploading(true);
 
-      const storageRef = ref(
-        storage,
-        `UserAssets/${new Date().getFullYear()}/${ujbCode}/Achievements/${Date.now()}-${file.name}`
-      );
-
-      await uploadBytes(storageRef, file);
-      const url = await getDownloadURL(storageRef);
+      const { url } = await uploadUserProfileAsset({
+        file,
+        folder: "achievements",
+      });
 
       setCertificates((prev) => [
         ...prev,
@@ -69,7 +67,7 @@ export default function EditAchievementSheet({
   const handleSave = async () => {
     try {
       if (!ujbCode) return;
-      const userDocId = user?.__docId;
+      const userDocId = user?.__docId || user?.id || user?.UJBCode || user?.ujbCode;
       if (!userDocId) {
         throw new Error("User profile document not found");
       }

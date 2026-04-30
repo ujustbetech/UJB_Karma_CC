@@ -2,8 +2,10 @@
 
 import { useEffect, useState } from "react";
 import { X } from "lucide-react";
-import { updateUserProfile } from "@/services/profileService";
-import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import {
+  updateUserProfile,
+  uploadUserProfileAsset,
+} from "@/services/profileService";
 
 const BUSINESS_DOCS = [
   { key: "gst", label: "GST Certificate" },
@@ -30,12 +32,11 @@ export default function EditBusinessKycSheet({
 
   const handleSave = async () => {
     try {
-      const userDocId = user?.__docId;
+      const userDocId = user?.__docId || user?.id || user?.UJBCode || user?.ujbCode;
       if (!userDocId) throw new Error("User profile document not found");
 
       setLoading(true);
 
-      const storage = getStorage();
       const nextBusinessKyc = { ...(user.businessKYC || {}) };
 
       for (const field of BUSINESS_DOCS) {
@@ -43,13 +44,11 @@ export default function EditBusinessKycSheet({
 
         if (!file) continue;
 
-        const storageRef = ref(
-          storage,
-          `userProfile/${ujbCode}/businessKYC/${field.key}-${Date.now()}-${file.name}`
-        );
-
-        await uploadBytes(storageRef, file);
-        const url = await getDownloadURL(storageRef);
+        const { url } = await uploadUserProfileAsset({
+          file,
+          folder: "businessKYC",
+          key: field.key,
+        });
 
         nextBusinessKyc[field.key] = {
           url,

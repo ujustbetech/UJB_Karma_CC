@@ -2,8 +2,10 @@
 
 import { useEffect, useState } from "react";
 import { X } from "lucide-react";
-import { updateUserProfile } from "@/services/profileService";
-import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import {
+  updateUserProfile,
+  uploadUserProfileAsset,
+} from "@/services/profileService";
 import { encryptData } from "@/utils/encryption";
 
 export default function EditBankDetailsSheet({
@@ -29,7 +31,7 @@ export default function EditBankDetailsSheet({
 
   const handleSave = async () => {
     try {
-      const userDocId = user?.__docId;
+      const userDocId = user?.__docId || user?.id || user?.UJBCode || user?.ujbCode;
       if (!userDocId) throw new Error("User profile document not found");
 
       setLoading(true);
@@ -44,14 +46,10 @@ export default function EditBankDetailsSheet({
       };
 
       if (proofFile) {
-        const storage = getStorage();
-        const storageRef = ref(
-          storage,
-          `userProfile/${ujbCode}/bank/${Date.now()}-${proofFile.name}`
-        );
-
-        await uploadBytes(storageRef, proofFile);
-        const url = await getDownloadURL(storageRef);
+        const { url } = await uploadUserProfileAsset({
+          file: proofFile,
+          folder: "bank",
+        });
 
         nextBankDetails.proofFile = {
           url,

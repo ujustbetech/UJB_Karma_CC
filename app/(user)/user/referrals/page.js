@@ -13,9 +13,9 @@ import {
 import {
     REFERRAL_STATUS_OPTIONS,
     REFERRAL_STATUSES,
+    getAvailableNextStatuses,
 } from "@/lib/referrals/referralStates.mjs";
-// import "../src/app/styles/user.scss";
-import { CheckCircle, Inbox, Mail, Phone, Send, X } from "lucide-react";
+import { CheckCircle, Inbox, Mail, Phone, Send, X, Info } from "lucide-react";
 import { useAuth } from "@/context/authContext";
 import {
     Trophy,
@@ -30,6 +30,7 @@ import {
 import { SlidersHorizontal } from "lucide-react";
 import { sendWhatsAppTemplateRequest } from "@/utils/whatsappClient";
 import UserPageHeader from "@/components/user/UserPageHeader";
+import ReferralStatusHelpModal from "@/components/referrals/shared/ReferralStatusHelpModal";
 
 function getReferralTimestampValue(referral) {
     const rawTimestamp = referral?.timestamp;
@@ -161,6 +162,7 @@ const UserReferrals = () => {
     const [searchTerm, setSearchTerm] = useState("");
     const [statusFilter, setStatusFilter] = useState("All");
     const [filterOpen, setFilterOpen] = useState(false);
+    const [isHelpOpen, setIsHelpOpen] = useState(false);
 
     const tabs = [
         { name: "My Referrals", key: "my" },
@@ -592,9 +594,18 @@ const UserReferrals = () => {
                                     {/* Status Dropdown */}
                                     {activeTab === "my" && !isPending && !isRejected && (
                                         <div className="mb-4">
-                                            <label className="block text-xs text-gray-500 mb-1">
-                                                Update Deal Status
-                                            </label>
+                                            <div className="flex items-center justify-between mb-1">
+                                                <label className="block text-xs text-gray-500">
+                                                    Update Deal Status
+                                                </label>
+                                                <button
+                                                    onClick={() => setIsHelpOpen(true)}
+                                                    className="p-1 text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                                                    title="Help with statuses"
+                                                >
+                                                    <Info size={16} />
+                                                </button>
+                                            </div>
                                             <select
                                                 value={status}
                                                 onChange={(e) =>
@@ -602,7 +613,7 @@ const UserReferrals = () => {
                                                 }
                                                 className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none"
                                             >
-                                                {statusOptions.map((opt) => (
+                                                {getAvailableNextStatuses(status).map((opt) => (
                                                     <option key={opt} value={opt}>
                                                         {opt}
                                                     </option>
@@ -748,6 +759,11 @@ const UserReferrals = () => {
                     </div>
                 </div>
             )}
+
+            <ReferralStatusHelpModal 
+                open={isHelpOpen} 
+                onClose={() => setIsHelpOpen(false)} 
+            />
 
             <>
                 {/* Backdrop */}

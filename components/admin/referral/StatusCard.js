@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import Card from "@/components/ui/Card";
 import Text from "@/components/ui/Text";
 import Button from "@/components/ui/Button";
@@ -11,8 +11,12 @@ import {
   Activity,
   RefreshCw,
   Clock,
-  CircleDot
+  CircleDot,
+  Info
 } from "lucide-react";
+
+import ReferralStatusHelpModal from "@/components/referrals/shared/ReferralStatusHelpModal";
+import { getAvailableNextStatuses } from "@/lib/referrals/referralStates.mjs";
 
 export default function StatusCard({
   formState,
@@ -20,8 +24,26 @@ export default function StatusCard({
   onUpdate,
   statusLogs = [],
 }) {
+  const [isHelpOpen, setIsHelpOpen] = useState(false);
+
+  // Use the last saved status to determine allowed transitions
+  // If no logs, fallback to current formState (e.g. on initial load before save)
+  const savedStatus =
+    statusLogs && statusLogs.length > 0
+      ? statusLogs[statusLogs.length - 1].status
+      : formState.dealStatus || "Pending";
+
+  const availableOptions = getAvailableNextStatuses(savedStatus).map((opt) => ({
+    label: opt,
+    value: opt,
+  }));
+
   return (
     <>
+      <ReferralStatusHelpModal 
+        open={isHelpOpen} 
+        onClose={() => setIsHelpOpen(false)} 
+      />
       {/* HEADER */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
@@ -39,9 +61,18 @@ export default function StatusCard({
 
       {/* STATUS CONTROL */}
       <div className="mt-4 p-4 bg-slate-50 border border-slate-200 rounded-lg space-y-3">
-        <div className="flex items-center gap-2">
-          <RefreshCw size={14} className="text-gray-500" />
-          <Text variant="label">Change Status</Text>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <RefreshCw size={14} className="text-gray-500" />
+            <Text variant="label">Change Status</Text>
+          </div>
+          <button
+            onClick={() => setIsHelpOpen(true)}
+            className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-full transition-colors flex items-center justify-center"
+            title="Help with statuses"
+          >
+            <Info size={16} />
+          </button>
         </div>
 
         <div className="flex items-center flex-col gap-2">
@@ -53,30 +84,7 @@ export default function StatusCard({
                 dealStatus: value,
               }))
             }
-            options={[
-              { label: "Pending", value: "Pending" },
-              { label: "Reject", value: "Reject" },
-              { label: "Not Connected", value: "Not Connected" },
-              { label: "Called but Not Answered", value: "Called but Not Answered" },
-              { label: "Discussion in Progress", value: "Discussion in Progress" },
-              { label: "Hold", value: "Hold" },
-              { label: "Deal Won", value: "Deal Won" },
-              { label: "Deal Lost", value: "Deal Lost" },
-              { label: "Work in Progress", value: "Work in Progress" },
-              { label: "Work Completed", value: "Work Completed" },
-              {
-                label: "Received Part Payment and Transferred to UJustBe",
-                value: "Received Part Payment and Transferred to UJustBe",
-              },
-              {
-                label: "Received Full and Final Payment",
-                value: "Received Full and Final Payment",
-              },
-              {
-                label: "Agreed % Transferred to UJustBe",
-                value: "Agreed % Transferred to UJustBe",
-              },
-            ]}
+            options={availableOptions}
           />
 
           <Button

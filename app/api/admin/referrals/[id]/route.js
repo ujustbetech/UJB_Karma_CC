@@ -63,7 +63,7 @@ export async function GET(req, { params }) {
   }
 
   try {
-    const { id } = params;
+    const { id } = await params;
     const detail = await fetchAdminReferralDetail({
       provider: guard.provider,
       id,
@@ -95,7 +95,7 @@ export async function PATCH(req, { params }) {
   }
 
   try {
-    const { id } = params;
+    const { id } = await params;
     const body = await req.json();
     const action = String(body?.action || "").trim();
     const referral = await guard.provider.referrals.getById(id);

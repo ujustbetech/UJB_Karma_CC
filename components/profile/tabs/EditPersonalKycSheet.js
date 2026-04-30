@@ -2,8 +2,10 @@
 
 import { useEffect, useState } from "react";
 import { X } from "lucide-react";
-import { updateUserProfile } from "@/services/profileService";
-import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import {
+  updateUserProfile,
+  uploadUserProfileAsset,
+} from "@/services/profileService";
 
 const PERSONAL_KYC_FIELDS = [
   { key: "panCard", label: "Upload PAN Card" },
@@ -41,12 +43,11 @@ export default function EditPersonalKycSheet({
 
   const handleSave = async () => {
     try {
-      const userDocId = user?.__docId;
+      const userDocId = user?.__docId || user?.id || user?.UJBCode || user?.ujbCode;
       if (!userDocId) throw new Error("User profile document not found");
 
       setLoading(true);
 
-      const storage = getStorage();
       const nextPersonalKyc = { ...(user.personalKYC || {}) };
 
       for (const field of PERSONAL_KYC_FIELDS) {
@@ -54,13 +55,11 @@ export default function EditPersonalKycSheet({
 
         if (!file) continue;
 
-        const storageRef = ref(
-          storage,
-          `userProfile/${ujbCode}/personalKYC/${field.key}-${Date.now()}-${file.name}`
-        );
-
-        await uploadBytes(storageRef, file);
-        const url = await getDownloadURL(storageRef);
+        const { url } = await uploadUserProfileAsset({
+          file,
+          folder: "personalKYC",
+          key: field.key,
+        });
 
         nextPersonalKyc[field.key] = {
           url,

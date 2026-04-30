@@ -34,6 +34,7 @@ export default function UserProfileEditor({ ujbCode }) {
   const [active, setActive] = useState("personal");
   const profile = useOrbiterProfile(ujbCode, toast, {
     profileEndpoint: "/api/user/profile",
+    uploadEndpoint: "/api/user/profile/upload",
   });
 
   const isCosmOrbiter =

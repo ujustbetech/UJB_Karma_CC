@@ -2,8 +2,10 @@
 
 import { useState, useEffect } from "react";
 import { X, Upload } from "lucide-react";
-import { updateUserProfile } from "@/services/profileService";
-import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import {
+  updateUserProfile,
+  uploadUserProfilePhoto,
+} from "@/services/profileService";
 
 export default function EditHeroSheet({ open, setOpen, user, setUser, ujbCode }) {
 
@@ -29,30 +31,15 @@ export default function EditHeroSheet({ open, setOpen, user, setUser, ujbCode })
 
   const handleImageUpload = async (file) => {
     try {
-      const storage = getStorage();
-      const userDocId = user?.__docId;
-
-      const storageRef = ref(
-        storage,
-        `profilePhotos/${ujbCode || userDocId}/${Date.now()}`
-      );
-
-      await uploadBytes(storageRef, file);
-      const downloadURL = await getDownloadURL(storageRef);
+      const { user: updatedUser, url: downloadURL } =
+        await uploadUserProfilePhoto(file);
 
       setPreview(downloadURL);
-
-      if (!userDocId) {
-        throw new Error("User profile document not found");
-      }
-
-      await updateUserProfile({
-        ProfilePhotoURL: downloadURL,
-      });
 
       // Live preview update
       setUser((prev) => ({
         ...prev,
+        ...(updatedUser || {}),
         ProfilePhotoURL: downloadURL,
       }));
 
@@ -66,7 +53,7 @@ export default function EditHeroSheet({ open, setOpen, user, setUser, ujbCode })
   const handleSave = async () => {
     try {
       setLoading(true);
-      const userDocId = user?.__docId;
+      const userDocId = user?.__docId || user?.id || user?.UJBCode || user?.ujbCode;
 
       if (!userDocId) {
         throw new Error("User profile document not found");

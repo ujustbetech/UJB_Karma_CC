@@ -22,7 +22,7 @@ export async function GET(req, { params }) {
     });
   }
 
-  const id = String(params?.id || "").trim();
+  const id = String((await params)?.id || "").trim();
 
   if (!id) {
     return jsonError("Missing referral id", {

@@ -54,7 +54,7 @@ export default function Topbar({ collapsed, setCollapsed }) {
       showConfirmButton: false,
     });
 
-    router.replace("/");
+    router.replace("/login");
   };
 
   const userName = getName();

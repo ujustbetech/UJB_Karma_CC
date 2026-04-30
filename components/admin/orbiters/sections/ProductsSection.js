@@ -28,6 +28,13 @@ export default function ProductsSection({ profile }) {
 
   const products = formData?.products || [];
 
+  const getSavedImages = (product) =>
+    Array.isArray(product?.images)
+      ? product.images.filter((image) => image?.url)
+      : product?.imageURL
+        ? [{ url: product.imageURL, name: product.name || "product-image" }]
+        : [];
+
   /* ---------------- HELPERS ---------------- */
 
   const normalizeTags = (v) => {
@@ -444,6 +451,18 @@ export default function ProductsSection({ profile }) {
             />
 
             <div className="grid grid-cols-5 gap-3 mt-4">
+              {getSavedImages(prd).map((image, i) => (
+                <div
+                  key={`saved-${index}-${i}`}
+                  className="bg-slate-50 p-2 rounded-lg text-xs"
+                >
+                  <img
+                    src={image.url}
+                    className="w-full h-20 object-cover rounded"
+                  />
+                  <div className="truncate">{image.name || `Saved ${i + 1}`}</div>
+                </div>
+              ))}
               {(productImagesTemp?.[index] || []).map((file, i) => (
                 <div
                   key={`pimg-${index}-${i}`}

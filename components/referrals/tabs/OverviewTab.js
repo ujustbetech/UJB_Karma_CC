@@ -11,20 +11,19 @@ import {
     Eye,
     ShieldCheck,
     RefreshCcw,
+    Info,
 } from "lucide-react";
 
 import InfoCard from "../shared/InfoCard";
 import InfoRow from "../shared/InfoRow";
+import ReferralStatusHelpModal from "../shared/ReferralStatusHelpModal";
 import { useToast } from "@/components/ui/ToastProvider";
 import { updateReferralStatus } from "@/services/referralService";
 import {
     REFERRAL_STATUSES,
     REFERRAL_STATUS_OPTIONS,
+    getAvailableNextStatuses,
 } from "@/lib/referrals/referralStates.mjs";
-
-const statusOptions = REFERRAL_STATUS_OPTIONS.filter(
-    (status) => status !== REFERRAL_STATUSES.REJECTED
-);
 
 const statusMessages = {
     [REFERRAL_STATUSES.DEAL_WON]: {
@@ -83,6 +82,7 @@ export default function OverviewTab({
     onReferralUpdated,
 }) {
     const [updating, setUpdating] = useState(false);
+    const [isHelpOpen, setIsHelpOpen] = useState(false);
     const [selectedStatus, setSelectedStatus] = useState(
         referral?.dealStatus || REFERRAL_STATUSES.PENDING
     );
@@ -198,10 +198,20 @@ export default function OverviewTab({
                         </div>
                     </div>
 
-                    <div>
-                        <label className="mb-1 block text-xs text-slate-500">
+                    <div className="flex items-center justify-between mb-1">
+                        <label className="block text-xs text-slate-500">
                             Change Status
                         </label>
+                        <button
+                            onClick={() => setIsHelpOpen(true)}
+                            className="p-1 text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                            title="Help with statuses"
+                        >
+                            <Info size={16} />
+                        </button>
+                    </div>
+
+                    <div>
 
                         <select
                             value={selectedStatus}
@@ -219,7 +229,7 @@ export default function OverviewTab({
                             }
                             className="w-full rounded-xl border border-slate-300 px-3 py-3 text-sm focus:ring-2 focus:ring-indigo-500 disabled:cursor-not-allowed disabled:bg-slate-100"
                         >
-                            {statusOptions.map((opt) => (
+                            {getAvailableNextStatuses(currentStatus).map((opt) => (
                                 <option key={opt} value={opt}>
                                     {opt}
                                 </option>
@@ -420,6 +430,11 @@ export default function OverviewTab({
                     </div>
                 </div>
             )}
+
+            <ReferralStatusHelpModal 
+                open={isHelpOpen} 
+                onClose={() => setIsHelpOpen(false)} 
+            />
         </div>
     );
 }
