@@ -1,18 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
-  collection,
-  doc,
-  getDocs,
-  updateDoc,
-  query,
-  orderBy,
-  onSnapshot,
-  where,
-} from "firebase/firestore";
-import { db } from "@/lib/firebase/firebaseClient";
-import { COLLECTIONS } from "@/lib/utility_collection";
+  fetchAdminConclaveRegisteredUsers,
+  markAdminConclaveAttendance,
+} from "@/services/adminConclaveService";
 
 import Card from "@/components/ui/Card";
 import Text from "@/components/ui/Text";
@@ -24,124 +16,57 @@ import TableRow from "@/components/table/TableRow";
 import ConfirmModal from "@/components/ui/ConfirmModal";
 import { useToast } from "@/components/ui/ToastProvider";
 
-export default function RegisteredUsersSection({
-  conclaveId,
-  meetingId,
-}) {
+export default function RegisteredUsersSection({ conclaveId, meetingId }) {
   const toast = useToast();
 
   const [users, setUsers] = useState([]);
-  const [filtered, setFiltered] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [nameFilter, setNameFilter] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("");
-  const [attendanceMap, setAttendanceMap] = useState({});
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [selectedUserId, setSelectedUserId] = useState(null);
 
-  /* ================= FETCH USERS ================= */
-
-  useEffect(() => {
+  const loadUsers = async () => {
     if (!conclaveId || !meetingId) return;
 
-    const ref = collection(
-      db,
-      COLLECTIONS.conclaves,
-      conclaveId,
-      "meetings",
-      meetingId,
-      "registeredUsers"
-    );
-
-    const q = query(ref, orderBy("registeredAt", "desc"));
-
-    const unsub = onSnapshot(q, async (snapshot) => {
-      const list = await Promise.all(
-        snapshot.docs.map(async (d) => {
-          const regData = d.data();
-
-          const userQuery = query(
-            collection(db, COLLECTIONS.userDetail),
-            where("MobileNo", "==", d.id)
-          );
-
-          const userSnap = await getDocs(userQuery);
-
-          let userData = {};
-          if (!userSnap.empty) {
-            userData = userSnap.docs[0].data();
-          }
-
-          return {
-            id: d.id,
-            phoneNumber: d.id,
-            name:
-              userData["Name"] || `Unknown (${d.id})`,
-            category:
-              userData["Category"] || "Unknown",
-            response: regData.response || "",
-            attendanceStatus:
-              regData.attendanceStatus || false,
-          };
-        })
-      );
-
-      const responded = list.filter(
-        (u) => u.response
-      );
-
-      setUsers(responded);
-    });
-
-    return () => unsub();
-  }, [conclaveId, meetingId]);
-
-  /* ================= FILTER ================= */
-
-  useEffect(() => {
-    const f = users.filter(
-      (u) =>
-        u.name
-          .toLowerCase()
-          .includes(nameFilter.toLowerCase()) &&
-        u.category
-          .toLowerCase()
-          .includes(categoryFilter.toLowerCase())
-    );
-
-    setFiltered(f);
-  }, [users, nameFilter, categoryFilter]);
-
-  /* ================= ATTENDANCE ================= */
-
-  const openConfirm = (userId) => {
-    setSelectedUserId(userId);
-    setConfirmOpen(true);
-  };
-
-  const confirmAttendance = async () => {
+    setLoading(true);
     try {
-      const ref = doc(
-        db,
-        COLLECTIONS.conclaves,
-        conclaveId,
-        "meetings",
-        meetingId,
-        "registeredUsers",
-        selectedUserId
-      );
-
-      await updateDoc(ref, {
-        attendanceStatus: true,
-      });
-
-      toast.success("Marked as Present");
-      setConfirmOpen(false);
-    } catch (err) {
-      toast.error("Failed to mark attendance");
+      const data = await fetchAdminConclaveRegisteredUsers(conclaveId, meetingId);
+      setUsers(data);
+    } catch (error) {
+      console.error(error);
+      toast.error("Failed to load users");
+    } finally {
+      setLoading(false);
     }
   };
 
-  /* ================= TABLE ================= */
+  useEffect(() => {
+    loadUsers();
+  }, [conclaveId, meetingId]);
+
+  const filtered = useMemo(
+    () =>
+      users.filter(
+        (user) =>
+          user.name.toLowerCase().includes(nameFilter.toLowerCase()) &&
+          user.category.toLowerCase().includes(categoryFilter.toLowerCase())
+      ),
+    [users, nameFilter, categoryFilter]
+  );
+
+  const confirmAttendance = async () => {
+    try {
+      await markAdminConclaveAttendance(conclaveId, meetingId, selectedUserId);
+      toast.success("Marked as Present");
+      setConfirmOpen(false);
+      setSelectedUserId(null);
+      await loadUsers();
+    } catch (error) {
+      console.error(error);
+      toast.error("Failed to mark attendance");
+    }
+  };
 
   const columns = [
     { key: "no", label: "#" },
@@ -154,80 +79,58 @@ export default function RegisteredUsersSection({
 
   return (
     <div className="space-y-6">
-
       <Card>
-        <Text variant="h2">
-          Registered Users
-        </Text>
+        <Text variant="h2">Registered Users</Text>
       </Card>
 
-      {/* FILTERS */}
       <Card className="flex gap-4">
         <Input
           placeholder="Search Name"
           value={nameFilter}
-          onChange={(e) =>
-            setNameFilter(e.target.value)
-          }
+          onChange={(e) => setNameFilter(e.target.value)}
         />
 
         <Input
           placeholder="Search Category"
           value={categoryFilter}
-          onChange={(e) =>
-            setCategoryFilter(e.target.value)
-          }
+          onChange={(e) => setCategoryFilter(e.target.value)}
         />
       </Card>
 
-      {/* TABLE */}
       <Card>
         <Table>
           <TableHeader columns={columns} />
           <tbody>
-            {filtered.length === 0 ? (
+            {loading ? (
               <TableRow>
-                <td
-                  colSpan={6}
-                  className="px-4 py-4 text-center"
-                >
+                <td colSpan={6} className="px-4 py-4 text-center">
+                  Loading users...
+                </td>
+              </TableRow>
+            ) : filtered.length === 0 ? (
+              <TableRow>
+                <td colSpan={6} className="px-4 py-4 text-center">
                   No users found
                 </td>
               </TableRow>
             ) : (
-              filtered.map((user, i) => (
+              filtered.map((user, index) => (
                 <TableRow key={user.id}>
-                  <td className="px-4 py-3">
-                    {i + 1}
-                  </td>
-
-                  <td className="px-4 py-3">
-                    {user.phoneNumber}
-                  </td>
-
-                  <td className="px-4 py-3">
-                    {user.name}
-                  </td>
-
-                  <td className="px-4 py-3">
-                    {user.category}
-                  </td>
-
-                  <td className="px-4 py-3">
-                    {user.response}
-                  </td>
-
+                  <td className="px-4 py-3">{index + 1}</td>
+                  <td className="px-4 py-3">{user.phoneNumber}</td>
+                  <td className="px-4 py-3">{user.name}</td>
+                  <td className="px-4 py-3">{user.category}</td>
+                  <td className="px-4 py-3">{user.response}</td>
                   <td className="px-4 py-3">
                     {user.attendanceStatus ? (
-                      <Text>
-                        ✅ Present
-                      </Text>
+                      <Text>Present</Text>
                     ) : (
                       <Button
                         size="sm"
-                        onClick={() =>
-                          openConfirm(user.id)
-                        }
+                        onClick={() => {
+                          setSelectedUserId(user.id);
+                          setConfirmOpen(true);
+                        }}
                       >
                         Mark Present
                       </Button>
@@ -245,12 +148,10 @@ export default function RegisteredUsersSection({
         title="Mark Attendance"
         description="Mark this user as present?"
         onConfirm={confirmAttendance}
-        onClose={() =>
-          setConfirmOpen(false)
-        }
+        onClose={() => setConfirmOpen(false)}
       />
-
     </div>
   );
 }
+
 

@@ -170,3 +170,4 @@ export default function FollowupList({ followups = [], onEdit, onDelete }) {
     </div>
   );
 }
+

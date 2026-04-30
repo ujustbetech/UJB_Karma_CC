@@ -1,22 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import {
-  addDoc,
-  collection,
-  getDocs,
-  getDoc,
-  doc,
-  Timestamp,
-  setDoc,
-  updateDoc,
-  query,
-  where,
-} from "firebase/firestore";
-
-import { db } from "@/lib/firebase/firebaseClient";
-import { COLLECTIONS } from "@/lib/utility_collection";
 import ReactSelect from "react-select";
+import {
+  createAdminConclave,
+  fetchAdminConclaveUsers,
+} from "@/services/adminConclaveService";
 
 import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
@@ -48,15 +37,16 @@ export default function CreateConclavePage() {
 
   useEffect(() => {
     const fetchUsers = async () => {
-      const snap = await getDocs(collection(db, COLLECTIONS.userDetail));
-      const list = snap.docs.map((doc) => ({
-        label: doc.data()["Name"],
-        value: doc.id,
-      }));
-      setUsers(list);
+      try {
+        const list = await fetchAdminConclaveUsers();
+        setUsers(list);
+      } catch (error) {
+        console.error(error);
+        toast.error("Failed to load users");
+      }
     };
     fetchUsers();
-  }, []);
+  }, [toast]);
 
   const handleChange = (name, value) => {
     setForm((prev) => ({ ...prev, [name]: value }));
@@ -73,66 +63,31 @@ export default function CreateConclavePage() {
     }));
   };
 
-  const convertDatetimeLocalToTimestamp = (value) => {
-    if (!value) return null;
-    const [datePart, timePart] = value.split("T");
-    const [year, month, day] = datePart.split("-").map(Number);
-    let hours = 0;
-    let minutes = 0;
-
-    if (timePart) {
-      [hours, minutes] = timePart.split(":").map(Number);
-    }
-
-    const localDate = new Date(year, month - 1, day, hours, minutes);
-    return Timestamp.fromDate(localDate);
-  };
-
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
 
     try {
-      const startTS = convertDatetimeLocalToTimestamp(form.startDate);
-      const initTS = convertDatetimeLocalToTimestamp(form.initiationDate);
+      const startTS = form.startDate ? new Date(form.startDate) : null;
+      const initTS = form.initiationDate ? new Date(form.initiationDate) : null;
 
-      if (!startTS || !initTS) {
+      if (!startTS || !initTS || Number.isNaN(startTS.getTime()) || Number.isNaN(initTS.getTime())) {
         toast.error("Please select valid Date & Time");
         setLoading(false);
         return;
       }
 
-      let finalForm = {
+      const getPhoneForUser = (id) => users.find((user) => user.value === id)?.phone || "";
+      const finalForm = {
         ...form,
-        startDate: startTS,
-        initiationDate: initTS,
+        startDate: form.startDate,
+        initiationDate: form.initiationDate,
+        leader: getPhoneForUser(form.leader),
+        ntMembers: form.ntMembers.map(getPhoneForUser).filter(Boolean),
+        orbiters: form.orbiters.map(getPhoneForUser).filter(Boolean),
       };
 
-      const convertToPhones = async (ids) => {
-        const phones = [];
-        for (const id of ids) {
-          const ref = doc(db, COLLECTIONS.userDetail, id);
-          const snap = await getDoc(ref);
-          if (snap.exists()) phones.push(snap.data().MobileNo);
-        }
-        return phones;
-      };
-
-      if (form.leader) {
-        const ref = doc(db, COLLECTIONS.userDetail, form.leader);
-        const snap = await getDoc(ref);
-        if (snap.exists()) {
-          finalForm.leader = snap.data().MobileNo;
-        }
-      }
-
-      finalForm.ntMembers = await convertToPhones(form.ntMembers);
-      finalForm.orbiters = await convertToPhones(form.orbiters);
-
-      await addDoc(collection(db, COLLECTIONS.conclaves), {
-        ...finalForm,
-        createdAt: Timestamp.now(),
-      });
+      await createAdminConclave(finalForm);
 
       toast.success("Conclave created successfully");
     } catch (err) {
@@ -323,3 +278,5 @@ export default function CreateConclavePage() {
     </Card>
   );
 }
+
+

@@ -2,49 +2,51 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  fetchUserNotifications,
   getReadNotificationIds,
   markAllNotificationsAsRead,
   markNotificationAsRead,
-  subscribeUserNotificationSources,
-} from "@/services/notificationService";
+} from "@/services/userNotificationReadState";
+import { fetchApiUserNotifications } from "@/services/userNotificationApiService";
+
+const refreshIntervalMs = 30000;
 
 export default function useUserNotifications(user) {
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(true);
 
   const ujbCode = user?.profile?.ujbCode;
-  const phone = user?.phone;
-  const category = user?.profile?.category;
-  const refreshTimeoutRef = useRef(null);
+  const intervalRef = useRef(null);
 
-  const refresh = useCallback(async ({ silent = false } = {}) => {
-    if (!ujbCode) {
-      setNotifications([]);
-      setLoading(false);
-      return;
-    }
-
-    try {
-      if (!silent) {
-        setLoading(true);
+  const refresh = useCallback(
+    async ({ silent = false } = {}) => {
+      if (!ujbCode) {
+        setNotifications([]);
+        setLoading(false);
+        return;
       }
 
-      const items = await fetchUserNotifications({ ujbCode, phone, category });
-      const readIds = new Set(getReadNotificationIds(ujbCode));
+      try {
+        if (!silent) {
+          setLoading(true);
+        }
 
-      setNotifications(
-        items.map((item) => ({
-          ...item,
-          read: readIds.has(item.id),
-        }))
-      );
-    } catch {
-      setNotifications([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [category, phone, ujbCode]);
+        const items = await fetchApiUserNotifications();
+        const readIds = new Set(getReadNotificationIds(ujbCode));
+
+        setNotifications(
+          items.map((item) => ({
+            ...item,
+            read: readIds.has(item.id),
+          }))
+        );
+      } catch {
+        setNotifications([]);
+      } finally {
+        setLoading(false);
+      }
+    },
+    [ujbCode]
+  );
 
   useEffect(() => {
     refresh();
@@ -55,29 +57,16 @@ export default function useUserNotifications(user) {
       return undefined;
     }
 
-    const scheduleRefresh = () => {
-      if (refreshTimeoutRef.current) {
-        window.clearTimeout(refreshTimeoutRef.current);
-      }
-
-      refreshTimeoutRef.current = window.setTimeout(() => {
-        refresh({ silent: true });
-      }, 120);
-    };
-
-    const unsubscribe = subscribeUserNotificationSources(
-      { ujbCode, phone },
-      scheduleRefresh
-    );
+    intervalRef.current = window.setInterval(() => {
+      refresh({ silent: true });
+    }, refreshIntervalMs);
 
     return () => {
-      if (refreshTimeoutRef.current) {
-        window.clearTimeout(refreshTimeoutRef.current);
+      if (intervalRef.current) {
+        window.clearInterval(intervalRef.current);
       }
-
-      unsubscribe?.();
     };
-  }, [phone, refresh, ujbCode]);
+  }, [refresh, ujbCode]);
 
   const unreadCount = useMemo(
     () => notifications.filter((item) => !item.read).length,

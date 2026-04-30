@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { Search, Store } from "lucide-react";
-import { fetchApprovedCcDeals } from "@/services/ccMarketplaceService";
+import { fetchApprovedCcDeals } from "@/services/userCcMarketplaceService";
 import UserPageHeader from "@/components/user/UserPageHeader";
 
 const DealsForYou = () => {
@@ -112,3 +112,5 @@ const DealsForYou = () => {
 };
 
 export default DealsForYou;
+
+

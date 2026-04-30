@@ -1,6 +1,4 @@
 import { useCallback, useEffect, useState } from "react";
-import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
-import { storage } from "@/lib/firebase/firebaseClient";
 import { COLLECTIONS } from "@/lib/utility_collection";
 import {
   attachCcReferralFile as attachCcReferralFileMetadata,
@@ -9,6 +7,7 @@ import {
   saveCcReferralDealLog,
   updateCcReferralStatus,
 } from "@/services/ccReferralService";
+import { uploadReferralBrowserFile } from "@/services/referralFileUploadService";
 
 export default function useReferralDetails(
   id,
@@ -178,22 +177,17 @@ export default function useReferralDetails(
     if (!id || !file) return { error: "Missing file or referral ID" };
 
     try {
-      const path = `referrals/${id}/${type}-${Date.now()}-${file.name}`;
-      const storageRef = ref(storage, path);
-
-      await uploadBytes(storageRef, file);
-
-      const url = await getDownloadURL(storageRef);
+      const uploaded = await uploadReferralBrowserFile(id, type, file);
 
       await attachCcReferralFileMetadata({
         id,
         type,
-        url,
-        name: file.name,
+        url: uploaded.url,
+        name: uploaded.name,
       });
 
       await loadDetails();
-      return { success: true, url };
+      return { success: true, url: uploaded.url };
     } catch (error) {
       console.error("CC referral file upload failed:", error);
       return { error: "File upload failed" };

@@ -1,58 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { db } from "@/lib/firebase/firebaseClient";
-import { collection, getDocs } from "firebase/firestore";
-import { COLLECTIONS } from "@/lib/utility_collection";
 import { Trophy } from "lucide-react";
 
-export default function TopOrbitersLeaderboard() {
-  const [leaders, setLeaders] = useState([]);
+export default function TopOrbitersLeaderboard({ leaders }) {
+  const safeLeaders = leaders || [];
 
-  useEffect(() => {
-    async function fetchLeaderboard() {
-      try {
-        const now = new Date();
-        const currentMonth = now.getMonth();
-        const currentYear = now.getFullYear();
-
-        const snap = await getDocs(collection(db, COLLECTIONS.referral));
-        const map = {};
-
-        snap.forEach((doc) => {
-          const data = doc.data();
-          const createdAt = data.createdAt?.toDate?.();
-
-          if (
-            createdAt &&
-            createdAt.getMonth() === currentMonth &&
-            createdAt.getFullYear() === currentYear
-          ) {
-            const ujb = data.cosmoOrbiter?.ujbCode;
-            const name = data.cosmoOrbiter?.name || "Orbiter";
-
-            if (!map[ujb]) {
-              map[ujb] = { name, count: 0 };
-            }
-
-            map[ujb].count += 1;
-          }
-        });
-
-        const sorted = Object.values(map)
-          .sort((a, b) => b.count - a.count)
-          .slice(0, 5);
-
-        setLeaders(sorted);
-      } catch {
-        setLeaders([]);
-      }
-    }
-
-    fetchLeaderboard();
-  }, []);
-
-  if (leaders.length === 0) return null;
+  if (safeLeaders.length === 0) return null;
 
   return (
     <div className="bg-white rounded-2xl p-5 shadow-md space-y-4">
@@ -62,7 +15,7 @@ export default function TopOrbitersLeaderboard() {
       </div>
 
       <div className="space-y-3">
-        {leaders.map((item, index) => (
+        {safeLeaders.map((item, index) => (
           <div key={index} className="flex justify-between items-center text-sm">
             <div className="flex items-center gap-3">
               <span className="text-orange-500 font-semibold">#{index + 1}</span>
@@ -75,3 +28,4 @@ export default function TopOrbitersLeaderboard() {
     </div>
   );
 }
+

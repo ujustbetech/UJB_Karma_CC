@@ -37,3 +37,4 @@ export default function KPISection({ users }) {
     </div>
   );
 }
+

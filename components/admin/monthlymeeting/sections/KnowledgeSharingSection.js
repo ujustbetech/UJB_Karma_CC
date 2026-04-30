@@ -7,9 +7,9 @@ import {
   forwardRef,
   useImperativeHandle,
 } from 'react';
-import { collection, getDocs, doc, updateDoc } from 'firebase/firestore';
-import { db, storage } from '@/lib/firebase/firebaseClient';
-import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { collection, getDocs, doc, updateDoc, db } from '@/services/adminMonthlyMeetingFirebaseService';
+
+import { ref as storageRef, uploadBytes, getDownloadURL, storage } from '@/services/adminMonthlyMeetingStorageService';
 
 import { COLLECTIONS } from '@/lib/utility_collection';
 import { Trash2, BookOpen, Upload, FileText, X } from 'lucide-react';
@@ -525,4 +525,7 @@ const KnowledgeSharingSection = forwardRef(function KnowledgeSharingSection(
 });
 
 export default KnowledgeSharingSection;
+
+
+
 

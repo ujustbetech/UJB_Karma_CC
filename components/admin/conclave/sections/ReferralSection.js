@@ -1,8 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { doc, updateDoc, getDocs, collection } from "firebase/firestore";
-import { db } from "@/lib/firebase/firebaseClient";
+import { doc, updateDoc, getDocs, collection, db } from "@/services/adminConclaveFirebaseService";
 import { COLLECTIONS } from "@/lib/utility_collection";
 
 import Card from "@/components/ui/Card";
@@ -200,4 +199,6 @@ export default function ReferralSection({
     </div>
   );
 }
+
+
 

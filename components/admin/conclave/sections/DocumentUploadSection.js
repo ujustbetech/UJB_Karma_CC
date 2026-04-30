@@ -1,9 +1,9 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
-import { doc, updateDoc, getDoc } from "firebase/firestore";
-import { storage, db } from "@/lib/firebase/firebaseClient";
+import { ref, uploadBytes, getDownloadURL, storage } from "@/services/adminConclaveStorageService";
+import { doc, updateDoc, getDoc, db } from "@/services/adminConclaveFirebaseService";
+
 import { COLLECTIONS } from "@/lib/utility_collection";
 
 import Card from "@/components/ui/Card";
@@ -276,4 +276,7 @@ export default function DocumentUploadSection({
     </div>
   );
 }
+
+
+
 

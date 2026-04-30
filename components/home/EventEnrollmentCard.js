@@ -1,36 +1,21 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { db } from "@/lib/firebase/firebaseClient";
-import { collection, getDocs } from "firebase/firestore";
-import { COLLECTIONS } from "@/lib/utility_collection";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Slider from "react-slick";
-import {
-  CalendarDays,
-  ArrowRight,
-  Users,
-  Droplet,
-} from "lucide-react";
+import { CalendarDays } from "lucide-react";
 import { Forum } from "next/font/google";
-
 
 const forum = Forum({
   subsets: ["latin"],
   weight: "400",
 });
 
-
-export default function MeetingsSection() {
+export default function MeetingsSection({ data }) {
   const router = useRouter();
-
   const [activeTab, setActiveTab] = useState("monthly");
-  const [monthlyEvents, setMonthlyEvents] = useState([]);
-  const [conclaveEvents, setConclaveEvents] = useState([]);
-  const [loading, setLoading] = useState(true);
   const [now, setNow] = useState(new Date());
 
-  // Refresh clock
   useEffect(() => {
     const interval = setInterval(() => {
       setNow(new Date());
@@ -38,61 +23,39 @@ export default function MeetingsSection() {
     return () => clearInterval(interval);
   }, []);
 
-  // Fetch data
-  useEffect(() => {
-    async function fetchData() {
-      try {
-        const monthlySnap = await getDocs(
-          collection(db, COLLECTIONS.monthlyMeeting)
-        );
+  const monthlyEvents = useMemo(
+    () =>
+      (data?.monthlyEvents || [])
+        .map((event) => ({
+          ...event,
+          time: event?.time ? new Date(event.time) : null,
+        }))
+        .filter((event) => event.time && !Number.isNaN(event.time.getTime())),
+    [data]
+  );
 
-        let monthly = [];
-        monthlySnap.forEach((doc) => {
-          const data = doc.data();
-          const time = data.time?.toDate?.();
-          if (time) monthly.push({ id: doc.id, ...data, time });
-        });
-        setMonthlyEvents(monthly);
+  const conclaveEvents = useMemo(
+    () =>
+      (data?.conclaveEvents || [])
+        .map((event) => ({
+          ...event,
+          time: event?.time ? new Date(event.time) : null,
+        }))
+        .filter((event) => event.time && !Number.isNaN(event.time.getTime())),
+    [data]
+  );
 
-        const conclaveSnap = await getDocs(
-          collection(db, COLLECTIONS.conclaves)
-        );
-        let conclaves = [];
+  const loading = !data;
 
-        for (const conclaveDoc of conclaveSnap.docs) {
-          const meetingsSnap = await getDocs(
-            collection(db, COLLECTIONS.conclaves, conclaveDoc.id, "meetings")
-          );
-
-          meetingsSnap.forEach((doc) => {
-            const data = doc.data();
-            const time = data.time?.toDate?.();
-            if (time) conclaves.push({ id: doc.id, ...data, time });
-          });
-        }
-
-        setConclaveEvents(conclaves);
-      } catch {
-        setMonthlyEvents([]);
-        setConclaveEvents([]);
-      } finally {
-        setLoading(false);
-      }
-    }
-
-    fetchData();
-  }, []);
-
-  // Monthly slider logic (1 upcoming + 2 recent)
   const getMonthlySliderData = () => {
     const upcoming = monthlyEvents
-      .filter((e) => e.time > now)
-      .sort((a, b) => a.time - b.time)
+      .filter((event) => event.time > now)
+      .sort((left, right) => left.time - right.time)
       .slice(0, 1);
 
     const recent = monthlyEvents
-      .filter((e) => e.time <= now)
-      .sort((a, b) => b.time - a.time)
+      .filter((event) => event.time <= now)
+      .sort((left, right) => right.time - left.time)
       .slice(0, 2);
 
     if (upcoming.length > 0) {
@@ -100,15 +63,13 @@ export default function MeetingsSection() {
     }
 
     return monthlyEvents
-      .filter((e) => e.time <= now)
-      .sort((a, b) => b.time - a.time)
+      .filter((event) => event.time <= now)
+      .sort((left, right) => right.time - left.time)
       .slice(0, 3);
   };
 
   const sliderData =
-    activeTab === "monthly"
-      ? getMonthlySliderData()
-      : conclaveEvents.slice(0, 3);
+    activeTab === "monthly" ? getMonthlySliderData() : conclaveEvents.slice(0, 3);
 
   const sliderSettings = {
     dots: true,
@@ -136,24 +97,18 @@ export default function MeetingsSection() {
           ${isUpcoming ? "border-blue-200" : "border-slate-200"}
           bg-white`}
         >
-          {/* Top Accent Gradient */}
           <div
-            className={`h-1 w-full ${isUpcoming
-              ? "bg-gradient-to-r from-blue-500 to-indigo-500"
-              : "bg-gradient-to-r from-slate-300 to-slate-200"
-              }`}
+            className={`h-1 w-full ${
+              isUpcoming
+                ? "bg-gradient-to-r from-blue-500 to-indigo-500"
+                : "bg-gradient-to-r from-slate-300 to-slate-200"
+            }`}
           />
 
-          {/* Top Section */}
           <div className="flex gap-4 p-4">
-
-            {/* Thumbnail */}
             <div
               className={`w-16 h-16 rounded-lg flex items-center justify-center flex-shrink-0
-              ${isUpcoming
-                  ? "bg-blue-50 text-blue-600"
-                  : "bg-slate-100 text-slate-500"
-                }`}
+              ${isUpcoming ? "bg-blue-50 text-blue-600" : "bg-slate-100 text-slate-500"}`}
             >
               {event.image ? (
                 <img
@@ -166,7 +121,6 @@ export default function MeetingsSection() {
               )}
             </div>
 
-            {/* Content */}
             <div className="flex-1">
               <p className="text-xs uppercase tracking-wide text-slate-400 font-medium">
                 {activeTab === "monthly" ? "Event" : "Conclave"}
@@ -178,10 +132,7 @@ export default function MeetingsSection() {
             </div>
           </div>
 
-          {/* Info Grid */}
           <div className="grid grid-cols-3 text-center border-t border-slate-200">
-
-            {/* Date */}
             <div className="py-3">
               <p className="text-sm font-semibold text-slate-900">
                 {event.time.toLocaleDateString("en-IN", {
@@ -192,7 +143,6 @@ export default function MeetingsSection() {
               <p className="text-xs text-slate-400 mt-1">Date</p>
             </div>
 
-            {/* Time */}
             <div className="py-3 border-l border-r border-slate-200">
               <p className="text-sm font-semibold text-slate-900">
                 {event.time.toLocaleTimeString("en-IN", {
@@ -203,11 +153,11 @@ export default function MeetingsSection() {
               <p className="text-xs text-slate-400 mt-1">Time</p>
             </div>
 
-            {/* Status */}
             <div className="py-3">
               <p
-                className={`text-sm font-semibold ${isUpcoming ? "text-blue-600" : "text-slate-600"
-                  }`}
+                className={`text-sm font-semibold ${
+                  isUpcoming ? "text-blue-600" : "text-slate-600"
+                }`}
               >
                 {isUpcoming ? "Open" : "Closed"}
               </p>
@@ -215,19 +165,16 @@ export default function MeetingsSection() {
             </div>
           </div>
 
-          {/* Footer CTA */}
           <div className="border-t border-slate-200">
             <button
               onClick={() =>
                 router.push(
-                  activeTab === "monthly"
-                    ? "/Monthlymeetdetails"
-                    : "/ConclaveMeeting"
+                  activeTab === "monthly" ? "/Monthlymeetdetails" : "/ConclaveMeeting"
                 )
               }
               className="w-full py-3 text-sm font-medium text-blue-600 hover:bg-blue-50 transition"
             >
-              View event →
+              View event â†’
             </button>
           </div>
         </div>
@@ -256,8 +203,6 @@ export default function MeetingsSection() {
 
   return (
     <div className="space-y-6">
-
-      {/* Section Heading */}
       <div className="flex items-center gap-2">
         <CalendarDays size={18} className="text-orange-500" />
         <h3
@@ -268,41 +213,33 @@ export default function MeetingsSection() {
         </h3>
       </div>
 
-      {/* Tabs */}
       <div className="flex gap-4">
         {["monthly", "conclave"].map((tab) => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
             className={`px-4 py-2 rounded-full text-sm font-medium transition-all duration-200
-        ${activeTab === tab
-                ? "bg-orange-500 text-white shadow-md"
-                : "bg-blue-50 text-blue-600 hover:bg-blue-100"
-              }`}
+        ${
+          activeTab === tab
+            ? "bg-orange-500 text-white shadow-md"
+            : "bg-blue-50 text-blue-600 hover:bg-blue-100"
+        }`}
           >
-            {tab === "monthly"
-              ? "Monthly Meetings"
-              : "Conclaves"}
+            {tab === "monthly" ? "Monthly Meetings" : "Conclaves"}
           </button>
         ))}
       </div>
 
-      {/* Slider */}
       {loading ? (
         <Slider {...sliderSettings}>
           <SkeletonCard />
           <SkeletonCard />
         </Slider>
       ) : sliderData.length === 0 ? (
-        <p className="text-sm text-slate-500">
-          No events available.
-        </p>
+        <p className="text-sm text-slate-500">No events available.</p>
       ) : (
-        <Slider {...sliderSettings}>
-          {sliderData.map((event) => renderCard(event))}
-        </Slider>
+        <Slider {...sliderSettings}>{sliderData.map((event) => renderCard(event))}</Slider>
       )}
-
     </div>
   );
 }

@@ -169,3 +169,4 @@ export default function CloseConnectionsSection({ profile }) {
     </Card>
   );
 }
+

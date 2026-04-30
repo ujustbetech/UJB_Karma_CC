@@ -3,10 +3,9 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/authContext";
-import { collection, doc, getDoc, onSnapshot } from "firebase/firestore";
-import { db } from "@/lib/firebase/firebaseClient";
 import { Coins, Bell, User, LogOut, Receipt } from "lucide-react";
 import useUserNotifications from "@/hooks/useUserNotifications";
+import { fetchUserHomeData } from "@/services/homeService";
 
 export default function MobileHeader() {
   const { user, logout } = useAuth();
@@ -21,79 +20,20 @@ export default function MobileHeader() {
   useEffect(() => {
     if (!user?.profile?.ujbCode) return;
 
-    let docTotal = null;
-    let activityTotal = 0;
-
-    const applyTotal = () => {
-      setCPPoints(docTotal ?? activityTotal);
-    };
-
-    const boardRef = doc(db, "CPBoard", user.profile.ujbCode);
-    const activitiesRef = collection(boardRef, "activities");
-
-    const unsubscribeBoard = onSnapshot(
-      boardRef,
-      (snap) => {
-        const totals = snap.data()?.totals;
-        const nextDocTotal =
-          totals && typeof totals === "object"
-            ? Object.values(totals).reduce(
-                (sum, value) => sum + (Number(value) || 0),
-                0
-              )
-            : null;
-
-        docTotal = nextDocTotal;
-        applyTotal();
-      },
-      () => {
-        docTotal = null;
-        applyTotal();
-      }
-    );
-
-    const unsubscribeActivities = onSnapshot(
-      activitiesRef,
-      (snap) => {
-        activityTotal = snap.docs.reduce(
-          (sum, docSnap) => sum + (Number(docSnap.data()?.points) || 0),
-          0
-        );
-        applyTotal();
-      },
-      () => {
-        activityTotal = 0;
-        applyTotal();
-      }
-    );
-
-    return () => {
-      unsubscribeBoard();
-      unsubscribeActivities();
-    };
-  }, [user]);
-
-  useEffect(() => {
-    if (!user?.profile?.ujbCode) return;
-
-    const fetchUserDetails = async () => {
+    const loadHeaderData = async () => {
       try {
-        const userRef = doc(db, "usersdetail", user.profile.ujbCode);
-        const snap = await getDoc(userRef);
-
-        if (snap.exists()) {
-          const data = snap.data();
-          setUserCategory(data?.Category || "Member");
-          setProfileImage(data?.ProfilePhotoURL || "");
-          return;
-        }
-      } catch {}
-
-      setUserCategory("Member");
-      setProfileImage("");
+        const data = await fetchUserHomeData();
+        setCPPoints(Number(data?.header?.cpPoints || 0));
+        setUserCategory(data?.header?.userCategory || "Member");
+        setProfileImage(data?.header?.profileImage || "");
+      } catch {
+        setCPPoints(0);
+        setUserCategory("Member");
+        setProfileImage("");
+      }
     };
 
-    fetchUserDetails();
+    loadHeaderData();
   }, [user]);
 
   const getInitials = (name) =>
@@ -272,3 +212,4 @@ export default function MobileHeader() {
     </>
   );
 }
+

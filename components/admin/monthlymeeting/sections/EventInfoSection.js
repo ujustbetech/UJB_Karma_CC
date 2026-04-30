@@ -1,8 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { doc, updateDoc, Timestamp } from 'firebase/firestore';
-import { db } from '@/lib/firebase/firebaseClient';
+import { doc, updateDoc, Timestamp, db } from '@/services/adminMonthlyMeetingFirebaseService';
 import { COLLECTIONS } from '@/lib/utility_collection';
 
 import { Info, Settings, List, Trash2 } from 'lucide-react';
@@ -273,4 +272,6 @@ export default function EventInfoSection({ data, eventId }) {
     </Card>
   );
 }
+
+
 

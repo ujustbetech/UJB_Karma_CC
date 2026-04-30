@@ -197,3 +197,5 @@ export default function EventSummaryPanel({ data, activeSection, registeredCount
         </div>
     );
 }
+
+

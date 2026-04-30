@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import { useCallback, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
@@ -59,8 +59,10 @@ export default function ReferralDetailsPage() {
     <ReferralDashboardMobile
       referral={referral}
       userRole={userRole}
-      currentUserUjbCode={currentUserUjbCode}  // âœ… IMPORTANT
+      currentUserUjbCode={currentUserUjbCode}  // ✅ IMPORTANT
       onReferralUpdated={loadReferral}
     />
   );
 }
+
+

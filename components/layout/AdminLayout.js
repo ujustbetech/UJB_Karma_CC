@@ -35,3 +35,4 @@ export default function AdminLayout({ children, role }) {
     </div>
   );
 }
+

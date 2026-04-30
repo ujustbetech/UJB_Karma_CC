@@ -8,7 +8,7 @@ import {
   fetchRedeemDeals,
   rejectRedeemDeal,
   updateRedeemDeal,
-} from "@/services/redeemService";
+} from "@/services/adminRedeemService";
 
 function getItemName(request) {
   if (request.mode === "all") return "All items";
@@ -128,8 +128,6 @@ export default function AdminManageRedeemPage() {
 
   return (
     <main className="space-y-6">
-  QQQQQQQQQQQQQQQQQQQQQQQQQQQqQqQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQqqqqqqqqqqqQ
-
       <div className="rounded-3xl bg-white p-8 shadow-sm border border-slate-200 space-y-6">
         <div className="grid gap-4 md:grid-cols-2">
           <EditableField
@@ -344,3 +342,5 @@ function EditableField({ label, value, onChange, type = "text", placeholder }) {
     </div>
   );
 }
+
+

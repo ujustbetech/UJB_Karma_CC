@@ -99,3 +99,4 @@ export default function ProfileTabs({ activeTab, setActiveTab, tabs: customTabs 
     </div>
   );
 }
+

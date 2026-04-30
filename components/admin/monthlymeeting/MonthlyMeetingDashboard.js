@@ -1,8 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { collection, onSnapshot } from 'firebase/firestore';
-import { db } from '@/lib/firebase/firebaseClient';
+import { collection, onSnapshot, db } from '@/services/adminMonthlyMeetingFirebaseService';
 import { COLLECTIONS } from '@/lib/utility_collection';
 
 import Card from '@/components/ui/Card';
@@ -265,4 +264,6 @@ function addMember(obj, name, field) {
 
   obj[name][field]++;
 }
+
+
 

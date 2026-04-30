@@ -489,3 +489,4 @@ export default function ProductsSection({ profile }) {
     </Card>
   );
 }
+

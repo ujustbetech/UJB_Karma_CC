@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Gift, ShieldCheck } from "lucide-react";
-import { useAuth } from "@/context/authContext";
 import { useToast } from "@/components/ui/ToastProvider";
 import {
   acceptRedeemAgreement,
@@ -10,11 +9,10 @@ import {
   getAveragePercent,
   getOriginalPercent,
   submitRedeemRequest,
-} from "@/services/redeemService";
+} from "@/services/userRedeemService";
 import UserPageHeader from "@/components/user/UserPageHeader";
 
 export default function RedeemRequestPage() {
-  const { user, loading } = useAuth();
   const toast = useToast();
 
   const [profile, setProfile] = useState(null);
@@ -29,18 +27,10 @@ export default function RedeemRequestPage() {
   const [finalPercent, setFinalPercent] = useState(0);
 
   useEffect(() => {
-    if (loading) return;
-
     const loadProfile = async () => {
       try {
         setLoadingProfile(true);
-        const ujbCode = user?.profile?.ujbCode;
-        if (!ujbCode) {
-          setProfile(null);
-          return;
-        }
-
-        setProfile(await fetchRedeemUserProfile(ujbCode));
+        setProfile(await fetchRedeemUserProfile());
       } catch (error) {
         console.error(error);
         toast.error("Unable to load redemption profile.");
@@ -50,7 +40,7 @@ export default function RedeemRequestPage() {
     };
 
     loadProfile();
-  }, [loading, toast, user]);
+  }, [toast]);
 
   const allItems = useMemo(() => {
     if (!profile) return [];
@@ -113,11 +103,9 @@ export default function RedeemRequestPage() {
   };
 
   const handleAcceptAgreement = async () => {
-    if (!profile?.ujbCode) return;
-
     try {
-      await acceptRedeemAgreement(profile.ujbCode);
-      setProfile((prev) => ({ ...prev, agreementAccepted: true }));
+      const updatedProfile = await acceptRedeemAgreement();
+      setProfile((prev) => updatedProfile || { ...prev, agreementAccepted: true });
       toast.success("Agreement accepted.");
     } catch (error) {
       console.error(error);
@@ -167,7 +155,7 @@ export default function RedeemRequestPage() {
     }
   };
 
-  if (loading || loadingProfile) {
+  if (loadingProfile) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="h-10 w-10 animate-spin rounded-full border-4 border-orange-500 border-t-transparent" />
@@ -407,3 +395,5 @@ function EditableField({ label, value, onChange, type = "text" }) {
     </div>
   );
 }
+
+

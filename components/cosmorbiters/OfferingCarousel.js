@@ -95,3 +95,4 @@ const OfferingCarousel = ({ items, onSelect }) => {
 };
 
 export default OfferingCarousel;
+

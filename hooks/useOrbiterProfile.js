@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { encryptData, decryptData } from '@/utils/encryption';
+import { uploadOrbiterProfileAsset } from '@/services/orbiterProfileAssetService';
 
 /* ---------------- FILE HELPERS ---------------- */
 
@@ -61,6 +62,10 @@ function normalizeOfferingEntry(entry = {}) {
 }
 
 async function uploadWithMeta(file, fullPath, uploadEndpoint) {
+  if (!uploadEndpoint) {
+    return uploadOrbiterProfileAsset(file, fullPath);
+  }
+
   const formData = new FormData();
   formData.append('file', file);
   formData.append('path', fullPath);

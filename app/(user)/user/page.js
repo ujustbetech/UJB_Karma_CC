@@ -1,9 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
-import { doc, getDoc, updateDoc } from "firebase/firestore";
-import { db } from "@/lib/firebase/firebaseClient";
-import { COLLECTIONS } from "@/lib/utility_collection";
+import { useEffect, useState } from "react";
 import Swal from "sweetalert2";
 
 import HeroReferralCTA from "@/components/home/HeroReferralCTA";
@@ -21,32 +18,30 @@ import { generateAgreementPDF } from "@/utils/generateAgreementPDF";
 import {
   buildAgreementAcceptanceUpdate,
   getAgreementTitle,
-  shouldPromptAgreement,
 } from "@/lib/agreements/agreementWorkflow.mjs";
+import { fetchUserHomeData } from "@/services/homeService";
+import { updateUserProfile } from "@/services/profileService";
 
 export default function HomePage() {
+  const [homeData, setHomeData] = useState(null);
+
   useEffect(() => {
-    const checkAgreement = async () => {
-      const ujbCode = localStorage.getItem("mmUJBCode");
-      if (!ujbCode) return;
-
+    const loadHomeData = async () => {
       try {
-        const userRef = doc(db, COLLECTIONS.userDetail, ujbCode);
-        const userSnap = await getDoc(userRef);
+        const data = await fetchUserHomeData();
+        setHomeData(data);
 
-        if (!userSnap.exists()) return;
-
-        const data = userSnap.data();
-
-        if (!shouldPromptAgreement(data)) return;
+        if (!data?.agreement?.shouldPrompt) {
+          return;
+        }
 
         const result = await Swal.fire({
-          title: getAgreementTitle(data.Category),
+          title: getAgreementTitle(data?.agreement?.category),
           html: `
             <div style="text-align:left; max-height:250px; overflow:auto;">
-              <p>• You have read and understood the agreement</p>
-              <p>• You accept all terms & conditions</p>
-              <p>• This acceptance is legally binding</p>
+              <p>â€¢ You have read and understood the agreement</p>
+              <p>â€¢ You accept all terms & conditions</p>
+              <p>â€¢ This acceptance is legally binding</p>
             </div>
           `,
           icon: "info",
@@ -55,35 +50,45 @@ export default function HomePage() {
           allowEscapeKey: false,
         });
 
-        if (result.isConfirmed) {
-          const name = data.Name || data.BusinessName || "User";
-          const address = data.Address || "-";
-          const city = data.City || "-";
-          const category = data.Category;
-
-          const pdfUrl = await generateAgreementPDF({
-            name,
-            address,
-            city,
-            category,
-          });
-
-          await updateDoc(
-            userRef,
-            buildAgreementAcceptanceUpdate({
-              category,
-              pdfUrl,
-              acceptedAt: new Date(),
-            })
-          );
-
-          Swal.fire(
-            "Agreement Accepted",
-            "Your agreement has been signed and saved successfully",
-            "success"
-          );
+        if (!result.isConfirmed) {
+          return;
         }
-      } catch (err) {
+
+        const category = data?.agreement?.category || "";
+        const pdfUrl = await generateAgreementPDF({
+          name: data?.agreement?.name || "User",
+          address: data?.agreement?.address || "-",
+          city: data?.agreement?.city || "-",
+          category,
+        });
+
+        await updateUserProfile(
+          buildAgreementAcceptanceUpdate({
+            category,
+            pdfUrl,
+            acceptedAt: new Date(),
+          })
+        );
+
+        setHomeData((current) =>
+          current
+            ? {
+                ...current,
+                agreement: {
+                  ...current.agreement,
+                  shouldPrompt: false,
+                },
+              }
+            : current
+        );
+
+        Swal.fire(
+          "Agreement Accepted",
+          "Your agreement has been signed and saved successfully",
+          "success"
+        );
+      } catch {
+        setHomeData(null);
         Swal.fire(
           "Notice",
           "Some dashboard data is unavailable right now.",
@@ -92,21 +97,23 @@ export default function HomePage() {
       }
     };
 
-    checkAgreement();
+    loadHomeData();
   }, []);
 
   return (
     <div className="space-y-6 pb-28">
-      <NetworkOverview />
+      <NetworkOverview stats={homeData?.networkOverview} />
       <HeroReferralCTA />
-      <EventEnrollmentCard />
-      <RecentReferrals />
-      <RecommendedServices />
-      <DewdropLearningSection />
-      <PerformanceSnapshot />
-      <NetworkActivity />
-      <NewlyAddedSection />
-      <TopOrbitersLeaderboard />
+      <EventEnrollmentCard data={homeData?.eventEnrollment} />
+      <RecentReferrals referrals={homeData?.recentReferrals} />
+      <RecommendedServices services={homeData?.recommendedServices} />
+      <DewdropLearningSection stories={homeData?.dewdropStories} />
+      <PerformanceSnapshot stats={homeData?.performance} />
+      <NetworkActivity activities={homeData?.networkActivity} />
+      <NewlyAddedSection services={homeData?.newlyAdded} />
+      <TopOrbitersLeaderboard leaders={homeData?.topOrbiters} />
     </div>
   );
 }
+
+

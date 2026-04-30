@@ -7,37 +7,23 @@ import React, {
   useRef,
   useCallback,
 } from "react";
-import {
-  getFirestore,
-  collection,
-  query,
-  where,
-  getDocs,
-} from "firebase/firestore";
-import { app } from "@/lib/firebase/firebaseClient";
 import Link from "next/link";
 import {
   MapPin,
-  Globe,
   Search,
   BadgeCheck,
   Sparkles,
   SlidersHorizontal,
-  Droplet,
   OrbitIcon,
 } from "lucide-react";
-import { COLLECTIONS } from "@/lib/utility_collection";
-
-import { Forum, Orbit } from "next/font/google";
-
+import { Forum } from "next/font/google";
+import { fetchCosmOrbiters } from "@/services/cosmorbitersService";
 
 const forum = Forum({
   subsets: ["latin"],
   weight: "400",
 });
 
-
-const db = getFirestore(app);
 const PAGE_SIZE = 10;
 
 export default function AllEvents() {
@@ -53,64 +39,25 @@ export default function AllEvents() {
   const observerRef = useRef(null);
   const initialFetchDone = useRef(false);
 
-  // 🔥 Fetch Businesses
   const fetchBusinesses = useCallback(async () => {
-      try {
-        setLoading(true);
+    try {
+      setLoading(true);
+      const nextBusinesses = await fetchCosmOrbiters();
 
-        const q = query(
-          collection(db, COLLECTIONS.userDetail),
-          where("Category", "==", "CosmOrbiter")
-        );
-
-        const snapshot = await getDocs(q);
-
-        const newList = snapshot.docs.map((docSnap) => {
-          const data = docSnap.data();
-
-          const servicesArr = data.services
-            ? Object.values(data.services)
-            : [];
-          const productsArr = data.products
-            ? Object.values(data.products)
-            : [];
-
-          const aiScore =
-            servicesArr.length * 2 +
-            productsArr.length +
-            (data.Verified ? 5 : 0);
-
-          return {
-            id: docSnap.id,
-            businessName: data.BusinessName || "N/A",
-            city: data.City || "",
-            locality: data.Locality || "",
-            state: data.State || "",
-            category1: data.Category1 || "",
-            verified: data.Verified || false,
-            logo:
-              data.BusinessLogo ||
-              data["Business Logo"] ||
-              data.ProfilePhotoURL ||
-              "",
-            aiScore,
-          };
+      setBusinesses((prev) => {
+        const map = new Map();
+        [...prev, ...nextBusinesses].forEach((item) => {
+          map.set(item.id, item);
         });
-
-        // Deduplicate
-        setBusinesses((prev) => {
-          const map = new Map();
-          [...prev, ...newList].forEach((item) =>
-            map.set(item.id, item)
-          );
-          return Array.from(map.values());
-        });
-      } catch (err) {
-        console.error(err);
-      } finally {
-        setLoading(false);
-      }
-    }, []);
+        return Array.from(map.values());
+      });
+    } catch (error) {
+      console.error(error);
+      setBusinesses([]);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
     if (initialFetchDone.current) return;
@@ -118,49 +65,37 @@ export default function AllEvents() {
     fetchBusinesses();
   }, [fetchBusinesses]);
 
-  // Categories
   const categories = useMemo(() => {
-    const cats = businesses
-      .map((b) => b.category1)
-      .filter(Boolean);
+    const cats = businesses.map((item) => item.category1).filter(Boolean);
     return ["All", ...new Set(cats)];
   }, [businesses]);
 
-  // Filter + Sort
   const filteredBusinesses = useMemo(() => {
     let list = [...businesses];
 
     if (searchQuery) {
-      const q = searchQuery.toLowerCase();
-      list = list.filter((b) =>
-        [b.businessName, b.city, b.locality, b.state]
+      const queryText = searchQuery.toLowerCase();
+      list = list.filter((item) =>
+        [item.businessName, item.city, item.locality, item.state]
           .filter(Boolean)
-          .some((field) =>
-            field.toLowerCase().includes(q)
-          )
+          .some((field) => field.toLowerCase().includes(queryText))
       );
     }
 
     if (selectedCategory !== "All") {
-      list = list.filter(
-        (b) => b.category1 === selectedCategory
-      );
+      list = list.filter((item) => item.category1 === selectedCategory);
     }
 
     if (sortBy === "city") {
-      list.sort((a, b) =>
-        a.city.localeCompare(b.city)
-      );
+      list.sort((left, right) => left.city.localeCompare(right.city));
     }
 
     if (sortBy === "category") {
-      list.sort((a, b) =>
-        a.category1.localeCompare(b.category1)
-      );
+      list.sort((left, right) => left.category1.localeCompare(right.category1));
     }
 
     if (sortBy === "ai") {
-      list.sort((a, b) => b.aiScore - a.aiScore);
+      list.sort((left, right) => right.aiScore - left.aiScore);
     }
 
     return list;
@@ -173,7 +108,6 @@ export default function AllEvents() {
   const visibleBusinesses = filteredBusinesses.slice(0, visibleCount);
   const hasMore = visibleCount < filteredBusinesses.length;
 
-  // Infinite Scroll
   useEffect(() => {
     const sentinel = observerRef.current;
     if (!sentinel) return;
@@ -214,9 +148,6 @@ export default function AllEvents() {
 
   return (
     <main className="min-h-screen">
-
-      {/* Header */}
-      {/* Header Title (scrolls normally) */}
       <div className="flex items-center gap-2 pt-6 pb-3">
         <OrbitIcon size={24} className="text-orange-500" />
         <h3
@@ -227,100 +158,92 @@ export default function AllEvents() {
         </h3>
       </div>
 
-      {/* Sticky Search Bar */}
-      <div className="pb-3 pt-2">
-
+      <div className="sticky top-0 z-30 pb-3 pt-2">
         <div className="relative">
           <Search className="absolute left-4 top-3 w-4 h-4 text-gray-500" />
           <input
             type="text"
             placeholder="Search..."
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            onChange={(event) => setSearchQuery(event.target.value)}
             className="w-full rounded-xl border border-gray-200 bg-gray-200 pl-10 pr-4 py-2.5 text-sm focus:bg-white focus:border-blue-400 focus:ring-2 focus:ring-blue-100 outline-none transition"
           />
         </div>
-
       </div>
 
-      {/* Business List */}
       <div className="space-y-4">
-
-        {/* ✅ INITIAL SKELETON */}
         {loading && (
           <>
-            {[...Array(6)].map((_, i) => (
-              <BusinessSkeleton key={i} />
+            {[...Array(6)].map((_, index) => (
+              <BusinessSkeleton key={index} />
             ))}
           </>
         )}
 
-        {/* ✅ DATA LIST */}
-        {!loading && visibleBusinesses.map((b) => (
-          <Link
-            key={b.id}
-            href={`cosmorbiters/${b.id}`}
-            className="block"
-          >
-            <div className="rounded-2xl bg-white p-4 shadow-sm border border-gray-100 hover:shadow-md transition active:scale-[0.98]">
-              <div className="flex items-center space-x-4">
-
-                <div className="h-14 w-14 flex items-center justify-center rounded-full overflow-hidden bg-orange-50">
-                  {b.logo && /^https?:\/\//.test(b.logo) ? (
-                    <img
-                      src={b.logo}
-                      alt="Business Logo"
-                      className="h-full w-full object-cover"
-                    />
-                  ) : (
-                     <div className="h-14 w-14 flex items-center justify-center w-full h-full bg-gradient-to-br from-gray-200 to-gray-300">
-                      <OrbitIcon className="w-5 h-5 text-orange-400" />
-                    </div>
-                  )}
-                </div>
-
-                <div className="flex-1">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <p className="text-xs text-orange-500 font-medium">
-                      {b.category1}
-                    </p>
-
-                    {b.verified && (
-                      <span className="flex items-center text-xs bg-emerald-100 text-emerald-600 px-2 py-0.5 rounded-full">
-                        <BadgeCheck className="w-3 h-3 mr-1" />
-                        Verified
-                      </span>
-                    )}
-
-                    {b.aiScore > 8 && (
-                      <span className="flex items-center text-xs bg-purple-100 text-purple-600 px-2 py-0.5 rounded-full">
-                        <Sparkles className="w-3 h-3 mr-1" />
-                        AI Recommended
-                      </span>
+        {!loading &&
+          visibleBusinesses.map((business) => (
+            <Link
+              key={business.id}
+              href={`cosmorbiters/${business.id}`}
+              className="block"
+            >
+              <div className="rounded-2xl bg-white p-4 shadow-sm border border-gray-100 hover:shadow-md transition active:scale-[0.98]">
+                <div className="flex items-center space-x-4">
+                  <div className="h-14 w-14 flex items-center justify-center rounded-full overflow-hidden bg-orange-50">
+                    {business.logo && /^https?:\/\//.test(business.logo) ? (
+                      <img
+                        src={business.logo}
+                        alt="Business Logo"
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      <div className="h-14 w-14 flex items-center justify-center w-full h-full bg-gradient-to-br from-gray-200 to-gray-300">
+                        <OrbitIcon className="w-5 h-5 text-orange-400" />
+                      </div>
                     )}
                   </div>
 
-                  <h3 className="text-base font-semibold truncate mt-1">
-                    {b.businessName}
-                  </h3>
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <p className="text-xs text-orange-500 font-medium">
+                        {business.category1}
+                      </p>
 
-                  <div className="flex items-center text-xs text-gray-500 mt-1">
-                    <MapPin className="w-4 h-4 mr-1 text-gray-400" />
-                    {[b.locality, b.city, b.state]
-                      .filter(Boolean)
-                      .join(", ")}
+                      {business.verified && (
+                        <span className="flex items-center text-xs bg-emerald-100 text-emerald-600 px-2 py-0.5 rounded-full">
+                          <BadgeCheck className="w-3 h-3 mr-1" />
+                          Verified
+                        </span>
+                      )}
+
+                      {business.aiScore > 8 && (
+                        <span className="flex items-center text-xs bg-purple-100 text-purple-600 px-2 py-0.5 rounded-full">
+                          <Sparkles className="w-3 h-3 mr-1" />
+                          AI Recommended
+                        </span>
+                      )}
+                    </div>
+
+                    <h3 className="text-base font-semibold truncate mt-1">
+                      {business.businessName}
+                    </h3>
+
+                    <div className="flex items-center text-xs text-gray-500 mt-1">
+                      <MapPin className="w-4 h-4 mr-1 text-gray-400" />
+                      {[business.locality, business.city, business.state]
+                        .filter(Boolean)
+                        .join(", ")}
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
-          </Link>
-        ))}
+            </Link>
+          ))}
 
-        {/* ✅ LOAD MORE SKELETON */}
         {isFetchingMore && (
           <>
-            {[...Array(2)].map((_, i) => (
-              <BusinessSkeleton key={`more-${i}`} />
+            {[...Array(2)].map((_, index) => (
+              <BusinessSkeleton key={`more-${index}`} />
             ))}
           </>
         )}
@@ -328,7 +251,6 @@ export default function AllEvents() {
         {hasMore && <div ref={observerRef} className="h-10" />}
       </div>
 
-      {/* Floating Filter Button */}
       <div className="fixed bottom-26 right-6 z-40">
         <button
           onClick={() => setShowFilters(true)}
@@ -339,80 +261,62 @@ export default function AllEvents() {
         </button>
       </div>
 
-      {/* Bottom Sheet */}
-      {/* Bottom Sheet */}
       {showFilters && (
         <div className="fixed inset-0 z-99 flex items-end">
-
-          {/* Backdrop */}
           <div
             onClick={() => setShowFilters(false)}
             className="absolute inset-0 bg-black/40 backdrop-blur-sm"
           />
 
-          {/* Sheet Container */}
           <div className="relative w-full max-h-[90vh] bg-white rounded-t-3xl animate-slideUp shadow-2xl flex flex-col">
-
-            {/* Scrollable Content */}
             <div className="flex-1 overflow-y-auto px-6 pt-6 pb-4">
-
-              {/* Drag Handle */}
               <div className="w-12 h-1.5 bg-gray-300 rounded-full mx-auto mb-6" />
 
-              <h3 className="text-xl font-semibold mb-4">
-                Filter & Sort
-              </h3>
+              <h3 className="text-xl font-semibold mb-4">Filter & Sort</h3>
 
-              {/* Category */}
               <div className="mb-6">
-                <p className="text-sm font-medium mb-2">
-                  Category
-                </p>
+                <p className="text-sm font-medium mb-2">Category</p>
 
                 <div className="flex flex-wrap gap-2">
-                  {categories.map((cat) => (
+                  {categories.map((category) => (
                     <button
-                      key={cat}
-                      onClick={() => setSelectedCategory(cat)}
-                      className={`px-3 py-1.5 rounded-full text-xs border transition ${selectedCategory === cat
-                        ? "bg-orange-500 text-white border-orange-500"
-                        : "bg-gray-100 text-gray-600 border-gray-200"
-                        }`}
+                      key={category}
+                      onClick={() => setSelectedCategory(category)}
+                      className={`px-3 py-1.5 rounded-full text-xs border transition ${
+                        selectedCategory === category
+                          ? "bg-orange-500 text-white border-orange-500"
+                          : "bg-gray-100 text-gray-600 border-gray-200"
+                      }`}
                     >
-                      {cat}
+                      {category}
                     </button>
                   ))}
                 </div>
               </div>
 
-              {/* iOS Segmented Sort */}
               <div className="mb-6">
-                <p className="text-sm font-medium mb-2">
-                  Sort By
-                </p>
+                <p className="text-sm font-medium mb-2">Sort By</p>
 
                 <div className="flex bg-gray-100 rounded-xl p-1">
                   {["ai", "city", "category"].map((value) => (
                     <button
                       key={value}
                       onClick={() => setSortBy(value)}
-                      className={`flex-1 text-xs py-2 rounded-lg transition ${sortBy === value
-                        ? "bg-white shadow text-orange-500"
-                        : "text-gray-500"
-                        }`}
+                      className={`flex-1 text-xs py-2 rounded-lg transition ${
+                        sortBy === value
+                          ? "bg-white shadow text-orange-500"
+                          : "text-gray-500"
+                      }`}
                     >
                       {value === "ai"
                         ? "AI"
-                        : value.charAt(0).toUpperCase() +
-                        value.slice(1)}
+                        : value.charAt(0).toUpperCase() + value.slice(1)}
                     </button>
                   ))}
                 </div>
               </div>
-
             </div>
 
-            {/* Sticky Bottom Button */}
             <div className="px-6 pb-6 pt-4 border-t border-gray-100 bg-white">
               <button
                 onClick={() => setShowFilters(false)}
@@ -421,10 +325,11 @@ export default function AllEvents() {
                 Apply Filters
               </button>
             </div>
-
           </div>
         </div>
       )}
     </main>
   );
 }
+
+

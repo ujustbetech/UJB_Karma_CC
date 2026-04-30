@@ -8,7 +8,7 @@ import {
   fetchAllRedeemUsers,
   getAveragePercent,
   getOriginalPercent,
-} from "@/services/redeemService";
+} from "@/services/adminRedeemService";
 
 export default function AdminAddRedeemPage() {
   const toast = useToast();
@@ -387,3 +387,5 @@ function EditableField({ label, value, onChange, type = "text", placeholder }) {
     </div>
   );
 }
+
+

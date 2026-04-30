@@ -7,10 +7,9 @@ import Card from "@/components/ui/Card";
 import Text from "@/components/ui/Text";
 import Button from "@/components/ui/Button";
 import {
-  createCcReferral,
+  createCcReferralFromDeal,
   fetchApprovedCcDealById,
-  fetchUserOrbiterByCode,
-} from "@/services/ccMarketplaceService";
+} from "@/services/userCcMarketplaceService";
 
 export default function DealDetailPage() {
   const params = useParams();
@@ -27,11 +26,8 @@ export default function DealDetailPage() {
 
     const loadDeal = async () => {
       try {
-        const code = localStorage.getItem("mmUJBCode");
-        const [dealData, orbiterData] = await Promise.all([
-          fetchApprovedCcDealById(params?.id),
-          fetchUserOrbiterByCode(code),
-        ]);
+        const { deal: dealData, orbiter: orbiterData } =
+          await fetchApprovedCcDealById(params?.id);
 
         if (active) {
           setDeal(dealData);
@@ -73,9 +69,8 @@ export default function DealDetailPage() {
     setError("");
 
     try {
-      const referralId = await createCcReferral({
-        deal,
-        orbiter,
+      const referralId = await createCcReferralFromDeal({
+        id: deal.id,
         leadDescription,
       });
 
@@ -180,3 +175,5 @@ export default function DealDetailPage() {
     </main>
   );
 }
+
+

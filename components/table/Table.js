@@ -7,3 +7,4 @@ export default function Table({ children }) {
     </div>
   );
 }
+

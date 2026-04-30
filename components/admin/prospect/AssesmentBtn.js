@@ -1,11 +1,6 @@
 import React, { useState, useEffect } from "react";
-import {
-  doc,
-  updateDoc,
-  getDoc
-} from "firebase/firestore";
+import { doc, updateDoc, getDoc, db } from "@/services/adminProspectJourneyFirebaseService";
 
-import { db } from "@/lib/firebase/firebaseClient";
 import emailjs from "@emailjs/browser";
 import Swal from "sweetalert2";
 import { COLLECTIONS } from "@/lib/utility_collection";
@@ -350,4 +345,6 @@ UJustBe Team`;
 };
 
 export default Assessment;
+
+
 

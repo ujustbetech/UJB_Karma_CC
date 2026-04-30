@@ -483,3 +483,4 @@ function getStatusAppearance(status) {
         badge: "bg-slate-100 text-slate-700",
     };
 }
+

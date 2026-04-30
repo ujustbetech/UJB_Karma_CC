@@ -15,13 +15,13 @@ import {
   auth,
   googleProvider,
   microsoftProvider,
-} from "@/lib/firebase/firebaseClient";
+} from "@/services/adminLoginFirebaseService";
 import {
   sendPasswordResetEmail,
   signInWithEmailAndPassword,
   signInWithPopup,
   signOut,
-} from "firebase/auth";
+} from "@/services/adminLoginFirebaseService";
 
 function ProviderButton({
   label,
@@ -623,3 +623,7 @@ export default function LoginPage() {
     </div>
   );
 }
+
+
+
+

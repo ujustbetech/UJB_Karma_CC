@@ -1,22 +1,9 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import {
-  collection,
-  query,
-  orderBy,
-  onSnapshot,
-  doc,
-  updateDoc,
-  arrayUnion,
-  serverTimestamp,
-  getDocs,
-  setDoc,
-  getDoc
-} from 'firebase/firestore';
+import { collection, query, orderBy, onSnapshot, doc, updateDoc, arrayUnion, serverTimestamp, getDocs, setDoc, getDoc, db } from '@/services/adminMonthlyMeetingFirebaseService';
 
 
-import { db } from '@/lib/firebase/firebaseClient';
 import { COLLECTIONS } from '@/lib/utility_collection';
 
 import Card from '@/components/ui/Card';
@@ -445,4 +432,6 @@ export default function RegisteredUsersSection({ eventId }) {
     </div>
   );
 }
+
+
 

@@ -1,15 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
-import { db } from "@/lib/firebase/firebaseClient";
-import {
-  collection,
-  query,
-  orderBy,
-  limit,
-  onSnapshot,
-} from "firebase/firestore";
-import { COLLECTIONS } from "@/lib/utility_collection";
+import { useMemo, useRef } from "react";
 import Slider from "react-slick";
 import { Clock, Send } from "lucide-react";
 import { useRouter } from "next/navigation";
@@ -20,44 +11,18 @@ const forum = Forum({
   weight: "400",
 });
 
-export default function RecentPassReferral() {
-  const [referrals, setReferrals] = useState([]);
+export default function RecentPassReferral({ referrals }) {
   const router = useRouter();
   const sliderRef = useRef(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    const q = query(
-      collection(db, COLLECTIONS.referral),
-      orderBy("timestamp", "desc"),
-      limit(5)
-    );
-
-    const unsubscribe = onSnapshot(
-      q,
-      (snapshot) => {
-        const data = snapshot.docs.map((doc) => {
-          const d = doc.data();
-          return {
-            id: doc.id,
-            name: d.cosmoOrbiter?.name || "Orbiter",
-            serviceName: d.service?.name || "Service",
-            createdAt: d.timestamp?.toDate?.() || null,
-            status: d.dealStatus || "Pending",
-          };
-        });
-
-        setReferrals(data);
-        setLoading(false);
-      },
-      () => {
-        setReferrals([]);
-        setLoading(false);
-      }
-    );
-
-    return () => unsubscribe();
-  }, []);
+  const loading = !referrals;
+  const safeReferrals = useMemo(
+    () =>
+      (referrals || []).map((item) => ({
+        ...item,
+        createdAt: item?.createdAt ? new Date(item.createdAt) : null,
+      })),
+    [referrals]
+  );
 
   const timeAgo = (date) => {
     if (!date) return "";
@@ -130,9 +95,9 @@ export default function RecentPassReferral() {
           </div>
         )}
 
-        {!loading && referrals.length > 0 && (
+        {!loading && safeReferrals.length > 0 && (
           <Slider ref={sliderRef} {...settings}>
-            {referrals.map((item) => (
+            {safeReferrals.map((item) => (
               <div key={item.id} className="px-2">
                 <div
                   onClick={() => router.push(`/ReferralList/${item.id}`)}
@@ -143,9 +108,7 @@ export default function RecentPassReferral() {
                       <h4 className="font-semibold text-slate-900 text-base">
                         {item.serviceName}
                       </h4>
-                      <p className="text-sm text-slate-500 mt-1">
-                        Passed by {item.name}
-                      </p>
+                      <p className="text-sm text-slate-500 mt-1">Passed by {item.name}</p>
                     </div>
 
                     <span
@@ -170,3 +133,4 @@ export default function RecentPassReferral() {
     </div>
   );
 }
+

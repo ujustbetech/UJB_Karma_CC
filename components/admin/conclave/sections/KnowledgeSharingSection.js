@@ -1,8 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { doc, getDoc, updateDoc, collection, getDocs } from "firebase/firestore";
-import { db } from "@/lib/firebase/firebaseClient";
+import { doc, getDoc, updateDoc, collection, getDocs, db } from "@/services/adminConclaveFirebaseService";
 import { COLLECTIONS } from "@/lib/utility_collection";
 
 import Card from "@/components/ui/Card";
@@ -239,4 +238,6 @@ export default function KnowledgeSharingSection({
     </div>
   );
 }
+
+
 

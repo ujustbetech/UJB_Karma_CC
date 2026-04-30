@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { doc, updateDoc, getDoc } from "firebase/firestore";
-import { db } from "@/lib/firebase/firebaseClient";
+import { doc, updateDoc, getDoc, db } from "@/services/adminProspectJourneyFirebaseService";
 import emailjs from "@emailjs/browser";
 import { COLLECTIONS } from "@/lib/utility_collection";
 import Swal from "sweetalert2";
@@ -176,4 +175,6 @@ https://firebasestorage.googleapis.com/v0/b/monthlymeetingapp.appspot.com/o/Case
 };
 
 export default Assessment;
+
+
 

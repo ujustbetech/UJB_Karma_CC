@@ -1,9 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
-import { db } from "@/lib/firebase/firebaseClient";
-import { collection, getDocs } from "firebase/firestore";
-import { COLLECTIONS } from "@/lib/utility_collection";
+import { useRef } from "react";
 import {
   Users,
   Sparkles,
@@ -19,66 +16,15 @@ export const forum = Forum({
   weight: "400",
 });
 
-export default function NetworkOverview() {
-  const [stats, setStats] = useState({
+export default function NetworkOverview({ stats }) {
+  const scrollRef = useRef(null);
+  const safeStats = stats || {
     totalOrbiters: 0,
     totalCosmOrbiters: 0,
     totalReferrals: 0,
     totalBusiness: 0,
-  });
-
-  const [loading, setLoading] = useState(true);
-  const scrollRef = useRef(null);
-
-  useEffect(() => {
-    async function fetchStats() {
-      try {
-        const [userSnap, referralSnap] = await Promise.all([
-          getDocs(collection(db, COLLECTIONS.userDetail)),
-          getDocs(collection(db, COLLECTIONS.referral)),
-        ]);
-
-        const totalOrbiters = userSnap.size;
-        let totalCosmOrbiters = 0;
-        let totalBusiness = 0;
-
-        referralSnap.forEach((doc) => {
-          const payments = doc.data().payments || [];
-
-          payments.forEach((p) => {
-            if (p.paymentFrom === "CosmoOrbiter") {
-              const amount = parseFloat(p.amountReceived);
-              if (!Number.isNaN(amount)) {
-                totalBusiness += amount;
-              }
-            }
-          });
-        });
-
-        referralSnap.forEach((doc) => {
-          totalBusiness += Number(doc.data().amount || 0);
-        });
-
-        setStats({
-          totalOrbiters,
-          totalCosmOrbiters,
-          totalReferrals: referralSnap.size,
-          totalBusiness,
-        });
-      } catch {
-        setStats({
-          totalOrbiters: 0,
-          totalCosmOrbiters: 0,
-          totalReferrals: 0,
-          totalBusiness: 0,
-        });
-      } finally {
-        setLoading(false);
-      }
-    }
-
-    fetchStats();
-  }, []);
+  };
+  const loading = !stats;
 
   const scroll = (dir) => {
     if (!scrollRef.current) return;
@@ -93,25 +39,25 @@ export default function NetworkOverview() {
     {
       icon: Users,
       label: "Total Orbiters",
-      value: stats.totalOrbiters,
+      value: safeStats.totalOrbiters,
       gradient: "from-blue-600 to-blue-500",
     },
     {
       icon: Sparkles,
       label: "CosmOrbiters",
-      value: stats.totalCosmOrbiters,
+      value: safeStats.totalCosmOrbiters,
       gradient: "from-purple-600 to-indigo-500",
     },
     {
       icon: Share2,
       label: "Total Referrals",
-      value: stats.totalReferrals,
+      value: safeStats.totalReferrals,
       gradient: "from-emerald-600 to-teal-500",
     },
     {
       icon: IndianRupee,
       label: "Business Generated",
-      value: `Rs ${stats.totalBusiness.toLocaleString()}`,
+      value: `Rs ${Number(safeStats.totalBusiness || 0).toLocaleString()}`,
       gradient: "from-orange-600 to-amber-500",
     },
   ];
@@ -172,3 +118,4 @@ export default function NetworkOverview() {
     </div>
   );
 }
+

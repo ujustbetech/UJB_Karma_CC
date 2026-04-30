@@ -2,8 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { db } from '@/lib/firebase/firebaseClient';
-import { collection, getDocs, doc, setDoc } from 'firebase/firestore';
+import { collection, getDocs, doc, setDoc, db } from '@/services/adminMonthlyMeetingFirebaseService';
 import { COLLECTIONS } from '@/lib/utility_collection';
 
 import Text from '@/components/ui/Text';
@@ -294,4 +293,6 @@ export default function AddUserSection({ eventId: propEventId }) {
     </Card>
   );
 }
+
+
 

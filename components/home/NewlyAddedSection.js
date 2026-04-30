@@ -1,52 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { db } from "@/lib/firebase/firebaseClient";
-import { collection, getDocs, orderBy, query, limit } from "firebase/firestore";
-import { COLLECTIONS } from "@/lib/utility_collection";
 import { useRouter } from "next/navigation";
 import { Sparkles } from "lucide-react";
 
-export default function NewlyAddedSection() {
+export default function NewlyAddedSection({ services }) {
   const router = useRouter();
-  const [services, setServices] = useState([]);
+  const safeServices = services || [];
 
-  useEffect(() => {
-    async function fetchNewServices() {
-      try {
-        const q = query(
-          collection(db, COLLECTIONS.userDetail),
-          orderBy("subscription.startDate", "desc"),
-          limit(5)
-        );
-
-        const snap = await getDocs(q);
-        const newServices = [];
-
-        snap.forEach((doc) => {
-          const data = doc.data();
-          const userServices = data.services || [];
-
-          userServices.forEach((service) => {
-            newServices.push({
-              businessName: data.BusinessName,
-              serviceName: service.name,
-              description: service.description,
-              ujbCode: data.UJBCode,
-            });
-          });
-        });
-
-        setServices(newServices.slice(0, 4));
-      } catch {
-        setServices([]);
-      }
-    }
-
-    fetchNewServices();
-  }, []);
-
-  if (services.length === 0) return null;
+  if (safeServices.length === 0) return null;
 
   return (
     <div className="space-y-4">
@@ -56,7 +17,7 @@ export default function NewlyAddedSection() {
       </div>
 
       <div className="flex gap-3 overflow-x-auto pb-2">
-        {services.map((item, index) => (
+        {safeServices.map((item, index) => (
           <div key={index} className="min-w-[240px] bg-white rounded-2xl p-4 shadow-md">
             <span className="text-[10px] text-orange-500 font-semibold">NEW</span>
             <h4 className="text-sm font-semibold text-slate-900 mt-1">{item.serviceName}</h4>
@@ -73,3 +34,4 @@ export default function NewlyAddedSection() {
     </div>
   );
 }
+

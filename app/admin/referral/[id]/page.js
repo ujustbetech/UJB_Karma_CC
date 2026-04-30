@@ -621,3 +621,5 @@ export default function AdminReferralDetailPage() {
     </div>
   );
 }
+
+

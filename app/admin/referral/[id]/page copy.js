@@ -11,9 +11,8 @@ import {
     orderBy,
     limit,
     startAfter,
-} from 'firebase/firestore';
-
-import { db } from '@/lib/firebase/firebaseClient';
+    db,
+} from '@/services/adminReferralLegacyFirebaseService';
 import { COLLECTIONS } from '@/lib/utility_collection';
 
 import AdminLayout from '@/components/layout/AdminLayout';
@@ -543,4 +542,6 @@ export default function ManageReferralsPage() {
         </>
     );
 }
+
+
 

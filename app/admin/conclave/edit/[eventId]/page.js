@@ -3,16 +3,10 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import {
-  doc,
-  getDoc,
-  getDocs,
-  collection,
-  updateDoc,
-  addDoc,
-  Timestamp,
-} from "firebase/firestore";
-import { db } from "@/lib/firebase/firebaseClient";
-import { COLLECTIONS } from "@/lib/utility_collection";
+  createAdminConclaveMeeting,
+  fetchAdminConclave,
+  updateAdminConclave,
+} from "@/services/adminConclaveService";
 
 import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
@@ -20,6 +14,20 @@ import Text from "@/components/ui/Text";
 import Input from "@/components/ui/Input";
 import FormField from "@/components/ui/FormField";
 import { useToast } from "@/components/ui/ToastProvider";
+
+function convertDateValue(value) {
+  if (!value) return "";
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+
+  const pad = (part) => String(part).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(
+    date.getDate()
+  )}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
 
 export default function EditConclavePage() {
   const { eventId } = useParams();
@@ -50,56 +58,25 @@ export default function EditConclavePage() {
     venue: "",
   });
 
-  const convertTimestampToInput = (ts) => {
-    if (!ts?.seconds) return "";
-    const date = new Date(ts.seconds * 1000);
-    const pad = (value) => value.toString().padStart(2, "0");
-
-    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(
-      date.getDate()
-    )}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
-  };
-
-  const convertInputToTimestamp = (value) => {
-    if (!value) return null;
-    return Timestamp.fromDate(new Date(value));
-  };
-
   const fetchData = async () => {
     setLoading(true);
     try {
-      const snap = await getDoc(doc(db, COLLECTIONS.conclaves, id));
+      const data = await fetchAdminConclave(id);
+      const detail = data.conclave || {};
 
-      if (snap.exists()) {
-        const data = snap.data();
-
-        setConclave({
-          conclaveStream: data.conclaveStream || "",
-          startDate: convertTimestampToInput(data.startDate),
-          initiationDate: convertTimestampToInput(data.initiationDate),
-          leader: data.leader || "",
-          ntMembers: data.ntMembers || [],
-          orbiters: data.orbiters || [],
-          leaderRole: data.leaderRole || "",
-          ntRoles: data.ntRoles || "",
-        });
-      }
-
-      const meetingsSnap = await getDocs(
-        collection(db, COLLECTIONS.conclaves, id, "meetings")
-      );
-
-      const list = meetingsSnap.docs.map((docSnap) => ({
-        id: docSnap.id,
-        ...docSnap.data(),
-      }));
-
-      list.sort(
-        (a, b) => (b.datetime?.seconds || 0) - (a.datetime?.seconds || 0)
-      );
-
-      setMeetings(list);
-    } catch {
+      setConclave({
+        conclaveStream: detail.name || detail.conclaveStream || "",
+        startDate: convertDateValue(detail.startDate),
+        initiationDate: convertDateValue(detail.initiationDate),
+        leader: detail.leader || "",
+        ntMembers: detail.ntMembers || [],
+        orbiters: detail.orbiters || [],
+        leaderRole: detail.leaderRole || "",
+        ntRoles: detail.ntRoles || "",
+      });
+      setMeetings(data.meetings || []);
+    } catch (error) {
+      console.error(error);
       toast.error("Failed to load data");
     } finally {
       setLoading(false);
@@ -107,7 +84,9 @@ export default function EditConclavePage() {
   };
 
   useEffect(() => {
-    if (id) fetchData();
+    if (id) {
+      fetchData();
+    }
   }, [id]);
 
   const handleChange = (name, value) => {
@@ -128,14 +107,10 @@ export default function EditConclavePage() {
     event.preventDefault();
 
     try {
-      await updateDoc(doc(db, COLLECTIONS.conclaves, id), {
-        ...conclave,
-        startDate: convertInputToTimestamp(conclave.startDate),
-        initiationDate: convertInputToTimestamp(conclave.initiationDate),
-      });
-
+      await updateAdminConclave(id, conclave);
       toast.success("Updated successfully");
-    } catch {
+    } catch (error) {
+      console.error(error);
       toast.error("Update failed");
     }
   };
@@ -144,16 +119,20 @@ export default function EditConclavePage() {
     event.preventDefault();
 
     try {
-      await addDoc(collection(db, COLLECTIONS.conclaves, id, "meetings"), {
-        ...meetingForm,
-        datetime: Timestamp.fromDate(new Date(meetingForm.datetime)),
-        createdAt: Timestamp.now(),
-      });
-
+      await createAdminConclaveMeeting(id, meetingForm);
       toast.success("Meeting added");
       setShowMeetingForm(false);
-      fetchData();
-    } catch {
+      setMeetingForm({
+        meetingName: "",
+        datetime: "",
+        agenda: "",
+        mode: "online",
+        link: "",
+        venue: "",
+      });
+      await fetchData();
+    } catch (error) {
+      console.error(error);
       toast.error("Failed to add meeting");
     }
   };
@@ -182,6 +161,7 @@ export default function EditConclavePage() {
                 placeholder="Meeting Name"
                 onChange={handleMeetingChange}
                 className="w-full border p-2 rounded"
+                value={meetingForm.meetingName}
               />
 
               <input
@@ -189,6 +169,7 @@ export default function EditConclavePage() {
                 name="datetime"
                 onChange={handleMeetingChange}
                 className="w-full border p-2 rounded"
+                value={meetingForm.datetime}
               />
 
               <textarea
@@ -196,6 +177,7 @@ export default function EditConclavePage() {
                 placeholder="Agenda"
                 onChange={handleMeetingChange}
                 className="w-full border p-2 rounded"
+                value={meetingForm.agenda}
               />
 
               <button className="bg-blue-600 text-white px-4 py-2 rounded">
@@ -241,9 +223,7 @@ export default function EditConclavePage() {
         <FormField label="Conclave Name">
           <Input
             value={conclave.conclaveStream}
-            onChange={(event) =>
-              handleChange("conclaveStream", event.target.value)
-            }
+            onChange={(event) => handleChange("conclaveStream", event.target.value)}
           />
         </FormField>
 
@@ -266,41 +246,39 @@ export default function EditConclavePage() {
 
         <FormField label="Orbiters">
           <div className="flex flex-wrap gap-2">
-            {conclave.orbiters.map((member, index) => (
+            {conclave.orbiters.map((orbiter, index) => (
               <span
                 key={index}
-                className="bg-green-100 px-3 py-1 rounded-full text-sm"
+                className="bg-purple-100 px-3 py-1 rounded-full text-sm"
               >
-                {member}
+                {orbiter}
               </span>
             ))}
           </div>
         </FormField>
 
-        <FormField label="Start Date">
-          <input
-            type="datetime-local"
-            value={conclave.startDate}
-            onChange={(event) =>
-              handleChange("startDate", event.target.value)
-            }
-            className="w-full border p-2 rounded"
-          />
-        </FormField>
+        <div className="grid md:grid-cols-2 gap-4">
+          <FormField label="Start Date">
+            <Input
+              type="datetime-local"
+              value={conclave.startDate}
+              onChange={(event) => handleChange("startDate", event.target.value)}
+            />
+          </FormField>
 
-        <FormField label="Initiation Date">
-          <input
-            type="datetime-local"
-            value={conclave.initiationDate}
-            onChange={(event) =>
-              handleChange("initiationDate", event.target.value)
-            }
-            className="w-full border p-2 rounded"
-          />
-        </FormField>
+          <FormField label="Initiation Date">
+            <Input
+              type="datetime-local"
+              value={conclave.initiationDate}
+              onChange={(event) => handleChange("initiationDate", event.target.value)}
+            />
+          </FormField>
+        </div>
 
         <Button type="submit">Save Changes</Button>
       </form>
     </Card>
   );
 }
+
+

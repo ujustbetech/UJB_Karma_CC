@@ -215,3 +215,4 @@ function LongTextCard({ text }) {
     </p>
   );
 }
+

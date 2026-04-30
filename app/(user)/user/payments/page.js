@@ -2,13 +2,11 @@
 
 import { useEffect, useState } from "react";
 import { Receipt, Wallet } from "lucide-react";
-import { useAuth } from "@/context/authContext";
 import { useToast } from "@/components/ui/ToastProvider";
-import { fetchUserPayments } from "@/services/redeemService";
+import { fetchUserPayments } from "@/services/userRedeemService";
 import UserPageHeader from "@/components/user/UserPageHeader";
 
 export default function UserPaymentsPage() {
-  const { user, loading } = useAuth();
   const toast = useToast();
 
   const [payments, setPayments] = useState([]);
@@ -16,16 +14,10 @@ export default function UserPaymentsPage() {
   const [loadingPayments, setLoadingPayments] = useState(true);
 
   useEffect(() => {
-    if (loading) return;
-
     const loadPayments = async () => {
       try {
         setLoadingPayments(true);
-
-        const result = await fetchUserPayments({
-          ujbCode: user?.profile?.ujbCode,
-          category: user?.profile?.category,
-        });
+        const result = await fetchUserPayments();
 
         setPayments(result.payments);
         setTotalReceived(result.totalReceived);
@@ -38,7 +30,7 @@ export default function UserPaymentsPage() {
     };
 
     loadPayments();
-  }, [loading, toast, user]);
+  }, [toast]);
 
   return (
     <main className="min-h-screen py-6">
@@ -140,3 +132,5 @@ function InfoBlock({ label, lines }) {
     </div>
   );
 }
+
+

@@ -1,20 +1,9 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { db, storage } from '@/lib/firebase/firebaseClient';
-import {
-  ref,
-  uploadBytesResumable,
-  getDownloadURL,
-  deleteObject
-} from 'firebase/storage';
-import {
-  doc,
-  updateDoc,
-  arrayUnion,
-  arrayRemove,
-  getDoc
-} from 'firebase/firestore';
+
+import { ref, uploadBytesResumable, getDownloadURL, deleteObject, storage } from '@/services/adminMonthlyMeetingStorageService';
+import { doc, updateDoc, arrayUnion, arrayRemove, getDoc, db } from '@/services/adminMonthlyMeetingFirebaseService';
 import { COLLECTIONS } from '@/lib/utility_collection';
 
 import {
@@ -348,4 +337,7 @@ export default function DocumentUploadSection({ eventID, fetchData }) {
     </Card>
   );
 }
+
+
+
 

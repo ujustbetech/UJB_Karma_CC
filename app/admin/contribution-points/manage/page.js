@@ -9,7 +9,7 @@ import {
   fetchCpActivityDefinitions,
   saveCpActivityDefinition,
   toggleCpActivityStatus,
-} from "@/services/contributionPointService";
+} from "@/services/adminContributionPointService";
 
 const EMPTY_FORM = {
   activityName: "",
@@ -367,3 +367,5 @@ export default function ContributionPointActivityManagePage() {
     </div>
   );
 }
+
+

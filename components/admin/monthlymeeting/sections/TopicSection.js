@@ -7,8 +7,7 @@ import {
   forwardRef,
   useImperativeHandle,
 } from 'react';
-import { doc, updateDoc, collection, getDocs } from 'firebase/firestore';
-import { db } from '@/lib/firebase/firebaseClient';
+import { doc, updateDoc, collection, getDocs, db } from '@/services/adminMonthlyMeetingFirebaseService';
 import { COLLECTIONS } from '@/lib/utility_collection';
 
 import { BookOpen, Sparkles } from 'lucide-react';
@@ -261,4 +260,6 @@ const TopicSection = forwardRef(({ eventID, data, fetchData }, ref) => {
 });
 
 export default TopicSection;
+
+
 

@@ -5,10 +5,10 @@ import { useParams } from "next/navigation";
 import Card from "@/components/ui/Card";
 import Text from "@/components/ui/Text";
 import {
-  fetchCpBoardSummary,
   filterCpActivities,
   getCpCategoryLabel,
-} from "@/services/contributionPointService";
+} from "@/services/contributionPointShared";
+import { fetchCpBoardSummary } from "@/services/adminContributionPointService";
 
 const CATEGORY_OPTIONS = ["All", "R", "H", "W"];
 
@@ -158,3 +158,5 @@ export default function AdminContributionPointDetailsPage() {
     </div>
   );
 }
+
+

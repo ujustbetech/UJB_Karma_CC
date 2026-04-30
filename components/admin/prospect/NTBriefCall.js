@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { doc, getDoc, updateDoc, collection, getDocs } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, collection, getDocs } from '@/services/adminProspectJourneyFirebaseService';
 import { COLLECTIONS } from "@/lib/utility_collection";
 import emailjs from '@emailjs/browser';
-import { db } from '@/lib/firebase/firebaseClient';
 import { sendWhatsAppTemplateRequest } from '@/utils/whatsappClient';
 
 const Followup = ({ id, data = { followups: [], comments: [] ,event: [] }, fetchData }) => {
@@ -1276,4 +1275,6 @@ Send
 };
 
 export default Followup;
+
+
 

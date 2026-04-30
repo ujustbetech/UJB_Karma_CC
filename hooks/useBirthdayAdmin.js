@@ -4,7 +4,7 @@ import {
   fetchBirthdayUsersForAdmin,
   markBirthdayMessageSent,
   sendBirthdayMessage,
-} from "@/services/birthdayService";
+} from "@/services/adminBirthdayService";
 
 export function useBirthdayAdmin(toast) {
   const [users, setUsers] = useState([]);

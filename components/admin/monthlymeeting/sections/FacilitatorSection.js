@@ -1,8 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { collection, getDocs, doc, updateDoc } from 'firebase/firestore';
-import { db } from '@/lib/firebase/firebaseClient';
+import { collection, getDocs, doc, updateDoc, db } from '@/services/adminMonthlyMeetingFirebaseService';
 import { COLLECTIONS } from '@/lib/utility_collection';
 
 import Card from '@/components/ui/Card';
@@ -256,4 +255,6 @@ export default function FacilitatorSection({ eventId, data, fetchData }) {
     </Card>
   );
 }
+
+
 

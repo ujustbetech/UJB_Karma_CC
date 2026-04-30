@@ -195,3 +195,4 @@ export default function PersonalKYCSection({ profile }) {
     </Card>
   );
 }
+

@@ -286,3 +286,5 @@ const Detail = ({ label, value }) => (
         <p className="font-medium text-slate-800">{value || "-"}</p>
     </div>
 );
+
+

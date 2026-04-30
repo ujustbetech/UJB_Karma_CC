@@ -314,3 +314,4 @@ function BarChartView({ data }) {
   );
 }
 
+

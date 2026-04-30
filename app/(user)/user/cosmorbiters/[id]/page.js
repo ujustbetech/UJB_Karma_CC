@@ -25,26 +25,16 @@ import {
 
 import { useReferral } from "@/hooks/useReferral";
 import { useToast } from "@/components/ui/ToastProvider";
-import {
-  getFirestore,
-  doc,
-  getDoc,
-  collection,
-  query,
-  where,
-  setDoc,
-  deleteDoc,
-  onSnapshot,
-} from "firebase/firestore";
-import { app } from "@/lib/firebase/firebaseClient";
-import { COLLECTIONS } from "@/lib/utility_collection";
 import { buildDuplicateKeyFromReferralRecord } from "@/lib/referrals/referralWorkflow.mjs";
+import {
+  addCosmOrbiterFavorite,
+  fetchCosmOrbiterDetails,
+  removeCosmOrbiterFavorite,
+} from "@/services/cosmorbitersService";
 
 import OfferingCarousel from "@/components/cosmorbiters/OfferingCarousel";
 import ServiceDetailModal from "@/components/cosmorbiters/ServiceDetailModal";
 import ReferralModal from "@/components/cosmorbiters/ReferralModal";
-
-const db = getFirestore(app);
 
 function BusinessProfileSkeleton() {
   return (
@@ -127,102 +117,26 @@ export default function ReferralDetails() {
     [existingReferrals]
   );
 
-  const normalizeArrayField = (value) => {
-    if (!value || value === "-" || value === "aEUR") return [];
-    if (Array.isArray(value)) return value.filter(Boolean);
-    if (typeof value === "string") return [value];
-    return [];
-  };
-
-  const getCoverImage = (item) =>
-    item?.imageURL ||
-    item?.images?.find?.((image) => image?.isCover && image?.url)?.url ||
-    item?.images?.[0]?.url ||
-    "";
-
   useEffect(() => {
     if (!id) return;
 
-    const fetchBusiness = async () => {
-      const snap = await getDoc(doc(db, COLLECTIONS.userDetail, id));
-      if (!snap.exists()) return;
-
-      const data = snap.data();
-
-      setUserDetails({
-        name: data.Name || "",
-        email: data.Email || "",
-        phone: data.MobileNo || "",
-        ujbCode: data.UJBCode || "",
-        businessName: data.BusinessName || "",
-        businessDetails: data.BusinessHistory || "",
-        profilePic: data.ProfilePhotoURL || "",
-        logo: data.BusinessLogo || "",
-        Locality: data.Locality || "",
-        tagline: data.TagLine || "",
-        category1: data.Category1 || "",
-        category2: data.Category2 || "",
-        businessStage: data.BusinessStage || "",
-        professionType: data.ProfessionType || "",
-        skills: data.Skills || [],
-        languages: normalizeArrayField(data.LanguagesKnown),
-        mentorName: data.MentorName || "",
-        mentorPhone: data.MentorPhone || "",
-        subscriptionStatus: data.subscription?.status || null,
-        subscriptionStart: data.subscription?.startDate || null,
-        website: data.Website || data.website || "",
-      });
-
-      const rawServices = Object.values(data.services || []);
-      const rawProducts = Object.values(data.products || []);
-
-      setServices(
-        rawServices.map((s, index) => ({
-          id: `service_${index}`,
-          label: s.name || "",
-          description: s.description || "",
-          imageURL: getCoverImage(s),
-          type: "service",
-          raw: s,
-        }))
-      );
-
-      setProducts(
-        rawProducts.map((p, index) => ({
-          id: `product_${index}`,
-          label: p.name || "",
-          description: p.description || "",
-          imageURL: getCoverImage(p),
-          type: "product",
-          raw: p,
-        }))
-      );
+    const loadDetails = async () => {
+      try {
+        const data = await fetchCosmOrbiterDetails(id);
+        setUserDetails(data.business || null);
+        setOrbiterDetails(data.orbiter || null);
+        setServices(data.services || []);
+        setProducts(data.products || []);
+        setIsFavorite(Boolean(data.isFavorite));
+        setReferralCount(Number(data.referralCount || 0));
+        setExistingReferrals(data.existingReferrals || []);
+      } catch (error) {
+        console.error("Failed to load CosmOrbiter details:", error);
+      }
     };
 
-    fetchBusiness();
-  }, [id]);
-
-  useEffect(() => {
-    if (!currentUserUjbCode) return;
-
-    const fetchOrbiter = async () => {
-      const snap = await getDoc(doc(db, COLLECTIONS.userDetail, currentUserUjbCode));
-      if (!snap.exists()) return;
-
-      const data = snap.data();
-
-      setOrbiterDetails({
-        name: data.Name || "",
-        email: data.Email || "",
-        phone: data.MobileNo || "",
-        ujbCode: data.UJBCode || "",
-        mentorName: data.MentorName || "",
-        mentorPhone: data.MentorPhone || "",
-      });
-    };
-
-    fetchOrbiter();
-  }, [currentUserUjbCode]);
+    loadDetails();
+  }, [id, currentUserUjbCode]);
 
   const handlePassReferral = async (payload) => {
     try {
@@ -250,92 +164,19 @@ export default function ReferralDetails() {
     }
   };
 
-  useEffect(() => {
-    if (!currentUserUjbCode || !userDetails?.ujbCode) return;
-
-    const checkFavorite = async () => {
-      try {
-        const favRef = doc(db, "favorites", `${currentUserUjbCode}_${userDetails.ujbCode}`);
-        const snap = await getDoc(favRef);
-        setIsFavorite(snap.exists());
-      } catch (err) {
-        console.error("Favorite check error:", err);
-      }
-    };
-
-    checkFavorite();
-  }, [currentUserUjbCode, userDetails?.ujbCode]);
-
   const toggleFavorite = async () => {
     try {
-      if (!currentUserUjbCode || !userDetails?.ujbCode) return;
-
-      const favRef = doc(db, "favorites", `${currentUserUjbCode}_${userDetails.ujbCode}`);
-
       if (isFavorite) {
-        await deleteDoc(favRef);
+        await removeCosmOrbiterFavorite(id);
         setIsFavorite(false);
       } else {
-        await setDoc(favRef, {
-          orbiter: currentUserUjbCode,
-          cosmoUjbCode: userDetails.ujbCode,
-          timestamp: new Date(),
-        });
+        await addCosmOrbiterFavorite(id);
         setIsFavorite(true);
       }
     } catch (err) {
       console.error("Favorite toggle error:", err);
     }
   };
-
-  useEffect(() => {
-    if (!userDetails?.ujbCode) return;
-
-    const referralQuery = query(
-      collection(db, COLLECTIONS.referral),
-      where("cosmoUjbCode", "==", userDetails.ujbCode)
-    );
-
-    const unsubscribe = onSnapshot(
-      referralQuery,
-      (snapshot) => {
-        setReferralCount(snapshot.size);
-      },
-      (error) => {
-        console.error("Error fetching referral count:", error);
-      }
-    );
-
-    return () => unsubscribe();
-  }, [userDetails?.ujbCode]);
-
-  useEffect(() => {
-    if (!currentUserUjbCode || !userDetails?.ujbCode) {
-      setExistingReferrals([]);
-      return;
-    }
-
-    const referralQuery = query(
-      collection(db, COLLECTIONS.referral),
-      where("orbiter.ujbCode", "==", currentUserUjbCode)
-    );
-
-    const unsubscribe = onSnapshot(
-      referralQuery,
-      (snapshot) => {
-        const pairReferrals = snapshot.docs
-          .map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }))
-          .filter((referral) => referral.cosmoUjbCode === userDetails.ujbCode);
-
-        setExistingReferrals(pairReferrals);
-      },
-      (error) => {
-        console.error("Error fetching existing referrals:", error);
-      }
-    );
-
-    return () => unsubscribe();
-  }, [currentUserUjbCode, userDetails?.ujbCode]);
 
   const calculateAverageCommission = () => {
     const allItems = [...services, ...products];
@@ -728,3 +569,5 @@ export default function ReferralDetails() {
     </main>
   );
 }
+
+
