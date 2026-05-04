@@ -193,6 +193,14 @@ export default function AdditionalInfoSection({ profile }) {
           />
         </FormField>
 
+        <FormField label="Contribution ways (UJustBe)">
+          <TagsInput
+            value={normalizeTags(formData?.ContributionAreainUJustBe)}
+            onChange={(v) => update('ContributionAreainUJustBe', v)}
+            placeholder="Ways prospect can contribute — press Enter after each"
+          />
+        </FormField>
+
         <FormField label="Skills">
           <TagsInput
             value={normalizeTags(formData?.Skills)}

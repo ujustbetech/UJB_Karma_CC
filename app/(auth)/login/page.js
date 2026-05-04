@@ -52,6 +52,14 @@ function validateEmail(value) {
   );
 }
 
+function RequiredMark() {
+  return (
+    <span className="ml-1 text-rose-500" aria-hidden="true">
+      *
+    </span>
+  );
+}
+
 function buildAdminSessionApiError(status, message) {
   if (status === 404) {
     return "Admin session API is unavailable. Restart the app and verify the current server includes /api/admin/session routes.";
@@ -317,49 +325,63 @@ export default function LoginPage() {
             <div className="flex flex-wrap items-center justify-between gap-4">
               <div className="inline-flex items-center gap-2 rounded-full border border-sky-200 bg-white/80 px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.22em] text-sky-700 backdrop-blur">
                 <ShieldCheck size={14} />
-                UJustBe Admin Access
+                Secure Sign In
               </div>
 
               <div className="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-4 py-2 text-xs font-medium text-emerald-700">
                 <span className="h-2 w-2 rounded-full bg-emerald-500" />
-                Secure Workspace
+                Protected Access
               </div>
             </div>
 
             <div className="grid gap-8 xl:grid-cols-[minmax(0,1fr)_300px] xl:items-start">
               <div className="max-w-2xl">
-                <div className="flex items-center gap-5">
-                  <div className="rounded-[28px] border border-white/90 bg-white/90 p-3 shadow-[0_16px_36px_rgba(148,163,184,0.18)] backdrop-blur">
-                    <Image
-                      src="/ujustbe-logo.svg"
-                      alt="UJustBe logo"
-                      width={120}
-                      height={120}
-                      priority
-                      className="h-20 w-20 rounded-[22px] object-cover sm:h-24 sm:w-24"
-                    />
-                  </div>
-
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-[0.26em] text-sky-700/80">
-                      UJustBe Universe
-                    </p>
-                    <h1 className="mt-3 max-w-xl text-3xl font-semibold leading-tight text-slate-900 sm:text-4xl xl:text-[2.9rem]">
-                      Admin Workspace Login
-                    </h1>
-                  </div>
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.26em] text-sky-700/80">
+                    Workspace Access
+                  </p>
+                  <h1 className="mt-3 max-w-xl text-3xl font-semibold leading-tight text-slate-900 sm:text-4xl xl:text-[2.9rem]">
+                    Sign in to continue
+                  </h1>
                 </div>
 
                 <p className="mt-6 max-w-xl text-sm leading-7 text-slate-600 sm:text-base">
-                  Secure access for authorized administrators to manage platform
-                  operations.
+                  Use your approved account to access your dashboard, settings,
+                  and everyday workspace tools. Choose the sign-in method that
+                  works best for you.
                 </p>
+
+                <div className="relative mt-8 overflow-hidden rounded-[30px] border border-white/90 bg-slate-900 shadow-[0_20px_45px_rgba(15,23,42,0.14)]">
+                  <Image
+                    src="/space-background.jpg"
+                    alt="Abstract workspace background"
+                    width={960}
+                    height={640}
+                    priority
+                    className="h-[260px] w-full object-cover"
+                  />
+                  <div className="absolute inset-0 bg-[linear-gradient(135deg,rgba(15,23,42,0.14),rgba(15,23,42,0.68))]" />
+                  <div className="absolute inset-x-0 bottom-0 p-6 sm:p-7">
+                    <div className="max-w-md rounded-[24px] border border-white/20 bg-white/12 p-5 text-white backdrop-blur-md">
+                      <p className="text-xs font-semibold uppercase tracking-[0.24em] text-sky-100/90">
+                        Ready When You Are
+                      </p>
+                      <p className="mt-3 text-2xl font-semibold leading-tight">
+                        A simple, secure way back into your workspace.
+                      </p>
+                      <p className="mt-3 text-sm leading-6 text-slate-100/88">
+                        Sign in with a provider, use your email and password, or
+                        request a reset link if you need help getting started.
+                      </p>
+                    </div>
+                  </div>
+                </div>
 
                 <div className="mt-8 grid gap-4 sm:grid-cols-2 xl:max-w-2xl xl:grid-cols-3">
                   {[
-                    "Microsoft and Google sign-in",
-                    "Email and password authentication",
-                    "Password reset support",
+                    "Multiple sign-in options",
+                    "Protected session handling",
+                    "Password recovery support",
                   ].map((item) => (
                     <div
                       key={item}
@@ -377,22 +399,23 @@ export default function LoginPage() {
               <div className="grid gap-4">
                 <div className="rounded-[26px] border border-white/90 bg-white/82 p-5 shadow-sm backdrop-blur">
                   <p className="text-xs font-semibold uppercase tracking-[0.22em] text-sky-700/75">
-                    Access Overview
+                    Quick Overview
                   </p>
                   <p className="mt-3 text-xl font-semibold text-slate-900">
-                    Authorized admin sign-in
+                    Clear and flexible access
                   </p>
                   <p className="mt-3 text-sm leading-6 text-slate-600">
-                    Use your approved account to continue to the admin dashboard.
+                    Sign in with the method you prefer and continue where you
+                    left off.
                   </p>
                 </div>
 
                 <div className="rounded-[26px] border border-slate-200 bg-slate-50/90 p-5">
                   <div className="grid gap-4 sm:grid-cols-3 xl:grid-cols-1">
                     {[
-                      ["01", "Role-based access"],
-                      ["02", "Secure authentication"],
-                      ["03", "Password recovery"],
+                      ["01", "Choose a sign-in method"],
+                      ["02", "Enter your credentials securely"],
+                      ["03", "Reset access if needed"],
                     ].map(([index, label]) => (
                       <div key={index} className="flex items-start gap-3">
                         <span className="mt-0.5 inline-flex h-8 w-8 items-center justify-center rounded-full bg-white text-xs font-semibold text-slate-700 shadow-sm">
@@ -470,6 +493,7 @@ export default function LoginPage() {
                       className="mb-2 block text-sm font-medium text-slate-700"
                     >
                       Email address
+                      <RequiredMark />
                     </label>
                     <div className="relative">
                       <Mail
@@ -480,6 +504,10 @@ export default function LoginPage() {
                         id="admin-email"
                         type="email"
                         autoComplete="username"
+                        required
+                        aria-required="true"
+                        inputMode="email"
+                        pattern="[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$"
                         value={email}
                         onChange={(e) => {
                           setEmail(e.target.value);
@@ -500,6 +528,7 @@ export default function LoginPage() {
                       className="mb-2 block text-sm font-medium text-slate-700"
                     >
                       Password
+                      <RequiredMark />
                     </label>
                     <div className="relative">
                       <LockKeyhole
@@ -510,6 +539,8 @@ export default function LoginPage() {
                         id="admin-password"
                         type="password"
                         autoComplete="current-password"
+                        required
+                        aria-required="true"
                         value={password}
                         onChange={(e) => {
                           setPassword(e.target.value);
@@ -567,6 +598,7 @@ export default function LoginPage() {
                       className="mb-2 block text-sm font-medium text-slate-700"
                     >
                       Reset email
+                      <RequiredMark />
                     </label>
                     <div className="relative">
                       <Mail
@@ -577,6 +609,10 @@ export default function LoginPage() {
                         id="reset-email"
                         type="email"
                         autoComplete="email"
+                        required
+                        aria-required="true"
+                        inputMode="email"
+                        pattern="[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$"
                         value={resetEmail}
                         onChange={(e) => {
                           setResetEmail(e.target.value);

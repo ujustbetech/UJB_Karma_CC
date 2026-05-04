@@ -266,6 +266,247 @@ function getProspectField(prospect, keys = []) {
   return "";
 }
 
+function normalizeStringValue(value) {
+  return String(value || "").trim();
+}
+
+function getFirstNonEmptyValue(...values) {
+  for (const value of values) {
+    if (value == null) continue;
+
+    if (Array.isArray(value)) {
+      if (value.length > 0) {
+        return value;
+      }
+      continue;
+    }
+
+    if (String(value).trim() !== "") {
+      return value;
+    }
+  }
+
+  return "";
+}
+
+function normalizeTagArray(value) {
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => normalizeStringValue(item))
+      .filter(Boolean);
+  }
+
+  if (typeof value === "string") {
+    return value
+      .split(",")
+      .map((item) => normalizeStringValue(item))
+      .filter(Boolean);
+  }
+
+  return [];
+}
+
+function normalizeMultiSelectWithOther(values, triggerLabel, otherValue) {
+  const normalizedValues = normalizeTagArray(values);
+  const normalizedOther = normalizeStringValue(otherValue);
+
+  if (
+    normalizedOther &&
+    normalizedValues.includes(triggerLabel) &&
+    !normalizedValues.includes(normalizedOther)
+  ) {
+    return [...normalizedValues, normalizedOther];
+  }
+
+  return normalizedValues;
+}
+
+function isMissingUserField(value) {
+  if (Array.isArray(value)) {
+    return value.length === 0;
+  }
+
+  return normalizeStringValue(value) === "";
+}
+
+function assignIfMissing(target, currentData, key, value) {
+  const normalizedValue = Array.isArray(value)
+    ? value.filter(Boolean)
+    : normalizeStringValue(value);
+
+  if (
+    (Array.isArray(normalizedValue) && normalizedValue.length === 0) ||
+    (!Array.isArray(normalizedValue) && normalizedValue === "")
+  ) {
+    return;
+  }
+
+  if (isMissingUserField(currentData?.[key])) {
+    target[key] = normalizedValue;
+  }
+}
+
+function getComparableTimestamp(value) {
+  if (!value) return 0;
+
+  if (value instanceof Date) {
+    return value.getTime();
+  }
+
+  if (typeof value?.toDate === "function") {
+    return value.toDate().getTime();
+  }
+
+  if (typeof value?.seconds === "number") {
+    return value.seconds * 1000;
+  }
+
+  const parsed = new Date(value).getTime();
+  return Number.isNaN(parsed) ? 0 : parsed;
+}
+
+function pickLatestEntry(entries = []) {
+  return [...entries].sort((left, right) => {
+    const leftStamp =
+      getComparableTimestamp(left?.updatedAt) ||
+      getComparableTimestamp(left?.createdAt) ||
+      getComparableTimestamp(left?.assessmentDate);
+    const rightStamp =
+      getComparableTimestamp(right?.updatedAt) ||
+      getComparableTimestamp(right?.createdAt) ||
+      getComparableTimestamp(right?.assessmentDate);
+
+    return rightStamp - leftStamp;
+  })[0] || null;
+}
+
+async function fetchProspectSubcollectionEntries(db, prospectId, subcollectionName) {
+  if (!prospectId) {
+    return [];
+  }
+
+  const snapshot = await db
+    .collection(prospectCollectionName)
+    .doc(prospectId)
+    .collection(subcollectionName)
+    .get();
+
+  return snapshot.docs.map((docSnap) => ({
+    id: docSnap.id,
+    ...docSnap.data(),
+  }));
+}
+
+function buildOrbiterMigrationFields({
+  prospect,
+  assessmentForm,
+  feedbackForm,
+  formattedDob,
+}) {
+  const company = normalizeStringValue(
+    getFirstNonEmptyValue(
+      assessmentForm?.companyName,
+      assessmentForm?.company,
+      assessmentForm?.Company,
+      assessmentForm?.CompanyName,
+      prospect?.companyName,
+      prospect?.company,
+      prospect?.Company,
+      prospect?.CompanyName
+    )
+  );
+  const hobbies = normalizeTagArray(
+    getFirstNonEmptyValue(
+      prospect?.hobbies,
+      prospect?.Hobbies,
+      prospect?.sections?.[0]?.hobbies,
+      prospect?.sections?.[0]?.Hobbies
+    )
+  );
+
+  return {
+    DOB: normalizeStringValue(formattedDob),
+    Hobbies: hobbies,
+    Country: normalizeStringValue(
+      getFirstNonEmptyValue(
+        assessmentForm?.country,
+        assessmentForm?.Country,
+        prospect?.country,
+        prospect?.Country
+      )
+    ),
+    City: normalizeStringValue(
+      getFirstNonEmptyValue(
+        assessmentForm?.city,
+        assessmentForm?.City,
+        prospect?.city,
+        prospect?.City
+      )
+    ),
+    Company: company,
+    CompanyName: company,
+    Industry: normalizeStringValue(
+      getFirstNonEmptyValue(
+        assessmentForm?.industry,
+        assessmentForm?.Industry,
+        prospect?.industry,
+        prospect?.Industry
+      )
+    ),
+    ProfessionType: normalizeStringValue(
+      getFirstNonEmptyValue(
+        assessmentForm?.profession,
+        assessmentForm?.Profession,
+        assessmentForm?.professionType,
+        assessmentForm?.ProfessionType,
+        prospect?.occupation,
+        prospect?.profession,
+        prospect?.ProfessionType
+      )
+    ),
+    InterestArea: normalizeMultiSelectWithOther(
+      getFirstNonEmptyValue(
+        assessmentForm?.interestAreas,
+        assessmentForm?.InterestAreas,
+        prospect?.interestAreas,
+        prospect?.InterestArea
+      ),
+      "Others (please specify)",
+      getFirstNonEmptyValue(
+        assessmentForm?.interestOther,
+        assessmentForm?.InterestOther,
+        prospect?.interestOther,
+        prospect?.InterestOther
+      )
+    ),
+    ContributionAreainUJustBe: normalizeMultiSelectWithOther(
+      getFirstNonEmptyValue(
+        assessmentForm?.contributionWays,
+        assessmentForm?.ContributionWays,
+        prospect?.contributionWays,
+        prospect?.ContributionAreainUJustBe
+      ),
+      "Other (please specify)",
+      getFirstNonEmptyValue(
+        assessmentForm?.contributionOther,
+        assessmentForm?.ContributionOther,
+        prospect?.contributionOther,
+        prospect?.ContributionOther
+      )
+    ),
+    PreferredCommunication: normalizeTagArray(
+      getFirstNonEmptyValue(
+        feedbackForm?.communicationOptions,
+        feedbackForm?.preferredCommunication,
+        feedbackForm?.PreferredCommunication,
+        prospect?.communicationOptions,
+        prospect?.preferredCommunication,
+        prospect?.PreferredCommunication
+      )
+    ),
+  };
+}
+
 async function createOrbiterOnEnrollmentCompletion(db, prospect) {
   const prospectName = getProspectField(prospect, [
     "prospectName",
@@ -329,22 +570,54 @@ async function createOrbiterOnEnrollmentCompletion(db, prospect) {
     }
   });
 
+  const parsedDob = normalizeDateOnly(prospect?.dob);
+  const formattedDob = parsedDob ? parsedDob.split("-").reverse().join("/") : "";
+  const [assessmentForms, feedbackForms] = await Promise.all([
+    fetchProspectSubcollectionEntries(db, prospect?.id, "prospectform"),
+    fetchProspectSubcollectionEntries(db, prospect?.id, "prospectfeedbackform"),
+  ]);
+  const latestAssessmentForm = pickLatestEntry(assessmentForms);
+  const latestFeedbackForm = pickLatestEntry(feedbackForms);
+  const migratedFields = buildOrbiterMigrationFields({
+    prospect,
+    assessmentForm: latestAssessmentForm,
+    feedbackForm: latestFeedbackForm,
+    formattedDob,
+  });
+
   if (existingByPhone) {
     const existingData = existingByPhone.data() || {};
     const existingCode = existingData.UJBCode || existingByPhone.id;
+    const missingFieldUpdates = {
+      SourceProspectId: prospect.id || existingData.SourceProspectId || "",
+    };
+
+    assignIfMissing(
+      missingFieldUpdates,
+      existingData,
+      "assignedOpsUserId",
+      getProspectField(prospect, ["assignedOpsUserId"])
+    );
+    assignIfMissing(
+      missingFieldUpdates,
+      existingData,
+      "assignedOpsName",
+      getProspectField(prospect, ["assignedOpsName"])
+    );
+    assignIfMissing(
+      missingFieldUpdates,
+      existingData,
+      "assignedOpsEmail",
+      getProspectField(prospect, ["assignedOpsEmail"])
+    );
+
+    for (const [key, value] of Object.entries(migratedFields)) {
+      assignIfMissing(missingFieldUpdates, existingData, key, value);
+    }
 
     await db.collection(userCollectionName).doc(existingByPhone.id).set(
       {
-        assignedOpsUserId:
-          getProspectField(prospect, ["assignedOpsUserId"]) ||
-          String(existingData.assignedOpsUserId || "").trim(),
-        assignedOpsName:
-          getProspectField(prospect, ["assignedOpsName"]) ||
-          String(existingData.assignedOpsName || "").trim(),
-        assignedOpsEmail:
-          getProspectField(prospect, ["assignedOpsEmail"]) ||
-          String(existingData.assignedOpsEmail || "").trim(),
-        SourceProspectId: prospect.id || existingData.SourceProspectId || "",
+        ...missingFieldUpdates,
         updatedAt: new Date(),
       },
       { merge: true }
@@ -357,9 +630,6 @@ async function createOrbiterOnEnrollmentCompletion(db, prospect) {
   }
 
   const nextUjbCode = await getNextUjbCode(db);
-
-  const parsedDob = normalizeDateOnly(prospect?.dob);
-  const formattedDob = parsedDob ? parsedDob.split("-").reverse().join("/") : "";
 
   await db.collection(userCollectionName).doc(nextUjbCode).set({
     Name: prospectName,
@@ -379,6 +649,7 @@ async function createOrbiterOnEnrollmentCompletion(db, prospect) {
     ProfileStatus: "incomplete",
     SourceProspectId: prospect.id || "",
     CreatedFromEnrollment: true,
+    ...migratedFields,
   });
 
   return {

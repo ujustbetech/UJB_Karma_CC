@@ -5,6 +5,7 @@ import Swal from "sweetalert2";
 import { useParams, useRouter } from "next/navigation";
 import { LockKeyhole, Phone } from "lucide-react";
 import Input from "@/components/ui/Input";
+import { ORBITER_PROFESSION_TYPE_OPTIONS } from "@/lib/prospectFormOptions";
 
 const tabs = ["Prospect", "Alignment", "Assessment"];
 const today = new Date().toISOString().split("T")[0];
@@ -576,13 +577,22 @@ export default function ProspectForm() {
 
               <div>
                 <FieldLabel label="Occupation" required />
-                <input
+                <select
                   className={getFieldClass(errors.profession)}
-                  name="profession"
                   value={formData.profession}
-                  onChange={handleChange}
-                  placeholder="Occupation"
-                />
+                  onChange={(e) =>
+                    setFormData((prev) => ({
+                      ...prev,
+                      profession: e.target.value,
+                    }))
+                  }
+                >
+                  {ORBITER_PROFESSION_TYPE_OPTIONS.map((option) => (
+                    <option key={option.value || "empty"} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
                 <FieldError message={errors.profession} />
               </div>
 

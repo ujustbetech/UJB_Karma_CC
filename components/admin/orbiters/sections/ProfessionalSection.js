@@ -6,6 +6,7 @@ import FormField from '@/components/ui/FormField';
 import Input from '@/components/ui/Input';
 import Select from '@/components/ui/Select';
 import TagsInput from '@/components/ui/TagsInput';
+import { ORBITER_PROFESSION_TYPE_OPTIONS } from '@/lib/prospectFormOptions';
 
 import {
     Briefcase,
@@ -43,18 +44,10 @@ export default function ProfessionalSection({ profile }) {
             {/* ================= PROFESSION TYPE ================= */}
             <div className="grid grid-cols-2 gap-4 mt-4">
                 <FormField label="Profession Type">
-                    <Select
-                        value={professionType}
-                        onChange={(val) => set('ProfessionType', val)}
-                        options={[
-                            { label: 'Select', value: '' },
-                            { label: 'Entrepreneur', value: 'Entrepreneur' },
-                            { label: 'Salaried', value: 'Salaried' },
-                            { label: 'Freelancer', value: 'Freelancer' },
-                            { label: 'Student', value: 'Student' },
-                            { label: 'Home Maker', value: 'Home Maker' },
-                            { label: 'Retired', value: 'Retired' }
-                        ]}
+                        <Select
+                            value={professionType}
+                            onChange={(val) => set('ProfessionType', val)}
+                        options={ORBITER_PROFESSION_TYPE_OPTIONS}
                     />
                 </FormField>
             </div>

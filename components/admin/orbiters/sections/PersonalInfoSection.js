@@ -14,8 +14,16 @@ import {
   MapPin,
   Globe,
   BriefcaseBusiness,
-  FileUser
+  FileUser,
 } from 'lucide-react';
+
+const toPreferredCommunicationTags = (val) => {
+  if (Array.isArray(val)) return val.map((t) => String(t || '').trim()).filter(Boolean);
+  if (typeof val === 'string') {
+    return val.split(',').map((t) => t.trim()).filter(Boolean);
+  }
+  return [];
+};
 
 export default function PersonalInfoSection({ profile }) {
   /* 🛡️ SAFE PROFILE + FORMDATA */
@@ -63,9 +71,6 @@ export default function PersonalInfoSection({ profile }) {
     }
   };
 
-
-  console.log("IDType RAW =", JSON.stringify(formData?.IDType));
-  const safeValue = (v) => clean(v) || '';
 
   /* 🛡️ SAFE SOCIAL LINKS */
   const links = Array.isArray(formData?.BusinessSocialMediaPages)
@@ -165,6 +170,22 @@ export default function PersonalInfoSection({ profile }) {
         <FormField label="Applicable Tax Slab">
           <Input value={clean(taxSlab)} disabled />
         </FormField>
+
+        <FormField label="Date of Birth">
+          <Input
+            value={clean(formData?.DOB)}
+            onChange={(e) => handleChange('DOB', e.target.value)}
+            placeholder="DD/MM/YYYY or as registered"
+          />
+        </FormField>
+
+        <FormField label="Preferred Communication" className="col-span-2">
+          <TagsInput
+            value={toPreferredCommunicationTags(formData?.PreferredCommunication)}
+            onChange={(tags) => handleChange('PreferredCommunication', tags)}
+            placeholder='Add channels (same as Prospect feedback: "Whatsapp", "Email", "Phone call"); press Enter'
+          />
+        </FormField>
       </div>
 
       {/* ================= VERIFICATION ================= */}
@@ -218,6 +239,14 @@ export default function PersonalInfoSection({ profile }) {
 
       <div className="grid grid-cols-2 gap-4 mt-2">
 
+        <FormField label="Country">
+          <Input
+            value={clean(formData?.Country)}
+            onChange={(e) => handleChange('Country', e.target.value)}
+            placeholder="Country"
+          />
+        </FormField>
+
         <FormField label="Pincode">
           <Input
             value={formData?.Pincode || ""}
@@ -248,6 +277,33 @@ export default function PersonalInfoSection({ profile }) {
         </FormField>
       </div>
 
+      {/* Prospect / assessment aligned work fields (stored on profile; mirrored in Professional for some types) */}
+      <Text variant="h4" className="flex items-center gap-2 mt-8">
+        <BriefcaseBusiness size={18} /> Company & sector
+      </Text>
+
+      <div className="grid grid-cols-2 gap-4 mt-2">
+        <FormField label="Company">
+          <Input
+            value={clean(formData?.CompanyName ?? formData?.Company)}
+            onChange={(e) =>
+              setFormData((prev) => ({
+                ...prev,
+                CompanyName: e.target.value,
+                Company: e.target.value,
+              }))}
+            placeholder="Company or business name"
+          />
+        </FormField>
+
+        <FormField label="Industry">
+          <Input
+            value={clean(formData?.Industry)}
+            onChange={(e) => handleChange('Industry', e.target.value)}
+            placeholder="Industry"
+          />
+        </FormField>
+      </div>
 
       {/* ================= SOCIAL MEDIA ================= */}
       <Text variant="h4" className="flex items-center gap-2 mt-8">
