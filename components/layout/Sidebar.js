@@ -110,47 +110,61 @@ export default function Sidebar({ collapsed }) {
             !collapsed &&
             (openMenu === item.label || isParentActive);
 
+          const itemClasses = clsx(
+            "group flex items-center w-full h-9 px-3 rounded-[10px] text-sm transition-colors",
+            isParentActive
+              ? "bg-slate-100 text-[#16274f] font-medium"
+              : "text-slate-500 hover:bg-slate-100 hover:text-slate-900"
+          );
+
           return (
             <div key={item.label} className="relative">
-              <button
-                onMouseEnter={() => {
-                  if (collapsed && item.children) {
-                    openHoverMenu(item.label);
-                  }
-                }}
-                onMouseLeave={() => {
-                  if (collapsed && item.children) {
-                    closeHoverMenuWithDelay();
-                  }
-                }}
-                onClick={() => {
-                  if (!item.children || collapsed) return;
-                  setOpenMenu(isOpen ? null : item.label);
-                }}
-                className={clsx(
-                  "group flex items-center w-full h-9 px-3 rounded-[10px] text-sm transition-colors",
-                  isParentActive
-                    ? "bg-slate-100 text-[#16274f] font-medium"
-                    : "text-slate-500 hover:bg-slate-100 hover:text-slate-900"
-                )}
-              >
-                <Icon className="h-[18px] w-[18px]" />
+              {item.href && !item.children ? (
+                <Link href={item.href} className={itemClasses}>
+                  <Icon className="h-[18px] w-[18px]" />
 
-                {!collapsed && (
-                  <span className="ml-3 flex-1 text-left">
-                    {item.label}
-                  </span>
-                )}
+                  {!collapsed && (
+                    <span className="ml-3 flex-1 text-left">
+                      {item.label}
+                    </span>
+                  )}
+                </Link>
+              ) : (
+                <button
+                  onMouseEnter={() => {
+                    if (collapsed && item.children) {
+                      openHoverMenu(item.label);
+                    }
+                  }}
+                  onMouseLeave={() => {
+                    if (collapsed && item.children) {
+                      closeHoverMenuWithDelay();
+                    }
+                  }}
+                  onClick={() => {
+                    if (!item.children || collapsed) return;
+                    setOpenMenu(isOpen ? null : item.label);
+                  }}
+                  className={itemClasses}
+                >
+                  <Icon className="h-[18px] w-[18px]" />
 
-                {!collapsed && item.children && (
-                  <ChevronRight
-                    className={clsx(
-                      "h-4 w-4 text-slate-400 transition-transform",
-                      isOpen && "rotate-90"
-                    )}
-                  />
-                )}
-              </button>
+                  {!collapsed && (
+                    <span className="ml-3 flex-1 text-left">
+                      {item.label}
+                    </span>
+                  )}
+
+                  {!collapsed && item.children && (
+                    <ChevronRight
+                      className={clsx(
+                        "h-4 w-4 text-slate-400 transition-transform",
+                        isOpen && "rotate-90"
+                      )}
+                    />
+                  )}
+                </button>
+              )}
 
               {/* Expanded submenu */}
               {!collapsed && item.children && isOpen && (

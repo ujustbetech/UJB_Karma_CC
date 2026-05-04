@@ -45,6 +45,7 @@ export default function EditProspect({ id, data }) {
   const [userSearch, setUserSearch] = useState("");
   const [filteredUsers, setFilteredUsers] = useState([]);
   const [userList, setUserList] = useState([]);
+  const [opsUsers, setOpsUsers] = useState([]);
   const [errors, setErrors] = useState({});
 
   const [form, setForm] = useState({
@@ -58,6 +59,9 @@ export default function EditProspect({ id, data }) {
     hobbies: data?.hobbies || "",
     email: data?.email || "",
     dob: data?.dob || "",
+    assignedOpsUserId: data?.assignedOpsUserId || "",
+    assignedOpsName: data?.assignedOpsName || "",
+    assignedOpsEmail: data?.assignedOpsEmail || "",
   });
 
   useEffect(() => {
@@ -65,17 +69,27 @@ export default function EditProspect({ id, data }) {
 
     const fetchUsers = async () => {
       try {
-        const res = await fetch("/api/admin/orbiters", {
-          credentials: "include",
-        });
-        const responseData = await res.json().catch(() => ({}));
+        const [orbitersRes, adminsRes] = await Promise.all([
+          fetch("/api/admin/orbiters", {
+            credentials: "include",
+          }),
+          fetch("/api/admin/users", {
+            credentials: "include",
+          }),
+        ]);
+        const orbitersData = await orbitersRes.json().catch(() => ({}));
+        const adminsData = await adminsRes.json().catch(() => ({}));
 
-        if (!res.ok) {
-          throw new Error(responseData.message || "Failed to fetch orbiters");
+        if (!orbitersRes.ok) {
+          throw new Error(orbitersData.message || "Failed to fetch orbiters");
         }
 
-        const list = Array.isArray(responseData.orbiters)
-          ? responseData.orbiters.map((user) => ({
+        if (!adminsRes.ok) {
+          throw new Error(adminsData.message || "Failed to fetch admin users");
+        }
+
+        const list = Array.isArray(orbitersData.orbiters)
+          ? orbitersData.orbiters.map((user) => ({
               id: user.ujbCode,
               name: user.name,
               phone: user.phone,
@@ -85,6 +99,11 @@ export default function EditProspect({ id, data }) {
 
         if (isMounted) {
           setUserList(list);
+          setOpsUsers(
+            (Array.isArray(adminsData.users) ? adminsData.users : []).filter(
+              (user) => String(user.role || "").trim().toLowerCase() === "ops"
+            )
+          );
         }
       } catch (error) {
         console.error(error);
@@ -161,6 +180,10 @@ export default function EditProspect({ id, data }) {
       nextErrors.type = "Occasion for intimation is required.";
     }
 
+    if (!String(form.assignedOpsEmail || "").trim()) {
+      nextErrors.assignedOpsEmail = "Assigned OPS is required.";
+    }
+
     if (!String(form.prospectName || "").trim()) {
       nextErrors.prospectName = "Prospect name is required.";
     }
@@ -216,8 +239,11 @@ export default function EditProspect({ id, data }) {
           occupation: String(form.occupation || "").trim(),
           hobbies: String(form.hobbies || "").trim(),
           email: String(form.email || "").trim(),
-          orbiterEmail: String(form.orbiterEmail || "").trim(),
-          dob: String(form.dob || "").trim(),
+      orbiterEmail: String(form.orbiterEmail || "").trim(),
+      assignedOpsUserId: String(form.assignedOpsUserId || "").trim(),
+      assignedOpsName: String(form.assignedOpsName || "").trim(),
+      assignedOpsEmail: String(form.assignedOpsEmail || "").trim().toLowerCase(),
+      dob: String(form.dob || "").trim(),
         }),
       });
       const responseData = await res.json().catch(() => ({}));
@@ -333,6 +359,33 @@ export default function EditProspect({ id, data }) {
               value={form.type}
               onChange={(v) => handleFieldChange("type", v)}
               options={PROSPECT_OCCASION_OPTIONS}
+            />
+          </FormField>
+
+          <FormField label="Assigned OPS" required error={errors.assignedOpsEmail}>
+            <Select
+              value={form.assignedOpsEmail}
+              onChange={(value) => {
+                const selectedOpsUser = opsUsers.find(
+                  (user) =>
+                    String(user.email || "").trim().toLowerCase() === value
+                );
+
+                setForm((prev) => ({
+                  ...prev,
+                  assignedOpsEmail: value,
+                  assignedOpsUserId: selectedOpsUser?.id || "",
+                  assignedOpsName: selectedOpsUser?.name || "",
+                }));
+                setErrors((prev) => ({ ...prev, assignedOpsEmail: "" }));
+              }}
+              options={[
+                { label: "Select OPS user", value: "" },
+                ...opsUsers.map((user) => ({
+                  label: `${user.name} (${user.email})`,
+                  value: String(user.email || "").trim().toLowerCase(),
+                })),
+              ]}
             />
           </FormField>
 

@@ -4,6 +4,7 @@ import {
   BarChart3,
   Gift,
   Orbit,
+  ClipboardCheck,
   CalendarDays,
   Share2,
   Droplets,
@@ -17,6 +18,11 @@ export const NAV_ITEMS = [
     label: "Dashboard",
     href: "/admin",
     icon: LayoutGrid,
+  },
+  {
+    label: "My TODO",
+    href: "/admin/tasks",
+    icon: ClipboardCheck,
   },
   {
     label: "Prospect",

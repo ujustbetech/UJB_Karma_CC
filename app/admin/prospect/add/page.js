@@ -143,21 +143,38 @@ export default function Register() {
   const [userSearch, setUserSearch] = useState("");
   const [filteredUsers, setFilteredUsers] = useState([]);
   const [selectedOrbiter, setSelectedOrbiter] = useState(null);
+  const [opsUsers, setOpsUsers] = useState([]);
+  const [selectedOpsEmail, setSelectedOpsEmail] = useState("");
 
   useEffect(() => {
     const fetchUsers = async () => {
       try {
-        const res = await fetch("/api/admin/orbiters", {
-          credentials: "include",
-        });
+        const [orbitersRes, adminsRes] = await Promise.all([
+          fetch("/api/admin/orbiters", {
+            credentials: "include",
+          }),
+          fetch("/api/admin/users", {
+            credentials: "include",
+          }),
+        ]);
 
-        const data = await res.json().catch(() => ({}));
+        const orbitersData = await orbitersRes.json().catch(() => ({}));
+        const adminsData = await adminsRes.json().catch(() => ({}));
 
-        if (!res.ok) {
-          throw new Error(data.message || "Failed to fetch orbiters");
+        if (!orbitersRes.ok) {
+          throw new Error(orbitersData.message || "Failed to fetch orbiters");
         }
 
-        setUserList(Array.isArray(data.orbiters) ? data.orbiters : []);
+        if (!adminsRes.ok) {
+          throw new Error(adminsData.message || "Failed to fetch admin users");
+        }
+
+        setUserList(Array.isArray(orbitersData.orbiters) ? orbitersData.orbiters : []);
+        setOpsUsers(
+          (Array.isArray(adminsData.users) ? adminsData.users : []).filter(
+            (user) => String(user.role || "").trim().toLowerCase() === "ops"
+          )
+        );
       } catch (error) {
         console.error("Orbiter fetch failed:", error);
         Swal.fire(
@@ -297,6 +314,10 @@ export default function Register() {
       nextErrors.type = "Source detail is required";
     }
 
+    if (!selectedOpsEmail) {
+      nextErrors.assignedOpsEmail = "Please assign an OPS user";
+    }
+
     setErrors(nextErrors);
     return Object.keys(nextErrors).length === 0;
   };
@@ -318,6 +339,9 @@ export default function Register() {
       const trimmedEmail = email.trim();
       const trimmedHobbies = hobbies.trim();
       const formattedProspectPhone = `${INDIA_DIAL_CODE}${prospectPhone}`;
+      const selectedOpsUser = opsUsers.find(
+        (user) => String(user.email || "").trim().toLowerCase() === selectedOpsEmail
+      );
 
       const data = {
         userType: "prospect",
@@ -332,6 +356,9 @@ export default function Register() {
         orbiterEmail: orbiteremail,
         source,
         type,
+        assignedOpsUserId: selectedOpsUser?.id || "",
+        assignedOpsName: selectedOpsUser?.name || "",
+        assignedOpsEmail: selectedOpsUser?.email || selectedOpsEmail,
       };
 
       const res = await fetch("/api/admin/prospects", {
@@ -381,6 +408,7 @@ export default function Register() {
       setPhone("");
       setOrbiterEmail("");
       setSelectedOrbiter(null);
+      setSelectedOpsEmail("");
     } catch (err) {
       console.error(err);
       Swal.fire("Error", "Something went wrong", "error");
@@ -465,6 +493,27 @@ export default function Register() {
               </FormField>
             </div>
           )}
+
+          <FormField
+            label="Assign OPS"
+            required
+            error={errors.assignedOpsEmail}
+          >
+            <Select
+              value={selectedOpsEmail}
+              onChange={(value) => {
+                setErrors((prev) => ({ ...prev, assignedOpsEmail: "" }));
+                setSelectedOpsEmail(value);
+              }}
+              options={[
+                { label: "Select OPS user", value: "" },
+                ...opsUsers.map((user) => ({
+                  label: `${user.name} (${user.email})`,
+                  value: String(user.email || "").trim().toLowerCase(),
+                })),
+              ]}
+            />
+          </FormField>
 
           <Text variant="h3">Prospect Details</Text>
 

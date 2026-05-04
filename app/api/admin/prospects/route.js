@@ -17,6 +17,7 @@ import {
   diffChangedFields,
   getFormAuditLogs,
 } from "@/lib/prospectFormAudit";
+import { buildProspectEngagementUpdate } from "@/lib/prospectEngagement";
 
 const prospectCollectionName = publicEnv.collections.prospect;
 const userCollectionName = publicEnv.collections.userDetail;
@@ -116,6 +117,22 @@ function getAdminDisplayName(admin) {
 
 function getAdminAuditIdentity(admin) {
   return String(admin?.email || admin?.name || "Admin").trim();
+}
+
+function normalizeAdminRole(value) {
+  return String(value || "").trim().toLowerCase();
+}
+
+function getProspectLifecycleStatus(prospect = {}) {
+  const status = String(
+    prospect.recordStatus || prospect.lifecycleStatus || ""
+  ).trim();
+
+  if (status === "Archive") {
+    return "Archive";
+  }
+
+  return "Active";
 }
 
 function normalizeMeetingEvent(event, admin) {
@@ -316,6 +333,23 @@ async function createOrbiterOnEnrollmentCompletion(db, prospect) {
     const existingData = existingByPhone.data() || {};
     const existingCode = existingData.UJBCode || existingByPhone.id;
 
+    await db.collection(userCollectionName).doc(existingByPhone.id).set(
+      {
+        assignedOpsUserId:
+          getProspectField(prospect, ["assignedOpsUserId"]) ||
+          String(existingData.assignedOpsUserId || "").trim(),
+        assignedOpsName:
+          getProspectField(prospect, ["assignedOpsName"]) ||
+          String(existingData.assignedOpsName || "").trim(),
+        assignedOpsEmail:
+          getProspectField(prospect, ["assignedOpsEmail"]) ||
+          String(existingData.assignedOpsEmail || "").trim(),
+        SourceProspectId: prospect.id || existingData.SourceProspectId || "",
+        updatedAt: new Date(),
+      },
+      { merge: true }
+    );
+
     return {
       ujbCode: existingCode,
       status: "already_orbiter",
@@ -339,6 +373,9 @@ async function createOrbiterOnEnrollmentCompletion(db, prospect) {
     MentorName: mentorData.name,
     MentorPhone: mentorData.phone,
     MentorUJBCode: mentorData.ujbCode,
+    assignedOpsUserId: getProspectField(prospect, ["assignedOpsUserId"]),
+    assignedOpsName: getProspectField(prospect, ["assignedOpsName"]),
+    assignedOpsEmail: getProspectField(prospect, ["assignedOpsEmail"]),
     ProfileStatus: "incomplete",
     SourceProspectId: prospect.id || "",
     CreatedFromEnrollment: true,
@@ -351,7 +388,7 @@ async function createOrbiterOnEnrollmentCompletion(db, prospect) {
 }
 
 function validateProspectPayload(body, options = {}) {
-  const { requireSource = false } = options;
+  const { requireSource = false, requireOps = false } = options;
   const {
     userType,
     prospectName,
@@ -364,6 +401,8 @@ function validateProspectPayload(body, options = {}) {
     orbiterEmail,
     source,
     type,
+    assignedOpsEmail,
+    assignedOpsName,
   } = body || {};
 
   if (
@@ -379,6 +418,10 @@ function validateProspectPayload(body, options = {}) {
     !type
   ) {
     return "Missing required prospect fields";
+  }
+
+  if (requireOps && (!assignedOpsEmail || !assignedOpsName)) {
+    return "Assigned OPS is required";
   }
 
   if (!INDIAN_MOBILE_REGEX.test(String(prospectPhone).trim())) {
@@ -637,6 +680,7 @@ export async function POST(req) {
     const body = await req.json();
     const validationError = validateProspectPayload(body, {
       requireSource: true,
+      requireOps: true,
     });
 
     if (validationError) {
@@ -659,6 +703,13 @@ export async function POST(req) {
       orbiterEmail: String(body.orbiterEmail || "").trim(),
       source: String(body.source || "").trim(),
       type: String(body.type).trim(),
+      assignedOpsUserId: String(body.assignedOpsUserId || "").trim(),
+      assignedOpsName: String(body.assignedOpsName || "").trim(),
+      assignedOpsEmail: String(body.assignedOpsEmail || "").trim().toLowerCase(),
+      recordStatus: "Active",
+      ...buildProspectEngagementUpdate(
+        "Prospect added and assessment email sent to the MentOrbiter."
+      ),
       registeredAt: new Date(),
     });
 
@@ -698,6 +749,7 @@ export async function GET(req) {
 
     const id = req.nextUrl.searchParams.get("id");
     const section = req.nextUrl.searchParams.get("section");
+    const statusFilter = req.nextUrl.searchParams.get("status");
 
     if (id) {
       const docSnap = await dbResult.adminDb
@@ -715,6 +767,8 @@ export async function GET(req) {
       const prospect = {
         id: docSnap.id,
         ...docSnap.data(),
+        recordStatus: getProspectLifecycleStatus(docSnap.data() || {}),
+        lastEngagementNote: String(docSnap.data()?.lastEngagementNote || "").trim(),
       };
 
       if (section === "prospectform") {
@@ -846,7 +900,7 @@ export async function GET(req) {
           .collection("engagementform")
           .get();
 
-        let lastEngagementDate = null;
+        let derivedLastEngagementDate = null;
         let nextFollowupDate = null;
 
         if (!engagementSnapshot.empty) {
@@ -864,11 +918,11 @@ export async function GET(req) {
           const latest = engagements[0];
 
           if (latest.callDate) {
-            lastEngagementDate = latest.callDate;
+            derivedLastEngagementDate = latest.callDate;
           } else if (latest.updatedAt) {
-            lastEngagementDate = latest.updatedAt;
+            derivedLastEngagementDate = latest.updatedAt;
           } else if (latest.createdAt) {
-            lastEngagementDate = latest.createdAt;
+            derivedLastEngagementDate = latest.createdAt;
           }
 
           if (latest.nextFollowupDate) {
@@ -876,16 +930,28 @@ export async function GET(req) {
           }
         }
 
+        const lifecycleStatus = getProspectLifecycleStatus(data);
+
         return {
           id: docSnap.id,
           ...data,
-          lastEngagementDate,
+          recordStatus: lifecycleStatus,
+          lastEngagementDate: data.lastEngagementDate || derivedLastEngagementDate,
+          lastEngagementNote: String(data.lastEngagementNote || "").trim(),
           nextFollowupDate,
         };
       })
     );
 
-    return NextResponse.json({ prospects });
+    const filteredProspects = statusFilter
+      ? prospects.filter(
+          (prospect) =>
+            getProspectLifecycleStatus(prospect).toLowerCase() ===
+            String(statusFilter).trim().toLowerCase()
+        )
+      : prospects;
+
+    return NextResponse.json({ prospects: filteredProspects });
   } catch (error) {
     console.error("Admin prospects fetch error:", error);
 
@@ -1039,7 +1105,7 @@ export async function PATCH(req) {
         await prospectRef.set(
           {
             formAuditLogs: updatedAuditLogs,
-            updatedAt: new Date(),
+            ...buildProspectEngagementUpdate("Assessment form updated."),
           },
           { merge: true }
         );
@@ -1091,7 +1157,7 @@ export async function PATCH(req) {
       await dbResult.adminDb.collection(prospectCollectionName).doc(id).set(
         {
           ...normalizedUpdate,
-          updatedAt: new Date(),
+          ...buildProspectEngagementUpdate("Meeting logs updated."),
         },
         { merge: true }
       );
@@ -1168,7 +1234,7 @@ export async function PATCH(req) {
         await prospectRef.set(
           {
             formAuditLogs: updatedAuditLogs,
-            updatedAt: new Date(),
+            ...buildProspectEngagementUpdate("Feedback form updated."),
           },
           { merge: true }
         );
@@ -1203,7 +1269,7 @@ export async function PATCH(req) {
         await prospectRef.set(
           {
             ...update,
-            updatedAt: new Date(),
+            ...buildProspectEngagementUpdate("Pre-enrollment form updated."),
           },
           { merge: true }
         );
@@ -1230,6 +1296,10 @@ export async function PATCH(req) {
             userIdentity: getAdminAuditIdentity(authResult.admin),
             changedFields: [],
           })
+        );
+        await prospectRef.set(
+          buildProspectEngagementUpdate("Pre-enrollment form sent."),
+          { merge: true }
         );
       }
 
@@ -1302,6 +1372,18 @@ export async function PATCH(req) {
           updatedAt: new Date(),
         });
 
+      await dbResult.adminDb
+        .collection(prospectCollectionName)
+        .doc(id)
+        .set(
+          buildProspectEngagementUpdate("Engagement log updated.", {
+            lastEngagementDate: new Date(
+              `${normalizeDateOnly(entry.callDate)}T00:00:00`
+            ),
+          }),
+          { merge: true }
+        );
+
       const updatedEntries = await dbResult.adminDb
         .collection(prospectCollectionName)
         .doc(id)
@@ -1366,7 +1448,9 @@ export async function PATCH(req) {
               ? note
               : "",
           authenticChoiceLogs: [...existingLogs, logEntry],
-          updatedAt: new Date(),
+          ...buildProspectEngagementUpdate(
+            `Authentic choice updated: ${selectedStatus}.`
+          ),
         },
         { merge: true }
       );
@@ -1494,7 +1578,12 @@ export async function PATCH(req) {
           userType: enrolledOrbiterUjbCode
             ? "orbiter"
             : existingData.userType || "prospect",
-          updatedAt: new Date(),
+          recordStatus: enrolledOrbiterUjbCode ? "Archive" : getProspectLifecycleStatus(existingData),
+          ...buildProspectEngagementUpdate(
+            enrolledOrbiterUjbCode
+              ? "Prospect converted to Orbitor and archived."
+              : "Enrollment status updated."
+          ),
         },
         { merge: true }
       );
@@ -1531,8 +1620,11 @@ export async function PATCH(req) {
       orbiterName: String(body.orbiterName).trim(),
       orbiterContact: String(body.orbiterContact).trim(),
       orbiterEmail: String(body.orbiterEmail || "").trim(),
+      assignedOpsUserId: String(body.assignedOpsUserId || "").trim(),
+      assignedOpsName: String(body.assignedOpsName || "").trim(),
+      assignedOpsEmail: String(body.assignedOpsEmail || "").trim().toLowerCase(),
       type: String(body.type).trim(),
-      updatedAt: new Date(),
+      ...buildProspectEngagementUpdate("Prospect details updated."),
     };
 
     if (Object.prototype.hasOwnProperty.call(body, "source")) {
