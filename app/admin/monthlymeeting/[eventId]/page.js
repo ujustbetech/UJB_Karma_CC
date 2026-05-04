@@ -67,6 +67,11 @@ export default function MonthlyMeetingDetailsPage() {
   }, [eventId]);
 
   useEffect(() => {
+    if (!data?.Eventname) return;
+    document.title = `${data.Eventname} | Monthly Meeting`;
+  }, [data?.Eventname]);
+
+  useEffect(() => {
     if (!eventId) return;
 
     const unsub = onSnapshot(
@@ -149,23 +154,65 @@ export default function MonthlyMeetingDetailsPage() {
   const renderSection = () => {
     switch (active) {
       case "basic":
-        return <EventInfoSection ref={basicRef} eventId={eventId} data={data} />;
+        return (
+          <EventInfoSection
+            ref={basicRef}
+            eventId={eventId}
+            data={data}
+            fetchData={fetchData}
+          />
+        );
       case "topic":
-        return <TopicSection ref={topicRef} eventID={eventId} data={data} />;
+        return (
+          <TopicSection
+            ref={topicRef}
+            eventID={eventId}
+            data={data}
+            fetchData={fetchData}
+          />
+        );
       case "participants":
-        return <ParticipantSection ref={participantRef} eventID={eventId} data={data} />;
+        return (
+          <ParticipantSection
+            ref={participantRef}
+            eventID={eventId}
+            data={data}
+            fetchData={fetchData}
+          />
+        );
       case "knowledge":
-        return <KnowledgeSharingSection ref={knowledgeRef} eventId={eventId} data={data} />;
+        return (
+          <KnowledgeSharingSection
+            ref={knowledgeRef}
+            eventId={eventId}
+            data={data}
+            fetchData={fetchData}
+          />
+        );
       case "e2a":
-        return <E2ASection ref={e2aRef} eventId={eventId} data={data} />;
+        return <E2ASection ref={e2aRef} eventId={eventId} data={data} fetchData={fetchData} />;
       case "prospects":
-        return <ProspectSection ref={prospectRef} eventId={eventId} data={data} />;
+        return (
+          <ProspectSection
+            ref={prospectRef}
+            eventId={eventId}
+            data={data}
+            fetchData={fetchData}
+          />
+        );
       case "requirements":
-        return <RequirementSection ref={requirementRef} eventId={eventId} data={data} />;
+        return (
+          <RequirementSection
+            ref={requirementRef}
+            eventId={eventId}
+            data={data}
+            fetchData={fetchData}
+          />
+        );
       case "documents":
-        return <DocumentUploadSection eventID={eventId} data={data} />;
+        return <DocumentUploadSection eventID={eventId} fetchData={fetchData} />;
       case "images":
-        return <ImageUploadSection eventID={eventId} data={data} />;
+        return <ImageUploadSection eventID={eventId} fetchData={fetchData} />;
       case "registered":
         return <RegisteredUsersSection eventId={eventId} data={data} />;
       case "adduser":
@@ -181,7 +228,7 @@ export default function MonthlyMeetingDetailsPage() {
     <div className="grid grid-cols-12 gap-6 pb-28 bg-slate-50 min-h-screen p-6">
       <div className="col-span-2">
         <Card className="sticky top-6 p-3">
-          <Text variant="h3">Meeting</Text>
+          <Text variant="h3">{data?.Eventname || "Monthly Meeting"}</Text>
 
           <div className="mt-4 space-y-5">
             {groupedSections.map((group) => (
@@ -198,8 +245,9 @@ export default function MonthlyMeetingDetailsPage() {
                     return (
                       <button
                         key={section.id}
+                        title={section.label}
                         onClick={() => setActive(section.id)}
-                        className={`relative w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition ${
+                        className={`relative w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition text-left overflow-hidden ${
                           isActive
                             ? "bg-blue-100 text-blue-700 font-medium"
                             : "hover:bg-slate-50 text-slate-700"
@@ -209,8 +257,8 @@ export default function MonthlyMeetingDetailsPage() {
                           <span className="absolute left-0 top-1 bottom-1 w-1 bg-blue-600 rounded" />
                         )}
 
-                        <Icon size={17} />
-                        {section.label}
+                        <Icon size={17} className="shrink-0" />
+                        <span className="truncate flex-1">{section.label}</span>
                       </button>
                     );
                   })}

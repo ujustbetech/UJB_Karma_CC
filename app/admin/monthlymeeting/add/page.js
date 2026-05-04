@@ -13,7 +13,6 @@ import FormField from "@/components/ui/FormField";
 import { useToast } from "@/components/ui/ToastProvider";
 
 export default function AddEventPage() {
-  
   const router = useRouter();
   const toast = useToast();
 
@@ -24,59 +23,64 @@ export default function AddEventPage() {
   const [errors, setErrors] = useState({});
 
   const validate = () => {
-    const e = {};
-    if (!eventName) e.eventName = "Event name is required";
-    if (!eventTime) e.eventTime = "Date & time is required";
-    return e;
+    const nextErrors = {};
+
+    if (!eventName.trim()) nextErrors.eventName = "Event name is required";
+    if (!eventTime) nextErrors.eventTime = "Date & time is required";
+    if (zoomLink && !/^https?:\/\//i.test(zoomLink.trim())) {
+      nextErrors.zoomLink = "Enter a valid meeting URL";
+    }
+
+    return nextErrors;
   };
 
-  const handleCreate = async (e) => {
-    e.preventDefault();
+  const handleCreate = async (event) => {
+    event.preventDefault();
 
-    const v = validate();
-    setErrors(v);
-    if (Object.keys(v).length) return;
+    const validationErrors = validate();
+    setErrors(validationErrors);
+
+    if (Object.keys(validationErrors).length) {
+      return;
+    }
 
     setLoading(true);
 
     try {
       const id = await createAdminMonthlyMeeting({
-        eventName,
+        eventName: eventName.trim(),
         eventTime,
-        zoomLink,
+        zoomLink: zoomLink.trim(),
       });
 
       toast.success("Event created successfully");
       router.push(`/admin/monthlymeeting/${id}`);
-    } catch (err) {
-      console.error(err);
+    } catch (error) {
+      console.error(error);
       toast.error("Failed to create event");
+    } finally {
+      setLoading(false);
     }
-
-    setLoading(false);
   };
 
   return (
     <div className="space-y-6">
-
-      {/* Form */}
-      <Card className="p-6 space-y-6">
-
-        <div className="pb-3 border-b">
+      <Card className="space-y-6 p-6">
+        <div className="border-b pb-3">
           <Text as="h2">Basic Information</Text>
         </div>
 
         <form onSubmit={handleCreate} className="space-y-5">
-
           <FormField label="Event Name" required error={errors.eventName}>
             <Input
               value={eventName}
-              onChange={(e) => {
-                setEventName(e.target.value);
-                setErrors((p) => ({ ...p, eventName: "" }));
+              onChange={(event) => {
+                setEventName(event.target.value);
+                setErrors((previous) => ({ ...previous, eventName: "" }));
               }}
-              placeholder="Eg: UJB Monthly Meeting – Feb 2026"
+              placeholder="Eg: UJB Monthly Meeting - Feb 2026"
               autoFocus
+              error={!!errors.eventName}
             />
           </FormField>
 
@@ -84,33 +88,33 @@ export default function AddEventPage() {
             <DateInput
               type="datetime-local"
               value={eventTime}
-              onChange={(e) => {
-                setEventTime(e.target.value);
-                setErrors((p) => ({ ...p, eventTime: "" }));
+              onChange={(event) => {
+                setEventTime(event.target.value);
+                setErrors((previous) => ({ ...previous, eventTime: "" }));
               }}
+              error={!!errors.eventTime}
             />
           </FormField>
 
-          <FormField label="Zoom Link (Optional)">
+          <FormField label="Zoom Link (Optional)" error={errors.zoomLink}>
             <Input
               value={zoomLink}
-              onChange={(e) => setZoomLink(e.target.value)}
+              onChange={(event) => {
+                setZoomLink(event.target.value);
+                setErrors((previous) => ({ ...previous, zoomLink: "" }));
+              }}
               placeholder="Paste Zoom meeting link"
+              error={!!errors.zoomLink}
             />
           </FormField>
 
-          <div className="flex justify-end pt-4 border-t">
+          <div className="flex justify-end border-t pt-4">
             <Button type="submit" variant="primary" disabled={loading}>
               {loading ? "Creating..." : "Create Event"}
             </Button>
           </div>
-
         </form>
       </Card>
     </div>
   );
 }
-
-
-
-

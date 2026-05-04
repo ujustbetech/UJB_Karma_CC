@@ -30,18 +30,33 @@ export default function HomePage() {
       try {
         const data = await fetchUserHomeData();
         setHomeData(data);
+      } catch {
+        setHomeData(null);
+        Swal.fire(
+          "Notice",
+          "Some dashboard data is unavailable right now.",
+          "info"
+        );
+      }
+    };
 
-        if (!data?.agreement?.shouldPrompt) {
-          return;
-        }
+    loadHomeData();
+  }, []);
 
+  useEffect(() => {
+    const promptAgreement = async () => {
+      if (!homeData?.agreement?.shouldPrompt) {
+        return;
+      }
+
+      try {
         const result = await Swal.fire({
-          title: getAgreementTitle(data?.agreement?.category),
+          title: getAgreementTitle(homeData?.agreement?.category),
           html: `
             <div style="text-align:left; max-height:250px; overflow:auto;">
-              <p>â€¢ You have read and understood the agreement</p>
-              <p>â€¢ You accept all terms & conditions</p>
-              <p>â€¢ This acceptance is legally binding</p>
+              <p>- You have read and understood the agreement</p>
+              <p>- You accept all terms & conditions</p>
+              <p>- This acceptance is legally binding</p>
             </div>
           `,
           icon: "info",
@@ -54,13 +69,19 @@ export default function HomePage() {
           return;
         }
 
-        const category = data?.agreement?.category || "";
-        const pdfUrl = await generateAgreementPDF({
-          name: data?.agreement?.name || "User",
-          address: data?.agreement?.address || "-",
-          city: data?.agreement?.city || "-",
-          category,
-        });
+        const category = homeData?.agreement?.category || "";
+        let pdfUrl = "";
+
+        try {
+          pdfUrl = await generateAgreementPDF({
+            name: homeData?.agreement?.name || "User",
+            address: homeData?.agreement?.address || "-",
+            city: homeData?.agreement?.city || "-",
+            category,
+          });
+        } catch (error) {
+          console.error("Agreement PDF generation failed:", error);
+        }
 
         await updateUserProfile(
           buildAgreementAcceptanceUpdate({
@@ -77,6 +98,7 @@ export default function HomePage() {
                 agreement: {
                   ...current.agreement,
                   shouldPrompt: false,
+                  pdfUrl,
                 },
               }
             : current
@@ -87,18 +109,18 @@ export default function HomePage() {
           "Your agreement has been signed and saved successfully",
           "success"
         );
-      } catch {
-        setHomeData(null);
+      } catch (error) {
+        console.error("Agreement acceptance failed:", error);
         Swal.fire(
           "Notice",
-          "Some dashboard data is unavailable right now.",
+          "Your dashboard loaded, but we could not save the agreement right now.",
           "info"
         );
       }
     };
 
-    loadHomeData();
-  }, []);
+    promptAgreement();
+  }, [homeData]);
 
   return (
     <div className="space-y-6 pb-28">
@@ -115,5 +137,3 @@ export default function HomePage() {
     </div>
   );
 }
-
-

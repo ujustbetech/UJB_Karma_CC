@@ -55,25 +55,8 @@ function mapConclaveMeeting(docSnap, conclaveData) {
   };
 }
 
-function mapRecentReferral(docSnap) {
-  const data = docSnap.data() || {};
-  return {
-    id: docSnap.id,
-    name: data.cosmoOrbiter?.name || "Orbiter",
-    serviceName: data.service?.name || data.serviceName || "Service",
-    createdAt: toIso(data.timestamp || data.createdAt),
-    status: data.dealStatus || "Pending",
-  };
-}
-
-function mapNetworkActivity(docSnap) {
-  const data = docSnap.data() || {};
-  return {
-    id: docSnap.id,
-    orbiterName: data.cosmoOrbiter?.name || "Orbiter",
-    serviceName: data.serviceName || data.service?.name || "a service",
-    createdAt: toIso(data.createdAt || data.timestamp),
-  };
+function normalizeRole(value) {
+  return String(value || "").trim().toLowerCase();
 }
 
 function calculateHomePayload({
@@ -91,6 +74,9 @@ function calculateHomePayload({
   const profile = userData || {};
   const currentUjbCode = String(profile.UJBCode || "").trim();
   const currentPhone = String(profile.MobileNo || "").trim();
+  const currentRole = normalizeRole(profile.Category);
+  const isCosmOrbiter = currentRole === "cosmorbiter";
+  const isOrbiter = currentRole === "orbiter";
 
   const totalOrbiters = allUsers.length;
   const totalCosmOrbiters = allUsers.filter(
@@ -142,8 +128,41 @@ function calculateHomePayload({
     .filter((item) => item.time)
     .sort((left, right) => getTimeMs(left.time) - getTimeMs(right.time));
 
-  const recentReferrals = referrals
-    .map(mapRecentReferral)
+  const relevantReferrals = referrals.filter((docSnap) => {
+    const data = docSnap.data() || {};
+    const cosmoUjbCode = String(data.cosmoOrbiter?.ujbCode || "").trim();
+    const orbiterUjbCode = String(
+      data.orbiter?.ujbCode || data.orbiterUJBCode || ""
+    ).trim();
+
+    if (isCosmOrbiter) {
+      return cosmoUjbCode === currentUjbCode;
+    }
+
+    if (isOrbiter) {
+      return orbiterUjbCode === currentUjbCode;
+    }
+
+    return (
+      cosmoUjbCode === currentUjbCode || orbiterUjbCode === currentUjbCode
+    );
+  });
+
+  const recentReferrals = relevantReferrals
+    .map((docSnap) => {
+      const data = docSnap.data() || {};
+      return {
+        id: docSnap.id,
+        name: isOrbiter
+          ? data.cosmoOrbiter?.name ||
+            data.cosmoOrbiter?.businessName ||
+            "CosmOrbiter"
+          : data.orbiter?.name || data.orbiter?.businessName || "Orbiter",
+        serviceName: data.service?.name || data.serviceName || "Service",
+        createdAt: toIso(data.timestamp || data.createdAt),
+        status: data.dealStatus || "Pending",
+      };
+    })
     .sort((left, right) => getTimeMs(right.createdAt) - getTimeMs(left.createdAt))
     .slice(0, 5);
 
@@ -237,12 +256,11 @@ function calculateHomePayload({
 
   let totalReferrals = 0;
   let monthlyReferrals = 0;
-  for (const referral of referrals) {
+  for (const referral of relevantReferrals) {
     const data = referral.data() || {};
-    if (data.cosmoOrbiter?.ujbCode !== currentUjbCode) continue;
     totalReferrals += 1;
 
-    const createdAt = toDate(data.createdAt);
+    const createdAt = toDate(data.createdAt || data.timestamp);
     if (
       createdAt &&
       createdAt.getMonth() === currentMonth &&
@@ -263,8 +281,20 @@ function calculateHomePayload({
     totalCP,
   };
 
-  const networkActivity = referrals
-    .map(mapNetworkActivity)
+  const networkActivity = relevantReferrals
+    .map((docSnap) => {
+      const data = docSnap.data() || {};
+      return {
+        id: docSnap.id,
+        orbiterName: isOrbiter
+          ? data.cosmoOrbiter?.name ||
+            data.cosmoOrbiter?.businessName ||
+            "CosmOrbiter"
+          : data.orbiter?.name || data.orbiter?.businessName || "Orbiter",
+        serviceName: data.serviceName || data.service?.name || "a service",
+        createdAt: toIso(data.createdAt || data.timestamp),
+      };
+    })
     .sort((left, right) => getTimeMs(right.createdAt) - getTimeMs(left.createdAt))
     .slice(0, 5);
 

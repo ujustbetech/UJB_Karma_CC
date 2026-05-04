@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import ReactSelect from "react-select";
 import {
   createAdminConclave,
@@ -15,15 +16,17 @@ import FormField from "@/components/ui/FormField";
 import { useToast } from "@/components/ui/ToastProvider";
 
 export default function CreateConclavePage() {
+  const router = useRouter();
   const toast = useToast();
 
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [errors, setErrors] = useState({});
 
   const [form, setForm] = useState({
     conclaveStream: "",
-    startDate: null,
-    initiationDate: null,
+    startDate: "",
+    initiationDate: "",
     leader: "",
     ntMembers: [],
     orbiters: [],
@@ -33,7 +36,6 @@ export default function CreateConclavePage() {
 
   const [tempNt, setTempNt] = useState("");
   const [tempOrbiter, setTempOrbiter] = useState("");
-  const [errors, setErrors] = useState({});
 
   useEffect(() => {
     const fetchUsers = async () => {
@@ -45,43 +47,74 @@ export default function CreateConclavePage() {
         toast.error("Failed to load users");
       }
     };
+
     fetchUsers();
   }, [toast]);
 
   const handleChange = (name, value) => {
-    setForm((prev) => ({ ...prev, [name]: value }));
-    setErrors((prev) => ({ ...prev, [name]: "" }));
+    setForm((previous) => ({ ...previous, [name]: value }));
+    setErrors((previous) => ({ ...previous, [name]: "" }));
   };
 
-  const addToList = (field, value) => {
-    if (!value) return;
-    setForm((prev) => ({
-      ...prev,
-      [field]: prev[field].includes(value)
-        ? prev[field]
-        : [...prev[field], value],
+  const addToList = (field, value, errorField) => {
+    if (!value) {
+      setErrors((previous) => ({
+        ...previous,
+        [errorField]: `Select a ${field === "ntMembers" ? "NT member" : "orbiter"} first`,
+      }));
+      return;
+    }
+
+    setForm((previous) => ({
+      ...previous,
+      [field]: previous[field].includes(value)
+        ? previous[field]
+        : [...previous[field], value],
     }));
+    setErrors((previous) => ({ ...previous, [errorField]: "" }));
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  const validate = () => {
+    const nextErrors = {};
+
+    if (!form.conclaveStream.trim()) nextErrors.conclaveStream = "Conclave name is required";
+    if (!form.startDate) nextErrors.startDate = "Start date is required";
+    if (!form.initiationDate) nextErrors.initiationDate = "Initiation date is required";
+    if (!form.leader) nextErrors.leader = "Leader is required";
+    if (!form.ntMembers.length) nextErrors.ntMembers = "Add at least one NT member";
+    if (!form.orbiters.length) nextErrors.orbiters = "Add at least one orbiter";
+    if (!form.leaderRole.trim()) nextErrors.leaderRole = "Leader role is required";
+    if (!form.ntRoles.trim()) nextErrors.ntRoles = "NT roles are required";
+
+    const startTS = form.startDate ? new Date(form.startDate) : null;
+    const initTS = form.initiationDate ? new Date(form.initiationDate) : null;
+
+    if (startTS && Number.isNaN(startTS.getTime())) {
+      nextErrors.startDate = "Please select a valid start date";
+    }
+    if (initTS && Number.isNaN(initTS.getTime())) {
+      nextErrors.initiationDate = "Please select a valid initiation date";
+    }
+
+    setErrors(nextErrors);
+    return Object.keys(nextErrors).length === 0;
+  };
+
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+
+    if (!validate()) {
+      toast.error("Please complete the required fields");
+      return;
+    }
+
     setLoading(true);
 
     try {
-      const startTS = form.startDate ? new Date(form.startDate) : null;
-      const initTS = form.initiationDate ? new Date(form.initiationDate) : null;
-
-      if (!startTS || !initTS || Number.isNaN(startTS.getTime()) || Number.isNaN(initTS.getTime())) {
-        toast.error("Please select valid Date & Time");
-        setLoading(false);
-        return;
-      }
-
       const getPhoneForUser = (id) => users.find((user) => user.value === id)?.phone || "";
+
       const finalForm = {
         ...form,
-        startDate: form.startDate,
-        initiationDate: form.initiationDate,
         leader: getPhoneForUser(form.leader),
         ntMembers: form.ntMembers.map(getPhoneForUser).filter(Boolean),
         orbiters: form.orbiters.map(getPhoneForUser).filter(Boolean),
@@ -90,186 +123,155 @@ export default function CreateConclavePage() {
       await createAdminConclave(finalForm);
 
       toast.success("Conclave created successfully");
-    } catch (err) {
-      console.log(err);
+      router.push("/admin/conclave/list");
+    } catch (error) {
+      console.error(error);
       toast.error("Failed to create conclave");
+    } finally {
+      setLoading(false);
     }
+  };
 
-    setLoading(false);
+  const renderChip = (id, field, bgClass) => {
+    const user = users.find((item) => item.value === id);
+    return (
+      <div
+        key={id}
+        className={`flex items-center gap-2 rounded-full px-3 py-1 text-sm ${bgClass}`}
+      >
+        {user?.label}
+        <button
+          type="button"
+          className="text-red-500"
+          onClick={() =>
+            setForm((previous) => ({
+              ...previous,
+              [field]: previous[field].filter((memberId) => memberId !== id),
+            }))
+          }
+        >
+          x
+        </button>
+      </div>
+    );
   };
 
   return (
-    <Card>
-      <form onSubmit={handleSubmit} className="space-y-6 pt-6">
-        <FormField label="Conclave Name & Stream" required>
+    <Card className="p-6">
+      <form onSubmit={handleSubmit} className="space-y-6">
+        <FormField label="Conclave Name & Stream" required error={errors.conclaveStream}>
           <Input
             value={form.conclaveStream}
-            onChange={(e) =>
-              handleChange("conclaveStream", e.target.value)
-            }
+            onChange={(event) => handleChange("conclaveStream", event.target.value)}
+            error={!!errors.conclaveStream}
           />
         </FormField>
 
-        <div>
-          <label className="block mb-1 text-sm font-medium">
-            Start Date *
-          </label>
+        <FormField label="Start Date" required error={errors.startDate}>
           <input
             type="datetime-local"
-            className="w-full border rounded p-2"
-            value={form.startDate || ""}
-            onChange={(e) =>
-              handleChange("startDate", e.target.value)
-            }
+            className={`w-full rounded p-2 ${errors.startDate ? "border border-red-500" : "border"}`}
+            value={form.startDate}
+            onChange={(event) => handleChange("startDate", event.target.value)}
           />
-        </div>
+        </FormField>
 
-        <div>
-          <label className="block mb-1 text-sm font-medium">
-            Initiation Date *
-          </label>
+        <FormField label="Initiation Date" required error={errors.initiationDate}>
           <input
             type="datetime-local"
-            className="w-full border rounded p-2"
-            value={form.initiationDate || ""}
-            onChange={(e) =>
-              handleChange("initiationDate", e.target.value)
-            }
+            className={`w-full rounded p-2 ${errors.initiationDate ? "border border-red-500" : "border"}`}
+            value={form.initiationDate}
+            onChange={(event) => handleChange("initiationDate", event.target.value)}
           />
-        </div>
+        </FormField>
 
-        {/* Leader */}
-        <FormField label="Leader" required>
+        <FormField label="Leader" required error={errors.leader}>
           <ReactSelect
             options={users}
-            value={users.find((u) => u.value === form.leader) || null}
-            onChange={(selected) =>
-              handleChange("leader", selected?.value)
-            }
+            value={users.find((user) => user.value === form.leader) || null}
+            onChange={(selected) => handleChange("leader", selected?.value || "")}
           />
         </FormField>
 
-        {/* NT MEMBERS */}
-        <FormField label="NT Members" required>
-          <>
-            <ReactSelect
-              options={users}
-              value={users.find((u) => u.value === tempNt) || null}
-              onChange={(selected) =>
-                setTempNt(selected?.value)
-              }
-            />
-
-            <Button
-              type="button"
-              onClick={() => {
-                addToList("ntMembers", tempNt);
-                setTempNt("");
-              }}
-            >
-              Add NT Member
-            </Button>
-
-            <div className="flex flex-wrap gap-2 mt-2">
-              {form.ntMembers.map((id) => {
-                const user = users.find((u) => u.value === id);
-                return (
-                  <div
-                    key={id}
-                    className="px-3 py-1 bg-blue-100 rounded-full text-sm flex items-center gap-2"
-                  >
-                    {user?.label}
-                    <span
-                      className="cursor-pointer text-red-500"
-                      onClick={() =>
-                        setForm((prev) => ({
-                          ...prev,
-                          ntMembers: prev.ntMembers.filter(
-                            (m) => m !== id
-                          ),
-                        }))
-                      }
-                    >
-                      ✕
-                    </span>
-                  </div>
-                );
-              })}
+        <FormField label="NT Members" required error={errors.ntMembers}>
+          <div className="space-y-3">
+            <div className="flex items-start gap-2">
+              <div className="flex-1">
+                <ReactSelect
+                  options={users}
+                  value={users.find((user) => user.value === tempNt) || null}
+                  onChange={(selected) => setTempNt(selected?.value || "")}
+                  placeholder="Select NT Member..."
+                />
+              </div>
+              <Button
+                type="button"
+                variant={tempNt ? "primary" : "secondary"}
+                disabled={!tempNt}
+                className={!tempNt ? "opacity-50 cursor-not-allowed" : ""}
+                onClick={() => {
+                  addToList("ntMembers", tempNt, "ntMembers");
+                  setTempNt("");
+                }}
+              >
+                Add Member
+              </Button>
             </div>
-          </>
+
+            <div className="flex flex-wrap gap-2">
+              {form.ntMembers.map((id) => renderChip(id, "ntMembers", "bg-blue-100"))}
+            </div>
+          </div>
         </FormField>
 
-        {/* ORBITERS */}
-        <FormField label="Orbiters" required>
-          <>
-            <ReactSelect
-              options={users}
-              value={
-                users.find((u) => u.value === tempOrbiter) || null
-              }
-              onChange={(selected) =>
-                setTempOrbiter(selected?.value)
-              }
-            />
-
-            <Button
-              type="button"
-              onClick={() => {
-                addToList("orbiters", tempOrbiter);
-                setTempOrbiter("");
-              }}
-            >
-              Add Orbiter
-            </Button>
-
-            <div className="flex flex-wrap gap-2 mt-2">
-              {form.orbiters.map((id) => {
-                const user = users.find((u) => u.value === id);
-                return (
-                  <div
-                    key={id}
-                    className="px-3 py-1 bg-green-100 rounded-full text-sm flex items-center gap-2"
-                  >
-                    {user?.label}
-                    <span
-                      className="cursor-pointer text-red-500"
-                      onClick={() =>
-                        setForm((prev) => ({
-                          ...prev,
-                          orbiters: prev.orbiters.filter(
-                            (m) => m !== id
-                          ),
-                        }))
-                      }
-                    >
-                      ✕
-                    </span>
-                  </div>
-                );
-              })}
+        <FormField label="Orbiters" required error={errors.orbiters}>
+          <div className="space-y-3">
+            <div className="flex items-start gap-2">
+              <div className="flex-1">
+                <ReactSelect
+                  options={users}
+                  value={users.find((user) => user.value === tempOrbiter) || null}
+                  onChange={(selected) => setTempOrbiter(selected?.value || "")}
+                  placeholder="Select Orbiter..."
+                />
+              </div>
+              <Button
+                type="button"
+                variant={tempOrbiter ? "primary" : "secondary"}
+                disabled={!tempOrbiter}
+                className={!tempOrbiter ? "opacity-50 cursor-not-allowed" : ""}
+                onClick={() => {
+                  addToList("orbiters", tempOrbiter, "orbiters");
+                  setTempOrbiter("");
+                }}
+              >
+                Add Orbiter
+              </Button>
             </div>
-          </>
+
+            <div className="flex flex-wrap gap-2">
+              {form.orbiters.map((id) => renderChip(id, "orbiters", "bg-green-100"))}
+            </div>
+          </div>
         </FormField>
 
-        <FormField label="Leader Role" required>
+        <FormField label="Leader Role" required error={errors.leaderRole}>
           <Textarea
             value={form.leaderRole}
-            onChange={(e) =>
-              handleChange("leaderRole", e.target.value)
-            }
+            onChange={(event) => handleChange("leaderRole", event.target.value)}
+            error={!!errors.leaderRole}
           />
         </FormField>
 
-        <FormField label="NT Roles" required>
+        <FormField label="NT Roles" required error={errors.ntRoles}>
           <Textarea
             value={form.ntRoles}
-            onChange={(e) =>
-              handleChange("ntRoles", e.target.value)
-            }
+            onChange={(event) => handleChange("ntRoles", event.target.value)}
+            error={!!errors.ntRoles}
           />
         </FormField>
 
-        <div className="flex justify-end pt-6 border-t">
+        <div className="flex justify-end border-t pt-6">
           <Button type="submit" disabled={loading}>
             {loading ? "Creating..." : "Create Conclave"}
           </Button>
@@ -278,5 +280,3 @@ export default function CreateConclavePage() {
     </Card>
   );
 }
-
-

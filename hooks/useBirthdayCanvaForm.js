@@ -93,7 +93,12 @@ export function useBirthdayCanvaForm(toast) {
 
   const handleSave = useCallback(async () => {
     if (!selectedUserData || !dob) {
-      toast?.error("Missing fields");
+      toast?.error("Please select a user with a valid date of birth");
+      return;
+    }
+
+    if (!image) {
+      toast?.error("Please upload a birthday image before saving");
       return;
     }
 
@@ -107,11 +112,11 @@ export function useBirthdayCanvaForm(toast) {
         imageUrl,
       });
 
-      toast?.success("Saved successfully");
+      toast?.success("Birthday creative saved successfully");
       resetForm();
     } catch (error) {
       console.error(error);
-      toast?.error("Upload failed");
+      toast?.error("Failed to upload the birthday image or save the entry");
     } finally {
       setSaving(false);
       setShowConfirm(false);

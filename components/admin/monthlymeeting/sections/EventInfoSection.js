@@ -1,11 +1,21 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
-import { doc, updateDoc, Timestamp, db } from '@/services/adminMonthlyMeetingFirebaseService';
+import {
+  forwardRef,
+  useEffect,
+  useImperativeHandle,
+  useRef,
+  useState,
+} from 'react';
+import {
+  doc,
+  updateDoc,
+  Timestamp,
+  db,
+} from '@/services/adminMonthlyMeetingFirebaseService';
 import { COLLECTIONS } from '@/lib/utility_collection';
 
 import { Info, Settings, List, Trash2 } from 'lucide-react';
-// import { useEditor, EditorContent } from '@tiptap/react';
 
 import Card from '@/components/ui/Card';
 import Text from '@/components/ui/Text';
@@ -14,16 +24,19 @@ import Input from '@/components/ui/Input';
 import FormField from '@/components/ui/FormField';
 import Textarea from '@/components/ui/Textarea';
 import DateInput from '@/components/ui/DateInput';
-// import RichEditor from '@/components/ui/RichEditor';
 import { useToast } from '@/components/ui/ToastProvider';
 import RichEditor from '@/components/ui/RichEditor';
 import EventInfoSkeleton from '@/components/skeleton/EventInfoSkeleton';
 
-export default function EventInfoSection({ data, eventId }) {
-  const { showToast } = useToast();
+const EventInfoSection = forwardRef(function EventInfoSection(
+  { data, eventId, fetchData },
+  ref
+) {
+  const toast = useToast();
 
   const [eventName, setEventName] = useState('');
-  const [eventTime, setEventTime] = useState('');
+  const [eventDate, setEventDate] = useState('');
+  const [eventClock, setEventClock] = useState('');
   const [zoomLink, setZoomLink] = useState('');
 
   const [agendaType, setAgendaType] = useState('points');
@@ -32,27 +45,25 @@ export default function EventInfoSection({ data, eventId }) {
 
   const [errors, setErrors] = useState({});
   const [saving, setSaving] = useState(false);
+  const [dirty, setDirty] = useState(false);
 
   const refs = {
     eventName: useRef(null),
-    eventTime: useRef(null),
+    eventDate: useRef(null),
+    eventClock: useRef(null),
     zoomLink: useRef(null),
   };
 
-  const formatTimestampForInput = (timestamp) => {
+  const formatTimestampParts = (timestamp) => {
     if (!timestamp || typeof timestamp.toDate !== 'function') return '';
 
     const date = timestamp.toDate();
+    const pad = (value) => String(value).padStart(2, '0');
 
-    const pad = (n) => String(n).padStart(2, '0');
-
-    const year = date.getFullYear();
-    const month = pad(date.getMonth() + 1);
-    const day = pad(date.getDate());
-    const hours = pad(date.getHours());
-    const minutes = pad(date.getMinutes());
-
-    return `${year}-${month}-${day}T${hours}:${minutes}`;
+    return {
+      date: `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`,
+      time: `${pad(date.getHours())}:${pad(date.getMinutes())}`,
+    };
   };
 
   useEffect(() => {
@@ -60,101 +71,124 @@ export default function EventInfoSection({ data, eventId }) {
 
     setEventName(data.Eventname || '');
     setZoomLink(data.zoomLink || '');
-    setEventTime(formatTimestampForInput(data.time));
+    const timestampParts = formatTimestampParts(data.time);
+    setEventDate(timestampParts?.date || '');
+    setEventClock(timestampParts?.time || '');
 
     if (data.agendaType === 'rich') {
       setAgendaType('rich');
       setAgendaRich(data.agenda || '');
+      setAgendaPoints(['']);
     } else {
       setAgendaType('points');
       setAgendaPoints(data.agenda?.length ? data.agenda : ['']);
+      setAgendaRich('');
     }
+
+    setErrors({});
+    setDirty(false);
   }, [data]);
 
+  const clearError = (field) => {
+    setErrors((previous) => ({ ...previous, [field]: '' }));
+  };
+
   const validate = () => {
-    const newErrors = {};
+    const nextErrors = {};
 
-    if (!eventName.trim()) newErrors.eventName = 'Required';
-    if (!eventTime) newErrors.eventTime = 'Required';
-    if (!zoomLink.trim()) newErrors.zoomLink = 'Required';
-
-    if (agendaType === 'points') {
-      if (agendaPoints.some((a) => !a.trim()))
-        newErrors.agenda = 'Fill all agenda points';
-    } else {
-      if (!agendaRich.trim()) newErrors.agenda = 'Agenda required';
+    if (!eventName.trim()) nextErrors.eventName = 'Event name is required';
+    if (!eventDate) nextErrors.eventDate = 'Date is required';
+    if (!eventClock) nextErrors.eventClock = 'Time is required';
+    if (zoomLink && !/^https?:\/\//i.test(zoomLink.trim())) {
+      nextErrors.zoomLink = 'Enter a valid meeting URL';
     }
 
-    setErrors(newErrors);
-    return newErrors;
+    if (agendaType === 'points') {
+      if (agendaPoints.some((item) => !item.trim())) {
+        nextErrors.agenda = 'Fill all agenda points';
+      }
+    } else if (!agendaRich.trim()) {
+      nextErrors.agenda = 'Agenda is required';
+    }
+
+    setErrors(nextErrors);
+    return nextErrors;
   };
 
-  const handleAgendaChange = (i, val) => {
+  const handleAgendaChange = (index, value) => {
     const updated = [...agendaPoints];
-    updated[i] = val;
+    updated[index] = value;
     setAgendaPoints(updated);
+    setDirty(true);
+    clearError('agenda');
   };
 
-  const addAgendaPoint = () =>
+  const addAgendaPoint = () => {
     setAgendaPoints([...agendaPoints, '']);
+    setDirty(true);
+  };
 
-  const removeAgendaPoint = (i) => {
+  const removeAgendaPoint = (index) => {
     if (agendaPoints.length === 1) return;
-    setAgendaPoints(agendaPoints.filter((_, idx) => idx !== i));
+    setAgendaPoints(agendaPoints.filter((_, currentIndex) => currentIndex !== index));
+    setDirty(true);
+    clearError('agenda');
   };
 
   const handleSave = async () => {
-    const errs = validate();
-    if (Object.keys(errs).length) return;
+    const validationErrors = validate();
+    if (Object.keys(validationErrors).length) {
+      return false;
+    }
 
     try {
       setSaving(true);
-      const ref = doc(db, COLLECTIONS.monthlyMeeting, eventId);
+      const eventDateTime = new Date(`${eventDate}T${eventClock}`);
 
-      await updateDoc(ref, {
-        Eventname: eventName,
-        time: Timestamp.fromDate(new Date(eventTime)),
-        zoomLink,
+      await updateDoc(doc(db, COLLECTIONS.monthlyMeeting, eventId), {
+        Eventname: eventName.trim(),
+        time: Timestamp.fromDate(eventDateTime),
+        zoomLink: zoomLink.trim(),
         agendaType,
         agenda:
           agendaType === 'points'
-            ? agendaPoints
+            ? agendaPoints.map((item) => item.trim())
             : agendaRich,
       });
 
-      showToast({
-        type: 'success',
-        message: 'Event details updated',
-      });
-    } catch {
-      showToast({
-        type: 'error',
-        message: 'Update failed',
-      });
+      fetchData?.();
+      setDirty(false);
+      toast.success('Event details updated');
+      return true;
+    } catch (error) {
+      console.error(error);
+      toast.error('Failed to update event details');
+      return false;
     } finally {
       setSaving(false);
     }
   };
 
+  useImperativeHandle(ref, () => ({
+    save: handleSave,
+    isDirty: () => dirty,
+  }));
 
   if (!data) {
     return <EventInfoSkeleton />;
   }
 
-
   return (
-    <Card className="p-6 space-y-8">
-      {/* Header */}
+    <Card className="space-y-8 p-6">
       <div className="flex items-center gap-3">
-        <Info className="w-5 h-5 text-blue-600" />
+        <Info className="h-5 w-5 text-blue-600" />
         <Text as="h2">Event Information</Text>
       </div>
 
-      {/* 2 Column Layout */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
         <div className="space-y-5">
           <div className="flex items-center gap-2">
-            <Info className="w-4 h-4 text-gray-500" />
+            <Info className="h-4 w-4 text-gray-500" />
             <Text className="font-semibold">Basic Info</Text>
           </div>
 
@@ -162,26 +196,53 @@ export default function EventInfoSection({ data, eventId }) {
             <Input
               ref={refs.eventName}
               value={eventName}
-              onChange={(e) => setEventName(e.target.value)}
+              onChange={(event) => {
+                setEventName(event.target.value);
+                setDirty(true);
+                clearError('eventName');
+              }}
+              error={!!errors.eventName}
             />
           </FormField>
 
-          <FormField label="Date & Time" error={errors.eventTime}>
-            <DateInput
-              ref={refs.eventTime}
-              value={eventTime}
-              onChange={(e) => {
-                setEventTime(e.target.value);
-                clearError('eventTime');
-              }}
-              error={!!errors.eventTime}
-            />
-          </FormField>
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <FormField label="Date" error={errors.eventDate}>
+              <DateInput
+                ref={refs.eventDate}
+                type="date"
+                value={eventDate}
+                onChange={(event) => {
+                  setEventDate(event.target.value);
+                  setDirty(true);
+                  clearError('eventDate');
+                }}
+                error={!!errors.eventDate}
+              />
+            </FormField>
+
+            <FormField label="Time" error={errors.eventClock}>
+              <input
+                ref={refs.eventClock}
+                type="time"
+                value={eventClock}
+                onChange={(event) => {
+                  setEventClock(event.target.value);
+                  setDirty(true);
+                  clearError('eventClock');
+                }}
+                className={`block h-9 w-full rounded-lg border bg-white px-3 text-sm text-slate-900 transition-colors focus:outline-none ${
+                  errors.eventClock
+                    ? 'border-rose-300 text-rose-900 focus:border-rose-400'
+                    : 'border-slate-200 focus:border-slate-300'
+                }`}
+              />
+            </FormField>
+          </div>
         </div>
 
         <div className="space-y-5">
           <div className="flex items-center gap-2">
-            <Settings className="w-4 h-4 text-gray-500" />
+            <Settings className="h-4 w-4 text-gray-500" />
             <Text className="font-semibold">Meeting Access</Text>
           </div>
 
@@ -189,26 +250,32 @@ export default function EventInfoSection({ data, eventId }) {
             <Input
               ref={refs.zoomLink}
               value={zoomLink}
-              onChange={(e) => setZoomLink(e.target.value)}
+              onChange={(event) => {
+                setZoomLink(event.target.value);
+                setDirty(true);
+                clearError('zoomLink');
+              }}
+              error={!!errors.zoomLink}
             />
           </FormField>
         </div>
       </div>
 
-      {/* Agenda */}
       <div className="space-y-4">
         <div className="flex items-center gap-2">
-          <List className="w-4 h-4 text-gray-500" />
+          <List className="h-4 w-4 text-gray-500" />
           <Text className="font-semibold">Agenda</Text>
         </div>
 
-        {/* Toggle */}
-        <div className="flex gap-6">
+        <div className="flex flex-wrap gap-6">
           <label className="flex items-center gap-2">
             <input
               type="radio"
               checked={agendaType === 'points'}
-              onChange={() => setAgendaType('points')}
+              onChange={() => {
+                setAgendaType('points');
+                setDirty(true);
+              }}
             />
             Simple Points
           </label>
@@ -217,7 +284,10 @@ export default function EventInfoSection({ data, eventId }) {
             <input
               type="radio"
               checked={agendaType === 'rich'}
-              onChange={() => setAgendaType('rich')}
+              onChange={() => {
+                setAgendaType('rich');
+                setDirty(true);
+              }}
             />
             Rich Text
           </label>
@@ -227,23 +297,20 @@ export default function EventInfoSection({ data, eventId }) {
           {agendaType === 'points' ? (
             <div className="space-y-3">
               {agendaPoints.map((point, index) => (
-                <div key={index} className="relative bg-gray-50 p-3 rounded-lg">
-
+                <div key={index} className="relative rounded-lg bg-gray-50 p-3">
                   {agendaPoints.length > 1 && (
                     <button
                       type="button"
                       onClick={() => removeAgendaPoint(index)}
-                      className="absolute top-2 right-2 text-red-500"
+                      className="absolute right-2 top-2 text-red-500"
                     >
-                      <Trash2 className="w-4 h-4" />
+                      <Trash2 className="h-4 w-4" />
                     </button>
                   )}
 
                   <Textarea
                     value={point}
-                    onChange={(e) =>
-                      handleAgendaChange(index, e.target.value)
-                    }
+                    onChange={(event) => handleAgendaChange(index, event.target.value)}
                     className="pr-8"
                   />
                 </div>
@@ -256,22 +323,23 @@ export default function EventInfoSection({ data, eventId }) {
           ) : (
             <RichEditor
               value={agendaRich}
-              onChange={setAgendaRich}
+              onChange={(value) => {
+                setAgendaRich(value);
+                setDirty(true);
+                clearError('agenda');
+              }}
             />
           )}
         </FormField>
-
       </div>
 
-      {/* Save */}
-      <div className="flex justify-end pt-4 border-t">
+      <div className="flex justify-end border-t pt-4">
         <Button onClick={handleSave} disabled={saving}>
-          {saving ? 'Saving…' : 'Save Changes'}
+          {saving ? 'Saving...' : 'Save Changes'}
         </Button>
       </div>
     </Card>
   );
-}
+});
 
-
-
+export default EventInfoSection;

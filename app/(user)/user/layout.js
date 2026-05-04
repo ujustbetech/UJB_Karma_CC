@@ -15,7 +15,7 @@ export default function UserLayout({ children }) {
 
   useEffect(() => {
     if (!loading && !user && !isPublicProspectFlow) {
-      const next = pathname ? `/login?redirect=${encodeURIComponent(pathname)}` : "/login";
+      const next = pathname ? `/?redirect=${encodeURIComponent(pathname)}` : "/";
       router.replace(next);
     }
   }, [isPublicProspectFlow, loading, router, user]);

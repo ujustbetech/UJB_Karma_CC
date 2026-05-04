@@ -12,7 +12,7 @@ import { collection, getDocs, doc, updateDoc, db } from '@/services/adminMonthly
 import { ref as storageRef, uploadBytes, getDownloadURL, storage } from '@/services/adminMonthlyMeetingStorageService';
 
 import { COLLECTIONS } from '@/lib/utility_collection';
-import { Trash2, BookOpen, Upload, FileText, X } from 'lucide-react';
+import { Trash2, BookOpen, Upload, FileText, X, Pencil } from 'lucide-react';
 import { CheckCircle2, UserCheck, UserX } from 'lucide-react';
 
 import Card from '@/components/ui/Card';
@@ -42,6 +42,7 @@ const KnowledgeSharingSection = forwardRef(function KnowledgeSharingSection(
   const firstErrorRef = useRef(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [removeIndex, setRemoveIndex] = useState(null);
+  const [editingIndex, setEditingIndex] = useState(null);
 
   /* ===============================
      Load data from parent
@@ -135,6 +136,7 @@ const KnowledgeSharingSection = forwardRef(function KnowledgeSharingSection(
   };
 
   const addRow = () => {
+    const newIndex = sections.length;
     setSections([
       ...sections,
       {
@@ -150,6 +152,7 @@ const KnowledgeSharingSection = forwardRef(function KnowledgeSharingSection(
         referenceType: 'none',
       },
     ]);
+    setEditingIndex(newIndex);
     setDirty(true);
   };
 
@@ -157,6 +160,11 @@ const KnowledgeSharingSection = forwardRef(function KnowledgeSharingSection(
     const updated = sections.filter((_, i) => i !== removeIndex);
     setSections(updated);
     setDirty(true);
+    setEditingIndex((current) => {
+      if (current === removeIndex) return null;
+      if (typeof current === 'number' && current > removeIndex) return current - 1;
+      return current;
+    });
     setConfirmOpen(false);
     setRemoveIndex(null);
   };
@@ -207,6 +215,7 @@ const KnowledgeSharingSection = forwardRef(function KnowledgeSharingSection(
       });
 
       setDirty(false);
+      setEditingIndex(null);
       await fetchData?.();
 
       toast.success('Knowledge entries saved');
@@ -272,12 +281,18 @@ const KnowledgeSharingSection = forwardRef(function KnowledgeSharingSection(
             className="p-5 space-y-4 border border-slate-200 bg-slate-50/40 hover:shadow-md transition"
           >
             {/* Entry Header */}
-            <div className="flex items-center justify-between">
-              <Text as="h3" className="text-base font-semibold">
-                Knowledge Entry {i + 1}
-              </Text>
+            <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+              <div className="space-y-1">
+                <Text className="font-semibold">Knowledge Entry #{i + 1}</Text>
+                <Text className="text-sm text-slate-600">
+                  {s.topic || 'No topic added yet'}
+                </Text>
+                <Text className="text-xs text-slate-500">
+                  {s.name || 'Orbiter not selected'}
+                </Text>
+              </div>
 
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 {s.status === 'Shared' && (
                   <span className="flex items-center gap-1 text-xs px-2 py-1 rounded-full bg-green-100 text-green-700">
                     <CheckCircle2 className="w-3 h-3" />
@@ -299,19 +314,28 @@ const KnowledgeSharingSection = forwardRef(function KnowledgeSharingSection(
                   </span>
                 )}
 
-                <ActionButton
-                  icon={Trash2}
-                  label="Remove"
-                  variant="ghostDanger"
-                  onClick={() => {
-                    setRemoveIndex(i);
-                    setConfirmOpen(true);
-                  }}
-                />
+                <Button
+                  type="button"
+                  variant={editingIndex === i ? 'secondary' : 'outline'}
+                  onClick={() => setEditingIndex(editingIndex === i ? null : i)}
+                >
+                  <span className="flex items-center gap-2">
+                    <Pencil className="h-4 w-4" />
+                    {editingIndex === i ? 'Close' : 'Edit'}
+                  </span>
+                </Button>
+
+                <Button type="button" variant="ghostDanger" onClick={() => { setRemoveIndex(i); setConfirmOpen(true); }}>
+                  <span className="flex items-center gap-2">
+                    <Trash2 className="h-4 w-4" />
+                    Delete
+                  </span>
+                </Button>
               </div>
             </div>
 
-
+            {editingIndex === i && (
+              <div className="space-y-4 border-t pt-4 mt-2">
             {/* Orbiter */}
             <FormField label="Orbiter" required error={errors[`user-${i}`]}>
               <div className="relative">
@@ -501,16 +525,15 @@ const KnowledgeSharingSection = forwardRef(function KnowledgeSharingSection(
               </div>
             </FormField>
 
-
+            <div className="flex justify-end pt-4 mt-4">
+              <Button variant="primary" loading={saving} onClick={handleSave}>
+                Save
+              </Button>
+            </div>
+            </div>
+            )}
           </Card>
         ))}
-      </div>
-
-      {/* Save Bar */}
-      <div className="flex justify-end pt-4 border-t">
-        <Button variant="primary" onClick={handleSave} disabled={saving}>
-          {saving ? 'Saving…' : 'Save'}
-        </Button>
       </div>
 
       <ConfirmModal

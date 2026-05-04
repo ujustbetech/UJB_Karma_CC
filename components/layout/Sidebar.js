@@ -2,17 +2,21 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState, useRef } from "react";
 import clsx from "clsx";
 import { NAV_ITEMS } from "./nav.config";
+import Swal from "sweetalert2";
 import {
   ChevronRight,
   LogOut,
 } from "lucide-react";
+import { useAdminSession } from "@/hooks/useAdminSession";
 
 export default function Sidebar({ collapsed }) {
   const pathname = usePathname();
+  const router = useRouter();
+  const { logout } = useAdminSession();
 
   const [openMenu, setOpenMenu] = useState(null);
   const [hoveredMenu, setHoveredMenu] = useState(null);
@@ -57,6 +61,34 @@ export default function Sidebar({ collapsed }) {
       setOpenMenu(activeParent.label);
     }
   }, [pathname]);
+
+  const handleLogout = async () => {
+    const result = await Swal.fire({
+      title: "Logout?",
+      text: "Are you sure you want to logout?",
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonColor: "#2563eb",
+      cancelButtonColor: "#d33",
+      confirmButtonText: "Yes, Logout",
+    });
+
+    if (!result.isConfirmed) {
+      return;
+    }
+
+    await logout();
+
+    await Swal.fire({
+      title: "Logged out!",
+      text: "You have been successfully logged out.",
+      icon: "success",
+      timer: 1500,
+      showConfirmButton: false,
+    });
+
+    router.replace("/login");
+  };
 
   if (!isMounted) return null;
 
@@ -233,13 +265,14 @@ export default function Sidebar({ collapsed }) {
 
       {/* Footer */}
       <div className="mt-auto px-1 pb-4 space-y-1">
-        <Link
-          href="/logout"
+        <button
+          type="button"
+          onClick={handleLogout}
           className="flex items-center h-9 px-3 rounded-[10px] text-sm text-slate-400 hover:bg-slate-100 hover:text-slate-900"
         >
           <LogOut className="h-4 w-4" />
           {!collapsed && <span className="ml-3">Log Out</span>}
-        </Link>
+        </button>
       </div>
     </aside>
   );

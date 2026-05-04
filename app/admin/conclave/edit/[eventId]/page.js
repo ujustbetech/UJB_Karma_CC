@@ -30,8 +30,10 @@ function convertDateValue(value) {
 }
 
 export default function EditConclavePage() {
-  const { eventId } = useParams();
-  const id = eventId;
+  const params = useParams();
+  const id = Array.isArray(params?.eventId)
+    ? params.eventId[0]
+    : String(params?.eventId || "").trim();
 
   const router = useRouter();
   const toast = useToast();

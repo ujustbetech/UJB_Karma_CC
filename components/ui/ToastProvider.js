@@ -32,6 +32,8 @@ export function ToastProvider({ children }) {
   }, [removeToast]);
 
   const api = {
+    showToast,
+
     success: (message, options = {}) =>
       showToast({
         type: "success",
