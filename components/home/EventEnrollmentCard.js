@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import Slider from "react-slick";
 import { CalendarDays } from "lucide-react";
 import { Forum } from "next/font/google";
+import { useToast } from "@/components/ui/ToastProvider";
+import { registerUserForMonthlyMeeting } from "@/services/monthlyMeetingService";
 
 const forum = Forum({
   subsets: ["latin"],
@@ -13,8 +15,11 @@ const forum = Forum({
 
 export default function MeetingsSection({ data }) {
   const router = useRouter();
+  const toast = useToast();
   const [activeTab, setActiveTab] = useState("monthly");
   const [now, setNow] = useState(new Date());
+  const [registeringId, setRegisteringId] = useState("");
+  const [registeredIds, setRegisteredIds] = useState(new Set());
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -97,6 +102,41 @@ export default function MeetingsSection({ data }) {
 
   const renderCard = (event) => {
     const isUpcoming = event.time > now;
+    const isRegistered = event.isUserRegistered || registeredIds.has(event.id);
+    const enrollmentOpen =
+      event.isEnrollmentOpen !== undefined
+        ? event.isEnrollmentOpen
+        : typeof event.enrollmentEnabled === "boolean"
+        ? event.enrollmentEnabled
+        : !event.enrollmentDeadline ||
+          new Date(event.enrollmentDeadline).getTime() >= Date.now();
+    const monthlyStatusText =
+      isRegistered ? "Registered" : enrollmentOpen ? "Open" : "Enrollment Closed";
+    const monthlyStatusClass = isRegistered
+      ? "text-emerald-600"
+      : enrollmentOpen
+      ? "text-blue-600"
+      : "text-rose-600";
+
+    const handleRegister = async (clickEvent) => {
+      clickEvent.stopPropagation();
+      if (activeTab !== "monthly" || isRegistered || registeringId === event.id) return;
+
+      try {
+        setRegisteringId(event.id);
+        const response = await registerUserForMonthlyMeeting(event.id);
+        setRegisteredIds((prev) => new Set([...prev, event.id]));
+        toast.success(
+          response?.alreadyRegistered
+            ? "You are already registered for this meeting"
+            : "Registration successful"
+        );
+      } catch (error) {
+        toast.error(error?.message || "Failed to register");
+      } finally {
+        setRegisteringId("");
+      }
+    };
 
     return (
       <div key={event.id} className="px-2">
@@ -165,19 +205,40 @@ export default function MeetingsSection({ data }) {
             <div className="py-3">
               <p
                 className={`text-sm font-semibold ${
-                  isUpcoming ? "text-blue-600" : "text-slate-600"
+                  activeTab === "monthly"
+                    ? monthlyStatusClass
+                    : isUpcoming
+                    ? "text-blue-600"
+                    : "text-slate-600"
                 }`}
               >
-                {isUpcoming ? "Open" : "Closed"}
+                {activeTab === "monthly" ? monthlyStatusText : isUpcoming ? "Open" : "Closed"}
               </p>
               <p className="mt-1 text-xs text-slate-400">Status</p>
             </div>
           </div>
 
-          <div className="border-t border-slate-200">
+          <div className="grid grid-cols-2 border-t border-slate-200">
+            {activeTab === "monthly" ? (
+              <button
+                onClick={handleRegister}
+                disabled={!enrollmentOpen || isRegistered || registeringId === event.id}
+                className="py-3 text-sm font-medium text-emerald-600 transition hover:bg-emerald-50 disabled:text-slate-400 disabled:hover:bg-transparent"
+              >
+                {isRegistered
+                  ? "Registered"
+                  : !enrollmentOpen
+                  ? "Enrollment Closed"
+                  : registeringId === event.id
+                  ? "Registering..."
+                  : "Register"}
+              </button>
+            ) : (
+              <div />
+            )}
             <button
               onClick={() => router.push(getDestination(event))}
-              className="w-full py-3 text-sm font-medium text-blue-600 transition hover:bg-blue-50"
+              className="py-3 text-sm font-medium text-blue-600 transition hover:bg-blue-50"
             >
               View Details
             </button>

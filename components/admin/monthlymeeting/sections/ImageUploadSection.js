@@ -2,9 +2,17 @@
 
 import { useEffect, useState } from 'react';
 
-import { ref, uploadBytesResumable, getDownloadURL, deleteObject, storage } from '@/services/adminMonthlyMeetingStorageService';
-import { doc, updateDoc, arrayUnion, getDoc, db } from '@/services/adminMonthlyMeetingFirebaseService';
+import { doc, updateDoc, getDoc, db } from '@/services/adminMonthlyMeetingFirebaseService';
 import { COLLECTIONS } from '@/lib/utility_collection';
+import {
+  appendMonthlyMeetingAuditLogs,
+  buildMonthlyMeetingAuditEntry,
+  diffMonthlyMeetingFields,
+} from '@/lib/monthlymeeting/monthlyMeetingAudit.mjs';
+import {
+  deleteAdminMonthlyMeetingFile,
+  uploadAdminMonthlyMeetingFile,
+} from '@/services/adminMonthlyMeetingService';
 
 import Card from '@/components/ui/Card';
 import Text from '@/components/ui/Text';
@@ -16,7 +24,7 @@ import ConfirmModal from '@/components/ui/ConfirmModal';
 
 import { FileText, Trash2, UploadCloud } from 'lucide-react';
 
-export default function ImageUploadSection({ eventID, fetchData }) {
+export default function ImageUploadSection({ eventID, fetchData, currentAdmin }) {
   const toast = useToast();
 
   const [sections, setSections] = useState([
@@ -95,39 +103,55 @@ export default function ImageUploadSection({ eventID, fetchData }) {
       setUploadingIndex(index);
       setProgress(10);
 
-      const fileRef = ref(
-        storage,
-        `${COLLECTIONS.monthlyMeeting}/${eventID}/${section.type}/${Date.now()}_${section.image.name}`
-      );
-
-      const uploadTask = uploadBytesResumable(fileRef, section.image);
-
-      uploadTask.on(
-        'state_changed',
-        (snap) => {
-          const percent =
-            (snap.bytesTransferred / snap.totalBytes) * 100;
-          setProgress(Math.round(percent));
-        },
-        (err) => {
-          console.error(err);
-          toast.error('Upload failed');
-          setUploadingIndex(null);
-        },
-        async () => {
-          const url = await getDownloadURL(uploadTask.snapshot.ref);
+      const upload = await uploadAdminMonthlyMeetingFile(eventID, {
+        file: section.image,
+        module: 'meetingMedia',
+        folder: `images/${section.type}`,
+      });
+      setProgress(85);
+      const url = upload.url;
 
           const eventRef = doc(db, COLLECTIONS.monthlyMeeting, eventID);
-          await updateDoc(eventRef, {
-            imageUploads: arrayUnion({
+          const snap = await getDoc(eventRef);
+          const currentUploads = snap.exists() ? snap.data().imageUploads || [] : [];
+          const nextUploads = [
+            ...currentUploads,
+            {
               type: section.type,
               description: section.description,
               image: {
                 name: section.image.name,
                 url,
+                path: upload.path,
               },
               timestamp: new Date().toISOString(),
-            }),
+            },
+          ];
+
+          await updateDoc(eventRef, {
+            imageUploads: nextUploads,
+            auditLogs: appendMonthlyMeetingAuditLogs(
+              snap.data()?.auditLogs,
+              diffMonthlyMeetingFields(
+                snap.data() || {},
+                { ...(snap.data() || {}), imageUploads: nextUploads },
+                ['imageUploads']
+              ).map((change) =>
+                buildMonthlyMeetingAuditEntry({
+                  section: 'Images',
+                  field: change.field,
+                  before: change.before,
+                  after: change.after,
+                  actor: currentAdmin,
+                })
+              ),
+            ),
+            updatedBy: {
+              name: currentAdmin?.name || currentAdmin?.email || 'Admin',
+              role: currentAdmin?.role || '',
+              identity: currentAdmin?.identity?.id || currentAdmin?.email || '',
+            },
+            updatedAt: new Date(),
           });
 
           toast.success('Image uploaded');
@@ -152,8 +176,6 @@ export default function ImageUploadSection({ eventID, fetchData }) {
 
           fetchData?.();
           fetchImages();
-        }
-      );
     } catch (err) {
       console.error(err);
       toast.error('Upload failed');
@@ -167,21 +189,47 @@ export default function ImageUploadSection({ eventID, fetchData }) {
     if (!upload) return;
 
     try {
-      const fileRef = ref(storage, upload.image.url);
-      await deleteObject(fileRef);
+      await deleteAdminMonthlyMeetingFile(eventID, {
+        path: upload.image.path,
+        module: 'meetingMedia',
+      });
 
       const docRef = doc(db, COLLECTIONS.monthlyMeeting, eventID);
       const docSnap = await getDoc(docRef);
 
-      if (docSnap.exists()) {
-        const updatedUploads = (docSnap.data().imageUploads || []).filter(
-          (item) => item.image.url !== upload.image.url
-        );
+        if (docSnap.exists()) {
+          const updatedUploads = (docSnap.data().imageUploads || []).filter(
+            (item) => item.image.url !== upload.image.url
+          );
 
-        await updateDoc(docRef, { imageUploads: updatedUploads });
-        toast.success('Image deleted');
-        fetchImages();
-      }
+          await updateDoc(docRef, {
+            imageUploads: updatedUploads,
+            auditLogs: appendMonthlyMeetingAuditLogs(
+              docSnap.data()?.auditLogs,
+              diffMonthlyMeetingFields(
+                docSnap.data() || {},
+                { ...(docSnap.data() || {}), imageUploads: updatedUploads },
+                ['imageUploads']
+              ).map((change) =>
+                buildMonthlyMeetingAuditEntry({
+                  section: 'Images',
+                  field: change.field,
+                  before: change.before,
+                  after: change.after,
+                  actor: currentAdmin,
+                })
+              ),
+            ),
+            updatedBy: {
+              name: currentAdmin?.name || currentAdmin?.email || 'Admin',
+              role: currentAdmin?.role || '',
+              identity: currentAdmin?.identity?.id || currentAdmin?.email || '',
+            },
+            updatedAt: new Date(),
+          });
+          toast.success('Image deleted');
+          fetchImages();
+        }
     } catch (e) {
       console.error(e);
       toast.error('Delete failed');

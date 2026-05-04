@@ -8,8 +8,7 @@ import {
   useImperativeHandle,
 } from 'react';
 import { collection, getDocs, doc, updateDoc, db } from '@/services/adminConclaveFirebaseService';
-
-import { ref as storageRef, uploadBytes, getDownloadURL, storage } from '@/services/adminConclaveStorageService';
+import { uploadAdminConclaveMeetingFile } from '@/services/adminConclaveService';
 
 import { COLLECTIONS } from '@/lib/utility_collection';
 import { Trash2, BookOpen, Upload, FileText, X, Pencil } from 'lucide-react';
@@ -24,6 +23,16 @@ import Textarea from '@/components/ui/Textarea';
 import { useToast } from '@/components/ui/ToastProvider';
 import ConfirmModal from '@/components/ui/ConfirmModal';
 import RichEditor from '@/components/ui/RichEditor';
+
+function buildAuditEntry(action, details) {
+  return {
+    id: `audit-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    section: 'Knowledge Sharing',
+    action,
+    details,
+    timestamp: new Date().toISOString(),
+  };
+}
 
 const KnowledgeSharingSection = forwardRef(function KnowledgeSharingSection(
   { conclaveId, meetingId, data = {}, fetchData },
@@ -209,6 +218,7 @@ const KnowledgeSharingSection = forwardRef(function KnowledgeSharingSection(
 
       await updateDoc(doc(db, COLLECTIONS.conclaves, conclaveId, "meetings", meetingId), {
         knowledgeSections: cleaned,
+        auditLogs: [...(Array.isArray(data?.auditLogs) ? data.auditLogs : []), buildAuditEntry("edit", "Knowledge entries updated")].slice(-100),
       });
 
       setDirty(false);
@@ -232,11 +242,11 @@ const KnowledgeSharingSection = forwardRef(function KnowledgeSharingSection(
     updateField(index, 'uploading', true);
 
     try {
-      const path = `conclaves/${conclaveId}/meetings/${meetingId}/knowledgeDocs/${Date.now()}_${file.name}`;
-      const fileRef = storageRef(storage, path);
-
-      await uploadBytes(fileRef, file);
-      const url = await getDownloadURL(fileRef);
+      const upload = await uploadAdminConclaveMeetingFile(conclaveId, meetingId, {
+        file,
+        module: "knowledgeDocs",
+      });
+      const url = upload.url;
 
       updateField(index, 'referenceUrl', url);
       updateField(index, 'fileName', file.name);

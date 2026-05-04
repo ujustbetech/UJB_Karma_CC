@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import {
   deleteAdminConclave,
   fetchAdminConclaves,
+  fetchAdminConclaveUsers,
 } from "@/services/adminConclaveService";
 
 import Card from "@/components/ui/Card";
@@ -24,6 +25,7 @@ export default function ConclavesListingPage() {
   const toast = useToast();
 
   const [conclaves, setConclaves] = useState([]);
+  const [userDirectory, setUserDirectory] = useState([]);
   const [loading, setLoading] = useState(true);
   const [nameFilter, setNameFilter] = useState("");
   const [page, setPage] = useState(1);
@@ -46,8 +48,12 @@ export default function ConclavesListingPage() {
   const fetchConclavesData = async () => {
     setLoading(true);
     try {
-      const list = await fetchAdminConclaves();
+      const [list, users] = await Promise.all([
+        fetchAdminConclaves(),
+        fetchAdminConclaveUsers(),
+      ]);
       setConclaves(list);
+      setUserDirectory(users);
     } catch (error) {
       console.error(error);
       toast.error("Failed to fetch conclaves");
@@ -103,6 +109,20 @@ export default function ConclavesListingPage() {
     });
   };
 
+  const resolveMemberName = (rawValue) => {
+    const value = String(rawValue || "").trim();
+    if (!value) return "-";
+
+    const match = userDirectory.find(
+      (user) =>
+        String(user?.id || "").trim() === value ||
+        String(user?.value || "").trim() === value ||
+        String(user?.phone || "").trim() === value
+    );
+
+    return String(match?.label || value);
+  };
+
   return (
     <>
       <div className="sticky top-0 z-30 bg-white mb-4">
@@ -144,7 +164,7 @@ export default function ConclavesListingPage() {
                 <TableRow key={item.id}>
                   <td className="px-4 py-3">{(page - 1) * perPage + i + 1}</td>
                   <td className="px-4 py-3 font-medium">{item.name}</td>
-                  <td className="px-4 py-3">{item.leader}</td>
+                  <td className="px-4 py-3">{resolveMemberName(item.leader)}</td>
                   <td className="px-4 py-3">{formatDate(item.startDate)}</td>
                   <td className="px-4 py-3">{formatDate(item.initiationDate)}</td>
                   <td className="px-4 py-3">{item.ntMembers.length}</td>

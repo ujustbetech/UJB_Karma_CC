@@ -9,9 +9,13 @@ import {
 } from 'react';
 import { collection, getDocs, doc, updateDoc, db } from '@/services/adminMonthlyMeetingFirebaseService';
 
-import { ref as storageRef, uploadBytes, getDownloadURL, storage } from '@/services/adminMonthlyMeetingStorageService';
-
 import { COLLECTIONS } from '@/lib/utility_collection';
+import {
+  appendMonthlyMeetingAuditLogs,
+  buildMonthlyMeetingAuditEntry,
+  diffMonthlyMeetingFields,
+} from '@/lib/monthlymeeting/monthlyMeetingAudit.mjs';
+import { uploadAdminMonthlyMeetingFile } from '@/services/adminMonthlyMeetingService';
 import { Trash2, BookOpen, Upload, FileText, X, Pencil } from 'lucide-react';
 import { CheckCircle2, UserCheck, UserX } from 'lucide-react';
 
@@ -27,7 +31,7 @@ import ConfirmModal from '@/components/ui/ConfirmModal';
 import RichEditor from '@/components/ui/RichEditor';
 
 const KnowledgeSharingSection = forwardRef(function KnowledgeSharingSection(
-  { eventId, data, fetchData },
+  { eventId, data, fetchData, currentAdmin },
   ref
 ) {
   const toast = useToast();
@@ -174,6 +178,20 @@ const KnowledgeSharingSection = forwardRef(function KnowledgeSharingSection(
       if (!s.name) e[`user-${i}`] = 'Required';
       if (!s.topic) e[`topic-${i}`] = 'Required';
       if (!s.description) e[`desc-${i}`] = 'Required';
+      const requiresWriteup = s.referenceType === 'writeup' || s.referenceType === 'both';
+      const requiresDocument = s.referenceType === 'document' || s.referenceType === 'both';
+
+      if (requiresWriteup && isRichTextEmpty(s.writeup)) {
+        e[`writeup-${i}`] = 'Write-up is required';
+      }
+
+      if (
+        requiresDocument &&
+        !String(s.referenceUrl || '').trim() &&
+        !String(s.fileName || '').trim()
+      ) {
+        e[`document-${i}`] = 'Document link or upload is required';
+      }
     });
     setErrors(e);
     return e;
@@ -181,6 +199,14 @@ const KnowledgeSharingSection = forwardRef(function KnowledgeSharingSection(
 
   const focusFirstError = (errs) => {
     if (!Object.keys(errs).length) return;
+    const firstKey = Object.keys(errs)[0];
+    const match = firstKey.match(/-(\d+)$/);
+    if (match) {
+      const index = Number(match[1]);
+      if (!Number.isNaN(index)) {
+        setEditingIndex(index);
+      }
+    }
     firstErrorRef.current?.focus();
   };
 
@@ -191,27 +217,61 @@ const KnowledgeSharingSection = forwardRef(function KnowledgeSharingSection(
     const errs = validate();
     if (Object.keys(errs).length) {
       focusFirstError(errs);
+      toast.error('Please fix the highlighted required fields');
       return false;
     }
 
     try {
       setSaving(true);
 
-      const cleaned = sections.map((s) => ({
-        description: s.description,
-        name: s.name,
-        topic: s.topic,
-        status: s.status || 'Shared',
-        writeup: s.writeup || '',
-        referenceUrl: s.referenceUrl || '',
-        fileName: s.fileName || '',
-        referenceType: s.referenceType || 'none',
-      }));
+      const cleaned = sections.map((s) => {
+        const referenceType = s.referenceType || 'none';
+        const next = {
+          description: s.description,
+          name: s.name,
+          topic: s.topic,
+          status: s.status || 'Shared',
+          referenceType,
+        };
+
+        if (referenceType === 'writeup' || referenceType === 'both') {
+          next.writeup = s.writeup || '';
+        }
+
+        if (referenceType === 'document' || referenceType === 'both') {
+          if (String(s.referenceUrl || '').trim()) next.referenceUrl = s.referenceUrl;
+          if (String(s.fileName || '').trim()) next.fileName = s.fileName;
+        }
+
+        return next;
+      });
 
 
 
       await updateDoc(doc(db, COLLECTIONS.monthlyMeeting, eventId), {
         knowledgeSections: cleaned,
+        auditLogs: appendMonthlyMeetingAuditLogs(
+          data?.auditLogs,
+          diffMonthlyMeetingFields(
+            data || {},
+            { ...(data || {}), knowledgeSections: cleaned },
+            ['knowledgeSections']
+          ).map((change) =>
+            buildMonthlyMeetingAuditEntry({
+              section: 'Knowledge Sharing',
+              field: change.field,
+              before: change.before,
+              after: change.after,
+              actor: currentAdmin,
+            })
+          ),
+        ),
+        updatedBy: {
+          name: currentAdmin?.name || currentAdmin?.email || 'Admin',
+          role: currentAdmin?.role || '',
+          identity: currentAdmin?.identity?.id || currentAdmin?.email || '',
+        },
+        updatedAt: new Date(),
       });
 
       setDirty(false);
@@ -235,11 +295,10 @@ const KnowledgeSharingSection = forwardRef(function KnowledgeSharingSection(
     updateField(index, 'uploading', true);
 
     try {
-      const path = `knowledgeDocs/${eventId}/${Date.now()}_${file.name}`;
-      const fileRef = storageRef(storage, path);
-
-      await uploadBytes(fileRef, file);
-      const url = await getDownloadURL(fileRef);
+      const { url } = await uploadAdminMonthlyMeetingFile(eventId, {
+        file,
+        module: 'knowledgeDocs',
+      });
 
       updateField(index, 'referenceUrl', url);
       updateField(index, 'fileName', file.name);
@@ -412,18 +471,24 @@ const KnowledgeSharingSection = forwardRef(function KnowledgeSharingSection(
 
 
             {(s.referenceType === 'writeup' || s.referenceType === 'both') && (
-              <FormField label="Reference Write-up (optional)">
-                <RichEditor
-                  value={s.writeup || ''}
-                  onChange={(val) => updateField(i, 'writeup', val)}
-                />
+              <FormField
+                label="Reference Write-up"
+                required
+                error={errors[`writeup-${i}`]}
+              >
+                <div className={`rounded-xl border ${errors[`writeup-${i}`] ? 'border-red-500' : 'border-slate-200'}`}>
+                  <RichEditor
+                    value={s.writeup || ''}
+                    onChange={(val) => updateField(i, 'writeup', val)}
+                  />
+                </div>
               </FormField>
             )}
 
             {(s.referenceType === 'document' || s.referenceType === 'both') && (
               <>
 
-                <FormField label="Reference Document Link (optional)">
+                <FormField label="Reference Document Link">
                   <Input
                     value={s.referenceUrl || ''}
                     onChange={(e) => updateField(i, 'referenceUrl', e.target.value)}
@@ -431,8 +496,15 @@ const KnowledgeSharingSection = forwardRef(function KnowledgeSharingSection(
                   />
                 </FormField>
 
-                <FormField label="Reference Document (optional)">
-                  <div className="flex items-center gap-3 flex-wrap">
+                <FormField
+                  label="Reference Document"
+                  required
+                  error={errors[`document-${i}`]}
+                >
+                  <div className={`flex items-center gap-3 flex-wrap rounded-xl border p-3 ${errors[`document-${i}`] ? 'border-red-500' : 'border-slate-200'}`}>
+                    <p className="w-full text-xs text-slate-500">
+                      Add at least one: document link or uploaded file.
+                    </p>
 
                     {/* Upload Button */}
                     <label className="flex items-center gap-2 px-3 py-1.5 border rounded-md cursor-pointer bg-white hover:bg-gray-50">
@@ -552,3 +624,9 @@ export default KnowledgeSharingSection;
 
 
 
+  const isRichTextEmpty = (value) =>
+    !String(value || "")
+      .replace(/<[^>]*>/g, " ")
+      .replace(/&nbsp;/gi, " ")
+      .replace(/\s+/g, "")
+      .trim();

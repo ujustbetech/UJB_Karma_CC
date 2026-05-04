@@ -2,9 +2,17 @@
 
 import { useEffect, useRef, useState } from 'react';
 
-import { ref, uploadBytesResumable, getDownloadURL, deleteObject, storage } from '@/services/adminMonthlyMeetingStorageService';
-import { doc, updateDoc, arrayUnion, arrayRemove, getDoc, db } from '@/services/adminMonthlyMeetingFirebaseService';
+import { doc, updateDoc, getDoc, db } from '@/services/adminMonthlyMeetingFirebaseService';
 import { COLLECTIONS } from '@/lib/utility_collection';
+import {
+  appendMonthlyMeetingAuditLogs,
+  buildMonthlyMeetingAuditEntry,
+  diffMonthlyMeetingFields,
+} from '@/lib/monthlymeeting/monthlyMeetingAudit.mjs';
+import {
+  deleteAdminMonthlyMeetingFile,
+  uploadAdminMonthlyMeetingFile,
+} from '@/services/adminMonthlyMeetingService';
 
 import {
   FileText,
@@ -26,7 +34,7 @@ import ConfirmModal from '@/components/ui/ConfirmModal';
 
 const CATEGORIES = ['Agenda', 'Minutes', 'Report', 'Finance', 'General'];
 
-export default function DocumentUploadSection({ eventID, fetchData }) {
+export default function DocumentUploadSection({ eventID, fetchData, currentAdmin }) {
   const toast = useToast();
 
   const [selectedDocs, setSelectedDocs] = useState([]);
@@ -63,43 +71,58 @@ export default function DocumentUploadSection({ eventID, fetchData }) {
 
     setLoading(true);
     const uploaded = [];
+    const refDoc = doc(db, COLLECTIONS.monthlyMeeting, eventID);
+    const snap = await getDoc(refDoc);
+    const currentUploads = snap.exists() ? snap.data().documentUploads || [] : [];
 
     for (const file of selectedDocs) {
-      const fileRef = ref(
-        storage,
-        `${COLLECTIONS.monthlyMeeting}/${eventID}/docs/${Date.now()}_${file.name}`
-      );
-
-      const uploadTask = uploadBytesResumable(fileRef, file);
-
-      await new Promise((resolve, reject) => {
-        uploadTask.on(
-          'state_changed',
-          (snap) => {
-            const p = (snap.bytesTransferred / snap.totalBytes) * 100;
-            setProgress(Math.round(p));
-          },
-          reject,
-          async () => {
-            const url = await getDownloadURL(uploadTask.snapshot.ref);
-            uploaded.push({
-              name: file.name,
-              url,
-              path: uploadTask.snapshot.ref.fullPath
-            });
-            resolve();
-          }
-        );
+      const upload = await uploadAdminMonthlyMeetingFile(eventID, {
+        file,
+        module: 'meetingMedia',
+        folder: 'documents',
       });
+      uploaded.push({
+        name: file.name,
+        url: upload.url,
+        path: upload.path,
+      });
+      setProgress(Math.round(((uploaded.length || 1) / selectedDocs.length) * 100));
     }
 
-    await updateDoc(doc(db, COLLECTIONS.monthlyMeeting, eventID), {
-      documentUploads: arrayUnion({
+    const nextUploads = [
+      ...currentUploads,
+      {
         description: docDescription,
         category,
         files: uploaded,
         timestamp: new Date().toISOString()
-      })
+      },
+    ];
+
+    await updateDoc(refDoc, {
+      documentUploads: nextUploads,
+      auditLogs: appendMonthlyMeetingAuditLogs(
+        snap.data()?.auditLogs,
+        diffMonthlyMeetingFields(
+          snap.data() || {},
+          { ...(snap.data() || {}), documentUploads: nextUploads },
+          ['documentUploads']
+        ).map((change) =>
+          buildMonthlyMeetingAuditEntry({
+            section: 'Documents',
+            field: change.field,
+            before: change.before,
+            after: change.after,
+            actor: currentAdmin,
+          })
+        ),
+      ),
+      updatedBy: {
+        name: currentAdmin?.name || currentAdmin?.email || 'Admin',
+        role: currentAdmin?.role || '',
+        identity: currentAdmin?.identity?.id || currentAdmin?.email || '',
+      },
+      updatedAt: new Date(),
     });
 
     setSelectedDocs([]);
@@ -118,7 +141,10 @@ export default function DocumentUploadSection({ eventID, fetchData }) {
       // Delete from storage ONLY if path exists
       for (const file of upload.files) {
         if (file.path) {
-          await deleteObject(ref(storage, file.path));
+          await deleteAdminMonthlyMeetingFile(eventID, {
+            path: file.path,
+            module: 'meetingMedia',
+          });
         }
       }
 
@@ -132,7 +158,29 @@ export default function DocumentUploadSection({ eventID, fetchData }) {
       );
 
       await updateDoc(refDoc, {
-        documentUploads: updated
+        documentUploads: updated,
+        auditLogs: appendMonthlyMeetingAuditLogs(
+          snap.data()?.auditLogs,
+          diffMonthlyMeetingFields(
+            snap.data() || {},
+            { ...(snap.data() || {}), documentUploads: updated },
+            ['documentUploads']
+          ).map((change) =>
+            buildMonthlyMeetingAuditEntry({
+              section: 'Documents',
+              field: change.field,
+              before: change.before,
+              after: change.after,
+              actor: currentAdmin,
+            })
+          ),
+        ),
+        updatedBy: {
+          name: currentAdmin?.name || currentAdmin?.email || 'Admin',
+          role: currentAdmin?.role || '',
+          identity: currentAdmin?.identity?.id || currentAdmin?.email || '',
+        },
+        updatedAt: new Date(),
       });
 
       fetchDocs();
@@ -156,7 +204,10 @@ export default function DocumentUploadSection({ eventID, fetchData }) {
       // Delete files from storage if path exists
       for (const file of deleteTarget.files) {
         if (file.path) {
-          await deleteObject(ref(storage, file.path));
+          await deleteAdminMonthlyMeetingFile(eventID, {
+            path: file.path,
+            module: 'meetingMedia',
+          });
         }
       }
 
@@ -169,7 +220,29 @@ export default function DocumentUploadSection({ eventID, fetchData }) {
       );
 
       await updateDoc(refDoc, {
-        documentUploads: updated
+        documentUploads: updated,
+        auditLogs: appendMonthlyMeetingAuditLogs(
+          snap.data()?.auditLogs,
+          diffMonthlyMeetingFields(
+            snap.data() || {},
+            { ...(snap.data() || {}), documentUploads: updated },
+            ['documentUploads']
+          ).map((change) =>
+            buildMonthlyMeetingAuditEntry({
+              section: 'Documents',
+              field: change.field,
+              before: change.before,
+              after: change.after,
+              actor: currentAdmin,
+            })
+          ),
+        ),
+        updatedBy: {
+          name: currentAdmin?.name || currentAdmin?.email || 'Admin',
+          role: currentAdmin?.role || '',
+          identity: currentAdmin?.identity?.id || currentAdmin?.email || '',
+        },
+        updatedAt: new Date(),
       });
 
       fetchDocs();
@@ -321,7 +394,10 @@ export default function DocumentUploadSection({ eventID, fetchData }) {
           className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
           onClick={() => setPreviewFile(null)}
         >
-          <div className="bg-white w-[80%] h-[80%] rounded-xl p-4">
+          <div
+            className="bg-white w-[80%] h-[80%] rounded-xl p-4"
+            onClick={(e) => e.stopPropagation()}
+          >
             <iframe src={previewFile.url} className="w-full h-full" />
           </div>
         </div>

@@ -23,6 +23,15 @@ async function getLeaderName(phone) {
   return String(snap.docs[0].data()?.Name || "").trim() || "User";
 }
 
+function normalize(value) {
+  return String(value || "").trim().toLowerCase();
+}
+
+function includesMember(values = [], probes = []) {
+  const set = new Set((Array.isArray(values) ? values : []).map(normalize).filter(Boolean));
+  return probes.some((probe) => set.has(normalize(probe)));
+}
+
 export async function GET(req, { params }) {
   const authResult = await requireUserSession(req);
 
@@ -63,7 +72,23 @@ export async function GET(req, { params }) {
       });
     }
 
-    const leaderName = await getLeaderName(conclave.leader);
+    const [leaderName, currentUserName] = await Promise.all([
+      getLeaderName(conclave.leader),
+      getLeaderName(authResult.context.phone),
+    ]);
+    const currentPhone = String(authResult.context.phone || "").trim();
+    const probes = [currentPhone, currentUserName];
+    const isMember =
+      normalize(conclave?.leader) === normalize(currentPhone) ||
+      includesMember(conclave?.orbiters, probes) ||
+      includesMember(conclave?.ntMembers, probes);
+
+    if (!isMember) {
+      return jsonError("You do not have access to this conclave", {
+        status: 403,
+        code: API_ERROR_CODES.FORBIDDEN,
+      });
+    }
 
     return jsonSuccess({
       conclave: {

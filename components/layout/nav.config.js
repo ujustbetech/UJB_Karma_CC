@@ -127,6 +127,7 @@ export const NAV_ITEMS = [
       { label: "Manage Role", href: "/admin/settings/roles" },
       { label: "Onbording Template", href: "/admin/settings/onboarding" },
       { label: "Journey Template", href: "/admin/settings/journey" },
+      { label: "Monthly Meeting Tabs", href: "/admin/settings/monthlymeeting" },
     ],
   },
 ];

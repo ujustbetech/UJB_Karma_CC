@@ -34,13 +34,24 @@ function normalizeServiceList(value) {
   return [];
 }
 
-function mapMonthlyEvent(docSnap) {
+function mapMonthlyEvent(docSnap, options = {}) {
   const data = docSnap.data() || {};
+  const phone = String(options.phone || "").trim();
+  const registrationMap = options.registrationMap || {};
+  const deadline = toIso(data.enrollmentDeadline);
+  const isEnrollmentOpen =
+    data.enrollmentEnabled !== false &&
+    (!deadline || new Date(deadline).getTime() >= Date.now());
+
   return {
     id: docSnap.id,
     title: data.Eventname || data.title || "Community Event",
     image: data.image || data.EventImage || data.thumbnail || "",
     time: toIso(data.time),
+    enrollmentEnabled: data.enrollmentEnabled !== false,
+    enrollmentDeadline: deadline,
+    isEnrollmentOpen,
+    isUserRegistered: Boolean(phone && registrationMap[docSnap.id]),
   };
 }
 
@@ -61,6 +72,8 @@ function normalizeRole(value) {
 
 function calculateHomePayload({
   userData,
+  currentPhone,
+  monthlyRegistrationMap,
   allUsers,
   referrals,
   monthlyMeetings,
@@ -73,7 +86,7 @@ function calculateHomePayload({
   const currentYear = now.getFullYear();
   const profile = userData || {};
   const currentUjbCode = String(profile.UJBCode || "").trim();
-  const currentPhone = String(profile.MobileNo || "").trim();
+  const profilePhone = String(profile.MobileNo || "").trim();
   const currentRole = normalizeRole(profile.Category);
   const isCosmOrbiter = currentRole === "cosmorbiter";
   const isOrbiter = currentRole === "orbiter";
@@ -107,7 +120,12 @@ function calculateHomePayload({
   };
 
   const monthlyEvents = monthlyMeetings
-    .map(mapMonthlyEvent)
+    .map((docSnap) =>
+      mapMonthlyEvent(docSnap, {
+        phone: currentPhone,
+        registrationMap: monthlyRegistrationMap,
+      })
+    )
     .filter((item) => item.time)
     .sort((left, right) => getTimeMs(left.time) - getTimeMs(right.time));
 
@@ -369,7 +387,7 @@ function calculateHomePayload({
     },
     notificationContext: {
       ujbCode: currentUjbCode,
-      phone: currentPhone,
+      phone: currentPhone || profilePhone,
       category: profile.Category || "",
     },
   };
@@ -444,9 +462,24 @@ export async function GET(req) {
     }
 
     const cpActivities = await getCpActivities();
+    const sessionPhone = String(authResult.context?.phone || "").trim();
+    const monthlyRegistrationEntries = await Promise.all(
+      monthlySnap.docs.map(async (docSnap) => {
+        if (!sessionPhone) return [docSnap.id, false];
+        const registrationSnap = await monthlyCollection
+          .doc(docSnap.id)
+          .collection("registeredUsers")
+          .doc(sessionPhone)
+          .get();
+        return [docSnap.id, registrationSnap.exists];
+      })
+    );
+    const monthlyRegistrationMap = Object.fromEntries(monthlyRegistrationEntries);
 
     const payload = calculateHomePayload({
       userData: userSnap.data() || {},
+      currentPhone: sessionPhone,
+      monthlyRegistrationMap,
       allUsers: usersSnap.docs.map((docSnap) => docSnap.data() || {}),
       referrals: referralsSnap.docs,
       monthlyMeetings: monthlySnap.docs,

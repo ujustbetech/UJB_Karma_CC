@@ -38,3 +38,29 @@ export async function deleteAdminMonthlyMeeting(id) {
 
   await readApiResponse(response, "Failed to delete monthly meeting");
 }
+
+export async function uploadAdminMonthlyMeetingFile(eventId, { file, module, folder = "" }) {
+  const formData = new FormData();
+  formData.set("file", file);
+  formData.set("module", module);
+  if (folder) formData.set("folder", folder);
+
+  const response = await fetch(`/api/admin/monthlymeeting/${encodeURIComponent(eventId)}/files`, {
+    method: "POST",
+    credentials: "include",
+    body: formData,
+  });
+
+  return readApiResponse(response, "Failed to upload file");
+}
+
+export async function deleteAdminMonthlyMeetingFile(eventId, { path, module }) {
+  const response = await fetch(`/api/admin/monthlymeeting/${encodeURIComponent(eventId)}/files`, {
+    method: "DELETE",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ path, module }),
+  });
+
+  return readApiResponse(response, "Failed to delete file");
+}

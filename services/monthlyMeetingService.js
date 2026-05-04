@@ -30,3 +30,12 @@ export async function fetchUserMonthlyMeetingDetails(id) {
 
   return readApiResponse(response, "Failed to load monthly meeting details");
 }
+
+export async function registerUserForMonthlyMeeting(id) {
+  const response = await fetch(`/api/user/monthlymeeting/${id}`, {
+    method: "POST",
+    credentials: "include",
+  });
+
+  return readApiResponse(response, "Failed to register for monthly meeting");
+}

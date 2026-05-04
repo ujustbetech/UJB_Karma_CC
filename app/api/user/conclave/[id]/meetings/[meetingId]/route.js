@@ -6,6 +6,7 @@ import { requireUserSession } from "@/lib/auth/userRequestAuth.mjs";
 import { getDataProvider } from "@/lib/data/provider.mjs";
 import { adminDb } from "@/lib/firebase/firebaseAdmin";
 import { publicEnv } from "@/lib/config/publicEnv";
+import { COLLECTIONS } from "@/lib/utility_collection";
 
 async function getUserNameByPhone(phone) {
   const value = String(phone || "").trim();
@@ -25,6 +26,15 @@ async function getUserNameByPhone(phone) {
   }
 
   return String(snap.docs[0].data()?.Name || "").trim();
+}
+
+function normalize(value) {
+  return String(value || "").trim().toLowerCase();
+}
+
+function includesMember(values = [], probes = []) {
+  const set = new Set((Array.isArray(values) ? values : []).map(normalize).filter(Boolean));
+  return probes.some((probe) => set.has(normalize(probe)));
 }
 
 export async function GET(req, { params }) {
@@ -69,6 +79,30 @@ export async function GET(req, { params }) {
       });
     }
 
+    const currentPhone = String(authResult.context.phone || "").trim();
+    const probes = [currentPhone, userName];
+    const isMember =
+      normalize(conclave?.leader) === normalize(currentPhone) ||
+      includesMember(conclave?.orbiters, probes) ||
+      includesMember(conclave?.ntMembers, probes);
+
+    if (!isMember) {
+      return jsonError("You do not have access to this conclave meeting", {
+        status: 403,
+        code: API_ERROR_CODES.FORBIDDEN,
+      });
+    }
+
+    const responseSnap = await adminDb
+      .collection(COLLECTIONS.conclaves)
+      .doc(conclaveId)
+      .collection("meetings")
+      .doc(meetingId)
+      .collection("registeredUsers")
+      .doc(currentPhone)
+      .get();
+    const existingResponse = responseSnap.exists ? responseSnap.data() || {} : null;
+
     return jsonSuccess({
       conclave,
       meeting,
@@ -76,6 +110,13 @@ export async function GET(req, { params }) {
         name: userName,
         phoneNumber: authResult.context.phone,
       },
+      response: existingResponse
+        ? {
+            status: String(existingResponse.response || "").trim(),
+            reason: String(existingResponse.reason || "").trim(),
+            responseTime: existingResponse.responseTime || null,
+          }
+        : null,
     });
   } catch (error) {
     logProviderFailure({

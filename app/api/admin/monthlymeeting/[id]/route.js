@@ -34,7 +34,8 @@ export async function GET(req, { params }) {
   }
 
   try {
-    const id = String(params?.id || "").trim();
+    const resolvedParams = await params;
+    const id = String(resolvedParams?.id || "").trim();
     const docSnap = await adminDb.collection(COLLECTIONS.monthlyMeeting).doc(id).get();
 
     if (!docSnap.exists) {
@@ -60,7 +61,8 @@ export async function DELETE(req, { params }) {
   }
 
   try {
-    const id = String(params?.id || "").trim();
+    const resolvedParams = await params;
+    const id = String(resolvedParams?.id || "").trim();
     if (!id) {
       return NextResponse.json({ message: "Missing event id" }, { status: 400 });
     }
@@ -74,5 +76,4 @@ export async function DELETE(req, { params }) {
     );
   }
 }
-
 

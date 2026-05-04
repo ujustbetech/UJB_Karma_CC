@@ -9,6 +9,12 @@ import {
 } from 'react';
 import { collection, getDocs, doc, updateDoc, db } from '@/services/adminMonthlyMeetingFirebaseService';
 import { COLLECTIONS } from '@/lib/utility_collection';
+import {
+  appendMonthlyMeetingAuditLogs,
+  buildMonthlyMeetingAuditEntry,
+  diffMonthlyMeetingFields,
+} from '@/lib/monthlymeeting/monthlyMeetingAudit.mjs';
+import { uploadAdminMonthlyMeetingFile } from '@/services/adminMonthlyMeetingService';
 
 import Card from '@/components/ui/Card';
 import Text from '@/components/ui/Text';
@@ -22,10 +28,10 @@ import FormField from '@/components/ui/FormField';
 import RichEditor from '@/components/ui/RichEditor';
 
 import { useToast } from '@/components/ui/ToastProvider';
-import { Trash2, ClipboardList } from 'lucide-react';
+import { Trash2, ClipboardList, Upload, FileText, X } from 'lucide-react';
 
 const RequirementSection = forwardRef(function RequirementSection(
-  { eventId, data, fetchData },
+  { eventId, data, fetchData, currentAdmin },
   ref
 ) {
   const toast = useToast();
@@ -132,6 +138,9 @@ const RequirementSection = forwardRef(function RequirementSection(
         reqSearch: '',
         reqDescription: '',
         stage: 'New',
+        referenceUrl: '',
+        fileName: '',
+        uploading: false,
       },
     ]);
     setDirty(true);
@@ -183,10 +192,34 @@ const RequirementSection = forwardRef(function RequirementSection(
         reqfrom: s.reqfrom,
         reqDescription: s.reqDescription,
         stage: s.stage || 'New',
+        referenceUrl: s.referenceUrl || '',
+        fileName: s.fileName || '',
       }));
 
       await updateDoc(doc(db, COLLECTIONS.monthlyMeeting, eventId), {
         requirementSections: cleaned,
+        auditLogs: appendMonthlyMeetingAuditLogs(
+          data?.auditLogs,
+          diffMonthlyMeetingFields(
+            data || {},
+            { ...(data || {}), requirementSections: cleaned },
+            ['requirementSections']
+          ).map((change) =>
+            buildMonthlyMeetingAuditEntry({
+              section: 'Requirements',
+              field: change.field,
+              before: change.before,
+              after: change.after,
+              actor: currentAdmin,
+            })
+          ),
+        ),
+        updatedBy: {
+          name: currentAdmin?.name || currentAdmin?.email || 'Admin',
+          role: currentAdmin?.role || '',
+          identity: currentAdmin?.identity?.id || currentAdmin?.email || '',
+        },
+        updatedAt: new Date(),
       });
 
       setDirty(false);
@@ -206,6 +239,26 @@ const RequirementSection = forwardRef(function RequirementSection(
     isDirty: () => dirty,
     save: handleSave,
   }));
+
+  const handleFileUpload = async (file, index) => {
+    if (!file) return;
+
+    updateField(index, 'uploading', true);
+    try {
+      const upload = await uploadAdminMonthlyMeetingFile(eventId, {
+        file,
+        module: 'requirementDocs',
+      });
+
+      updateField(index, 'referenceUrl', upload.url);
+      updateField(index, 'fileName', file.name);
+      toast.success('File uploaded');
+    } catch (error) {
+      toast.error(error?.message || 'Upload failed');
+    } finally {
+      updateField(index, 'uploading', false);
+    }
+  };
 
   return (
     <Card className="p-6 space-y-6">
@@ -312,7 +365,7 @@ const RequirementSection = forwardRef(function RequirementSection(
                 <button
                   type="button"
                   onClick={() => updateField(i, 'stage', 'New')}
-                  className={`px-3 py-1.5 rounded-full text-sm border ${s.outcome === 'New'
+                  className={`px-3 py-1.5 rounded-full text-sm border ${s.stage === 'New'
                       ? 'bg-gray-100 text-gray-700 border-gray-200'
                       : 'bg-white border-gray-300'
                     }`}
@@ -323,7 +376,7 @@ const RequirementSection = forwardRef(function RequirementSection(
                 <button
                   type="button"
                   onClick={() => updateField(i, 'stage', 'Connected')}
-                  className={`px-3 py-1.5 rounded-full text-sm border ${s.outcome === 'Connected'
+                  className={`px-3 py-1.5 rounded-full text-sm border ${s.stage === 'Connected'
                       ? 'bg-blue-100 text-blue-700 border-blue-200'
                       : 'bg-white border-gray-300'
                     }`}
@@ -334,7 +387,7 @@ const RequirementSection = forwardRef(function RequirementSection(
                 <button
                   type="button"
                   onClick={() => updateField(i, 'stage', 'Referral Passed')}
-                  className={`px-3 py-1.5 rounded-full text-sm border ${s.outcome === 'Referral Passed'
+                  className={`px-3 py-1.5 rounded-full text-sm border ${s.stage === 'Referral Passed'
                       ? 'bg-green-100 text-green-700 border-green-200'
                       : 'bg-white border-gray-300'
                     }`}
@@ -345,7 +398,7 @@ const RequirementSection = forwardRef(function RequirementSection(
                 <button
                   type="button"
                   onClick={() => updateField(i, 'stage', 'Not Fulfilled')}
-                  className={`px-3 py-1.5 rounded-full text-sm border ${s.outcome === 'Not Fulfilled'
+                  className={`px-3 py-1.5 rounded-full text-sm border ${s.stage === 'Not Fulfilled'
                       ? 'bg-red-100 text-red-700 border-red-200'
                       : 'bg-white border-gray-300'
                     }`}
@@ -356,6 +409,45 @@ const RequirementSection = forwardRef(function RequirementSection(
               </div>
             </FormField>
 
+            <FormField label="Requirement Document (optional)">
+              <div className="flex items-center gap-3 flex-wrap">
+                <label className="flex items-center gap-2 px-3 py-1.5 border rounded-md cursor-pointer bg-white hover:bg-gray-50">
+                  <Upload className="w-4 h-4" />
+                  Upload File
+                  <input
+                    type="file"
+                    className="hidden"
+                    onChange={(e) => handleFileUpload(e.target.files?.[0], i)}
+                  />
+                </label>
+
+                {s.uploading && <span className="text-sm text-blue-600">Uploading...</span>}
+
+                {s.referenceUrl && (
+                  <div className="flex items-center gap-2">
+                    <a
+                      href={s.referenceUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="flex items-center gap-1 text-sm text-blue-600 underline"
+                    >
+                      <FileText className="w-4 h-4" />
+                      {s.fileName || 'View Document'}
+                    </a>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        updateField(i, 'referenceUrl', '');
+                        updateField(i, 'fileName', '');
+                      }}
+                      className="text-red-500"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                )}
+              </div>
+            </FormField>
 
 
           </Card>

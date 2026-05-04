@@ -16,6 +16,10 @@ import {
 } from '@/services/adminMonthlyMeetingFirebaseService';
 
 import { COLLECTIONS } from '@/lib/utility_collection';
+import {
+  appendMonthlyMeetingAuditLogs,
+  buildMonthlyMeetingAuditEntry,
+} from '@/lib/monthlymeeting/monthlyMeetingAudit.mjs';
 
 import Card from '@/components/ui/Card';
 import Text from '@/components/ui/Text';
@@ -31,7 +35,7 @@ import { useToast } from '@/components/ui/ToastProvider';
 
 import { Eye, Plus, Phone, MessageCircle, Users } from 'lucide-react';
 
-export default function RegisteredUsersSection({ eventId }) {
+export default function RegisteredUsersSection({ eventId, data, currentAdmin }) {
   const toast = useToast();
 
   const [users, setUsers] = useState([]);
@@ -144,6 +148,34 @@ export default function RegisteredUsersSection({ eventId }) {
       }
     );
 
+    const meetingRef = doc(db, COLLECTIONS.monthlyMeeting, eventId);
+    const meetingSnap = await getDoc(meetingRef);
+    const currentUsers = await getDocs(
+      collection(db, `${COLLECTIONS.monthlyMeeting}/${eventId}/registeredUsers`)
+    );
+    const userTotals = currentUsers.size;
+    await updateDoc(meetingRef, {
+      auditLogs: appendMonthlyMeetingAuditLogs(
+        meetingSnap.data()?.auditLogs,
+        [
+          buildMonthlyMeetingAuditEntry({
+            section: 'Registered Users',
+            field: 'attendanceStatus',
+            before: 'Pending',
+            after: `Present for ${phone}`,
+            actor: currentAdmin,
+          }),
+        ]
+      ),
+      updatedBy: {
+        name: currentAdmin?.name || currentAdmin?.email || 'Admin',
+        role: currentAdmin?.role || '',
+        identity: currentAdmin?.identity?.id || currentAdmin?.email || '',
+      },
+      updatedAt: new Date(),
+      registeredUsersSummary: userTotals,
+    });
+
     toast.success('Attendance marked');
   };
 
@@ -192,6 +224,29 @@ export default function RegisteredUsersSection({ eventId }) {
       },
       { merge: true }
     );
+
+    const meetingRef = doc(db, COLLECTIONS.monthlyMeeting, eventId);
+    const meetingSnap = await getDoc(meetingRef);
+    await updateDoc(meetingRef, {
+      auditLogs: appendMonthlyMeetingAuditLogs(
+        meetingSnap.data()?.auditLogs,
+        [
+          buildMonthlyMeetingAuditEntry({
+            section: 'Registered Users',
+            field: 'feedback',
+            before: `Feedback count ${existingFeedback.length}`,
+            after: `Feedback count ${existingFeedback.length + 1}`,
+            actor: currentAdmin,
+          }),
+        ]
+      ),
+      updatedBy: {
+        name: currentAdmin?.name || currentAdmin?.email || 'Admin',
+        role: currentAdmin?.role || '',
+        identity: currentAdmin?.identity?.id || currentAdmin?.email || '',
+      },
+      updatedAt: new Date(),
+    });
 
     toast.success('Feedback saved');
     setFeedbackModalOpen(false);

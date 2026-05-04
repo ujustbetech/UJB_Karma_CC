@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import {
   createAdminConclaveMeeting,
   fetchAdminConclave,
+  fetchAdminConclaveUsers,
   updateAdminConclave,
 } from "@/services/adminConclaveService";
 
@@ -39,6 +40,7 @@ export default function EditConclavePage() {
   const toast = useToast();
 
   const [loading, setLoading] = useState(true);
+  const [userDirectory, setUserDirectory] = useState([]);
   const [conclave, setConclave] = useState({
     conclaveStream: "",
     startDate: "",
@@ -63,8 +65,12 @@ export default function EditConclavePage() {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const data = await fetchAdminConclave(id);
+      const [data, users] = await Promise.all([
+        fetchAdminConclave(id),
+        fetchAdminConclaveUsers(),
+      ]);
       const detail = data.conclave || {};
+      setUserDirectory(users || []);
 
       setConclave({
         conclaveStream: detail.name || detail.conclaveStream || "",
@@ -137,6 +143,20 @@ export default function EditConclavePage() {
       console.error(error);
       toast.error("Failed to add meeting");
     }
+  };
+
+  const resolveMemberName = (rawValue) => {
+    const value = String(rawValue || "").trim();
+    if (!value) return "-";
+
+    const match = userDirectory.find(
+      (user) =>
+        String(user?.id || "").trim() === value ||
+        String(user?.value || "").trim() === value ||
+        String(user?.phone || "").trim() === value
+    );
+
+    return String(match?.label || value);
   };
 
   return (
@@ -230,7 +250,7 @@ export default function EditConclavePage() {
         </FormField>
 
         <FormField label="Leader">
-          <Input value={conclave.leader} disabled />
+          <Input value={resolveMemberName(conclave.leader)} disabled />
         </FormField>
 
         <FormField label="NT Members">
@@ -240,7 +260,7 @@ export default function EditConclavePage() {
                 key={index}
                 className="bg-blue-100 px-3 py-1 rounded-full text-sm"
               >
-                {member}
+                {resolveMemberName(member)}
               </span>
             ))}
           </div>
@@ -253,7 +273,7 @@ export default function EditConclavePage() {
                 key={index}
                 className="bg-purple-100 px-3 py-1 rounded-full text-sm"
               >
-                {orbiter}
+                {resolveMemberName(orbiter)}
               </span>
             ))}
           </div>

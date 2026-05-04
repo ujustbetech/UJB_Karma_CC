@@ -28,8 +28,9 @@ export function usePageMeta() {
   useEffect(() => {
     let isMounted = true;
     const prospectMatch = pathname?.match(/^\/admin\/prospect\/edit\/([^/]+)$/);
+    const monthlyMeetingMatch = pathname?.match(/^\/admin\/monthlymeeting\/([^/]+)$/);
 
-    if (!prospectMatch) {
+    if (!prospectMatch && !monthlyMeetingMatch) {
       setDynamicTitle("");
       return () => {
         isMounted = false;
@@ -61,6 +62,39 @@ export function usePageMeta() {
     };
 
     loadProspectName();
+
+    if (monthlyMeetingMatch) {
+      const loadMonthlyMeetingName = async () => {
+        try {
+          const eventId = decodeURIComponent(monthlyMeetingMatch[1]);
+          const res = await fetch(`/api/admin/monthlymeeting/${eventId}`, {
+            credentials: "include",
+          });
+          const data = await res.json().catch(() => ({}));
+
+          if (!res.ok) {
+            throw new Error(data.message || "Failed to load monthly meeting");
+          }
+
+          if (isMounted) {
+            const meetingName = String(
+              data?.event?.Eventname || data?.event?.name || ""
+            ).trim();
+            setDynamicTitle(
+              meetingName
+                ? `${meetingName} (Monthly Meeting)`
+                : "Monthly Meeting"
+            );
+          }
+        } catch {
+          if (isMounted) {
+            setDynamicTitle("Monthly Meeting");
+          }
+        }
+      };
+
+      loadMonthlyMeetingName();
+    }
 
     return () => {
       isMounted = false;

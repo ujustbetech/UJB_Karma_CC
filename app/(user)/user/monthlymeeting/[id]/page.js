@@ -3,17 +3,20 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import {
-  BookOpen,
-  Briefcase,
-  CalendarDays,
-  FileText,
-  Handshake,
-  Link as LinkIcon,
-  Target,
-  UserCheck,
-  Users,
-} from "lucide-react";
-import { fetchUserMonthlyMeetingDetails } from "@/services/monthlyMeetingService";
+  collection,
+  doc,
+  onSnapshot,
+  db,
+} from "@/services/adminMonthlyMeetingFirebaseService";
+import { COLLECTIONS } from "@/lib/utility_collection";
+import {
+  fetchUserMonthlyMeetingDetails,
+  registerUserForMonthlyMeeting,
+} from "@/services/monthlyMeetingService";
+import { useToast } from "@/components/ui/ToastProvider";
+import {
+  getVisibleMonthlyMeetingUserTabs,
+} from "@/lib/monthlymeeting/userTabsConfig";
 
 function toDateValue(value) {
   if (!value) return null;
@@ -45,10 +48,17 @@ function RenderRichText({ value, emptyLabel = "No details available." }) {
 
   return (
     <div
-      className="prose prose-sm max-w-none text-slate-700"
+      className="prose prose-sm max-w-none break-words overflow-hidden text-slate-700"
       dangerouslySetInnerHTML={{ __html: value }}
     />
   );
+}
+
+function isEnrollmentOpen(event) {
+  if (typeof event?.enrollmentEnabled === "boolean") return event.enrollmentEnabled;
+  if (event?.isEnrollmentOpen !== undefined) return event.isEnrollmentOpen;
+  if (!event?.enrollmentDeadline) return true;
+  return new Date(event.enrollmentDeadline).getTime() >= Date.now();
 }
 
 function EmptyState({ label }) {
@@ -56,13 +66,16 @@ function EmptyState({ label }) {
 }
 
 export default function EventDetailsPage() {
+  const toast = useToast();
   const params = useParams();
   const id = params?.id;
 
   const [eventInfo, setEventInfo] = useState(null);
   const [users, setUsers] = useState([]);
   const [activeTab, setActiveTab] = useState("agenda");
+  const [tabVisibilityConfig, setTabVisibilityConfig] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [registering, setRegistering] = useState(false);
 
   useEffect(() => {
     if (!id) return;
@@ -73,10 +86,12 @@ export default function EventDetailsPage() {
         const data = await fetchUserMonthlyMeetingDetails(id);
         setEventInfo(data.event || null);
         setUsers(Array.isArray(data.users) ? data.users : []);
+        setTabVisibilityConfig(data.visibleTabsConfig || null);
       } catch (error) {
         console.error(error);
         setEventInfo(null);
         setUsers([]);
+        setTabVisibilityConfig(null);
       } finally {
         setLoading(false);
       }
@@ -85,20 +100,78 @@ export default function EventDetailsPage() {
     fetchEventData();
   }, [id]);
 
+  useEffect(() => {
+    if (!id) return;
+
+    const eventRef = doc(db, COLLECTIONS.monthlyMeeting, id);
+    const usersRef = collection(db, COLLECTIONS.monthlyMeeting, id, "registeredUsers");
+
+    const unsubscribeEvent = onSnapshot(eventRef, (snapshot) => {
+      if (snapshot.exists()) {
+        setEventInfo((prev) => ({
+          ...(snapshot.data() || {}),
+          isUserRegistered: prev?.isUserRegistered || false,
+        }));
+      }
+    });
+
+    const unsubscribeUsers = onSnapshot(usersRef, (snapshot) => {
+      const nextUsers = [];
+      snapshot.forEach((docSnap) => {
+        const user = docSnap.data() || {};
+        nextUsers.push({
+          phone: docSnap.id,
+          name: user.name || "Unknown",
+          category: user.category || "",
+          ujbCode: user.ujbCode || "",
+          attendance: user.attendanceStatus === true ? "Present" : "Pending",
+          feedback: Array.isArray(user.feedback) ? user.feedback : [],
+        });
+      });
+
+      setUsers(nextUsers);
+    });
+
+    return () => {
+      unsubscribeEvent();
+      unsubscribeUsers();
+    };
+  }, [id]);
+
   const eventTime = useMemo(() => formatDateTime(eventInfo?.time), [eventInfo]);
 
-  const tabs = [
-    { key: "agenda", label: "Agenda", icon: CalendarDays },
-    { key: "documents", label: "Docs", icon: FileText },
-    { key: "facilitators", label: "Facilitators", icon: UserCheck },
-    { key: "knowledge", label: "Knowledge", icon: BookOpen },
-    { key: "prospects", label: "Prospects", icon: Target },
-    { key: "referrals", label: "Referrals", icon: LinkIcon },
-    { key: "requirements", label: "Req.", icon: Briefcase },
-    { key: "e2a", label: "E2A", icon: Handshake },
-    { key: "121", label: "1-2-1", icon: Users },
-    { key: "users", label: "Users", icon: Users },
-  ];
+  const tabs = useMemo(
+    () => getVisibleMonthlyMeetingUserTabs(tabVisibilityConfig),
+    [tabVisibilityConfig]
+  );
+
+  useEffect(() => {
+    if (!tabs.length) return;
+    if (!tabs.some((tab) => tab.key === activeTab)) {
+      setActiveTab(tabs[0].key);
+    }
+  }, [tabs, activeTab]);
+
+  const handleRegister = async () => {
+    if (!id || registering || eventInfo?.isUserRegistered || !isEnrollmentOpen(eventInfo)) return;
+
+    try {
+      setRegistering(true);
+      const response = await registerUserForMonthlyMeeting(id);
+      setEventInfo((prev) =>
+        prev ? { ...prev, isUserRegistered: true } : prev
+      );
+      toast.success(
+        response?.alreadyRegistered
+          ? "You are already registered for this meeting"
+          : "Registration successful"
+      );
+    } catch (error) {
+      toast.error(error?.message || "Failed to register");
+    } finally {
+      setRegistering(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -130,6 +203,20 @@ export default function EventDetailsPage() {
           <div className="relative z-10 flex flex-col items-center justify-center h-full text-white text-center px-6">
             <h1 className="text-xl font-bold">{eventInfo.Eventname}</h1>
             <p className="text-xs opacity-80 mt-2">{eventTime || "Date not set"}</p>
+            <button
+              type="button"
+              onClick={handleRegister}
+              disabled={registering || eventInfo?.isUserRegistered || !isEnrollmentOpen(eventInfo)}
+              className="mt-3 rounded-full bg-emerald-500/90 px-4 py-2 text-xs font-semibold text-white transition hover:bg-emerald-500 disabled:cursor-not-allowed disabled:bg-white/30"
+            >
+              {eventInfo?.isUserRegistered
+                ? "Registered"
+                : !isEnrollmentOpen(eventInfo)
+                ? "Enrollment Closed"
+                : registering
+                ? "Registering..."
+                : "Register"}
+            </button>
             {eventInfo.titleOfTheDay && (
               <div className="mt-4 bg-white/15 border border-white/20 text-white text-xs px-4 py-2 rounded-full">
                 {eventInfo.titleOfTheDay}
@@ -140,33 +227,40 @@ export default function EventDetailsPage() {
 
         <div className="px-4 -mt-6 relative z-20">
           <div className="bg-white rounded-2xl shadow-xl p-2">
-            <div className="flex overflow-x-auto">
-              {tabs.map((tab) => {
-                const Icon = tab.icon;
-                return (
-                  <button
-                    key={tab.key}
-                    onClick={() => setActiveTab(tab.key)}
-                    className={`flex flex-col items-center justify-center px-4 py-2 min-w-[70px] transition ${
-                      activeTab === tab.key
-                        ? "text-orange-500"
-                        : "text-gray-500 hover:text-gray-700"
-                    }`}
-                  >
-                    <Icon size={18} />
-                    <span className="text-[11px] mt-1">{tab.label}</span>
-                    {activeTab === tab.key && (
-                      <div className="h-[2px] w-6 bg-orange-500 mt-1 rounded-full" />
-                    )}
-                  </button>
-                );
-              })}
-            </div>
+            {tabs.length ? (
+              <div className="flex overflow-x-auto">
+                {tabs.map((tab) => {
+                  const Icon = tab.icon;
+                  return (
+                    <button
+                      key={tab.key}
+                      onClick={() => setActiveTab(tab.key)}
+                      className={`flex flex-col items-center justify-center px-4 py-2 min-w-[70px] transition ${
+                        activeTab === tab.key
+                          ? "text-orange-500"
+                          : "text-gray-500 hover:text-gray-700"
+                      }`}
+                    >
+                      <Icon size={18} />
+                      <span className="text-[11px] mt-1">{tab.label}</span>
+                      {activeTab === tab.key && (
+                        <div className="h-[2px] w-6 bg-orange-500 mt-1 rounded-full" />
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            ) : (
+              <p className="px-3 py-4 text-sm text-slate-500">
+                No monthly meeting sections are enabled right now.
+              </p>
+            )}
           </div>
         </div>
 
         <div className="px-4 mt-6 space-y-6">
           <div className="bg-white rounded-3xl shadow-lg p-6">
+            {!tabs.length && <EmptyState label="No sections are available for this meeting right now." />}
             {activeTab === "agenda" && (
               <div className="space-y-5">
                 <div>
@@ -192,9 +286,9 @@ export default function EventDetailsPage() {
                   <p className="text-base font-medium text-slate-800">
                     {eventInfo.titleOfTheDay || "No topic added yet."}
                   </p>
-                  <div className="mt-3">
-                    <RenderRichText value={eventInfo.description} />
-                  </div>
+                <div className="mt-3 min-w-0 overflow-hidden">
+                  <RenderRichText value={eventInfo.description} />
+                </div>
                 </div>
               </div>
             )}

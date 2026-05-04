@@ -14,6 +14,11 @@ import {
   db,
 } from '@/services/adminMonthlyMeetingFirebaseService';
 import { COLLECTIONS } from '@/lib/utility_collection';
+import {
+  appendMonthlyMeetingAuditLogs,
+  buildMonthlyMeetingAuditEntry,
+  diffMonthlyMeetingFields,
+} from '@/lib/monthlymeeting/monthlyMeetingAudit.mjs';
 
 import { Info, Settings, List, Trash2 } from 'lucide-react';
 
@@ -29,7 +34,7 @@ import RichEditor from '@/components/ui/RichEditor';
 import EventInfoSkeleton from '@/components/skeleton/EventInfoSkeleton';
 
 const EventInfoSection = forwardRef(function EventInfoSection(
-  { data, eventId, fetchData },
+  { data, eventId, fetchData, currentAdmin },
   ref
 ) {
   const toast = useToast();
@@ -38,6 +43,9 @@ const EventInfoSection = forwardRef(function EventInfoSection(
   const [eventDate, setEventDate] = useState('');
   const [eventClock, setEventClock] = useState('');
   const [zoomLink, setZoomLink] = useState('');
+  const [enrollmentEnabled, setEnrollmentEnabled] = useState(true);
+  const [enrollmentDate, setEnrollmentDate] = useState('');
+  const [enrollmentTime, setEnrollmentTime] = useState('');
 
   const [agendaType, setAgendaType] = useState('points');
   const [agendaPoints, setAgendaPoints] = useState(['']);
@@ -52,6 +60,8 @@ const EventInfoSection = forwardRef(function EventInfoSection(
     eventDate: useRef(null),
     eventClock: useRef(null),
     zoomLink: useRef(null),
+    enrollmentDate: useRef(null),
+    enrollmentTime: useRef(null),
   };
 
   const formatTimestampParts = (timestamp) => {
@@ -74,6 +84,10 @@ const EventInfoSection = forwardRef(function EventInfoSection(
     const timestampParts = formatTimestampParts(data.time);
     setEventDate(timestampParts?.date || '');
     setEventClock(timestampParts?.time || '');
+    setEnrollmentEnabled(data.enrollmentEnabled !== false);
+    const enrollmentParts = formatTimestampParts(data.enrollmentDeadline);
+    setEnrollmentDate(enrollmentParts?.date || '');
+    setEnrollmentTime(enrollmentParts?.time || '');
 
     if (data.agendaType === 'rich') {
       setAgendaType('rich');
@@ -101,6 +115,9 @@ const EventInfoSection = forwardRef(function EventInfoSection(
     if (!eventClock) nextErrors.eventClock = 'Time is required';
     if (zoomLink && !/^https?:\/\//i.test(zoomLink.trim())) {
       nextErrors.zoomLink = 'Enter a valid meeting URL';
+    }
+    if ((enrollmentDate && !enrollmentTime) || (!enrollmentDate && enrollmentTime)) {
+      nextErrors.enrollmentTime = 'Set both enrollment date and time, or leave both empty';
     }
 
     if (agendaType === 'points') {
@@ -144,16 +161,64 @@ const EventInfoSection = forwardRef(function EventInfoSection(
     try {
       setSaving(true);
       const eventDateTime = new Date(`${eventDate}T${eventClock}`);
+      const hasEnrollmentInput = enrollmentDate && enrollmentTime;
+      const enrollmentDeadline = hasEnrollmentInput
+        ? Timestamp.fromDate(new Date(`${enrollmentDate}T${enrollmentTime}`))
+        : data?.enrollmentDeadline || null;
 
       await updateDoc(doc(db, COLLECTIONS.monthlyMeeting, eventId), {
         Eventname: eventName.trim(),
         time: Timestamp.fromDate(eventDateTime),
         zoomLink: zoomLink.trim(),
+        enrollmentEnabled,
+        enrollmentDeadline,
         agendaType,
         agenda:
           agendaType === 'points'
             ? agendaPoints.map((item) => item.trim())
             : agendaRich,
+        auditLogs: appendMonthlyMeetingAuditLogs(
+          data?.auditLogs,
+          diffMonthlyMeetingFields(
+            data || {},
+            {
+              ...(data || {}),
+              Eventname: eventName.trim(),
+              time: Timestamp.fromDate(eventDateTime),
+              zoomLink: zoomLink.trim(),
+              enrollmentEnabled,
+              enrollmentDeadline,
+              agendaType,
+              agenda:
+                agendaType === 'points'
+                  ? agendaPoints.map((item) => item.trim())
+                  : agendaRich,
+            },
+            [
+              'Eventname',
+              'time',
+              'zoomLink',
+              'enrollmentEnabled',
+              'enrollmentDeadline',
+              'agendaType',
+              'agenda',
+            ]
+          ).map((change) =>
+            buildMonthlyMeetingAuditEntry({
+              section: 'Basic Info',
+              field: change.field,
+              before: change.before,
+              after: change.after,
+              actor: currentAdmin,
+            })
+          ),
+        ),
+        updatedBy: {
+          name: currentAdmin?.name || currentAdmin?.email || 'Admin',
+          role: currentAdmin?.role || '',
+          identity: currentAdmin?.identity?.id || currentAdmin?.email || '',
+        },
+        updatedAt: new Date(),
       });
 
       fetchData?.();
@@ -258,6 +323,54 @@ const EventInfoSection = forwardRef(function EventInfoSection(
               error={!!errors.zoomLink}
             />
           </FormField>
+
+          <label className="flex items-center justify-between rounded-lg border border-slate-200 p-3">
+            <span className="text-sm font-medium text-slate-700">Allow Enrollment</span>
+            <input
+              type="checkbox"
+              checked={enrollmentEnabled}
+              onChange={(event) => {
+                setEnrollmentEnabled(event.target.checked);
+                setDirty(true);
+              }}
+              className="h-4 w-4 accent-blue-600"
+            />
+          </label>
+
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <FormField label="Enrollment End Date" error={errors.enrollmentDate}>
+              <DateInput
+                ref={refs.enrollmentDate}
+                type="date"
+                value={enrollmentDate}
+                onChange={(event) => {
+                  setEnrollmentDate(event.target.value);
+                  setDirty(true);
+                  clearError('enrollmentDate');
+                }}
+                error={!!errors.enrollmentDate}
+                disabled={!enrollmentEnabled}
+              />
+            </FormField>
+            <FormField label="Enrollment End Time" error={errors.enrollmentTime}>
+              <input
+                ref={refs.enrollmentTime}
+                type="time"
+                value={enrollmentTime}
+                onChange={(event) => {
+                  setEnrollmentTime(event.target.value);
+                  setDirty(true);
+                  clearError('enrollmentTime');
+                }}
+                disabled={!enrollmentEnabled}
+                className={`block h-9 w-full rounded-lg border bg-white px-3 text-sm text-slate-900 transition-colors focus:outline-none ${
+                  errors.enrollmentTime
+                    ? 'border-rose-300 text-rose-900 focus:border-rose-400'
+                    : 'border-slate-200 focus:border-slate-300'
+                } disabled:cursor-not-allowed disabled:bg-slate-100`}
+              />
+            </FormField>
+          </div>
         </div>
       </div>
 
