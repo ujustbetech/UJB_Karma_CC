@@ -27,15 +27,15 @@ import ProspectFormDetails from "@/components/admin/prospect/ProspectDetails";
 import EngagementForm from "@/components/admin/prospect/Engagementform";
 import ProspectFeedback from "@/components/admin/prospect/ProspectFeedback";
 
-const tabs = [
-  "Prospect Details",
-  "Assesment Form",
-  "Meeting Logs",
-  "Pre Enrollment Form",
-  "Feedback Form",
-  "Authentic Choice",
-  "Enrollment Status",
-  "Engagement Logs",
+const tabConfig = [
+  { sidebarLabel: "Prospect Details", title: "Prospect Details" },
+  { sidebarLabel: "Assesment Form", title: "Assesment Form" },
+  { sidebarLabel: "Meeting", title: "Meeting Logs - Introduction Call Execution" },
+  { sidebarLabel: "Pre Enrollment Form", title: "Pre Enrollment Form" },
+  { sidebarLabel: "Feedback Form", title: "Feedback Form" },
+  { sidebarLabel: "Authentic Choice", title: "Authentic Choice" },
+  { sidebarLabel: "Enrollment Status", title: "Enrollment Status" },
+  { sidebarLabel: "Engagement Logs", title: "Engagement Logs" },
 ];
 
 const icons = [
@@ -100,7 +100,7 @@ export default function EditAdminEvent() {
     if (
       Number.isInteger(tabParam) &&
       tabParam >= 0 &&
-      tabParam < tabs.length &&
+      tabParam < tabConfig.length &&
       !isLockedTab(tabParam) &&
       tabParam !== activeTab
     ) {
@@ -115,7 +115,7 @@ export default function EditAdminEvent() {
   }, [activeTab, isDeclinedByUJustBe]);
 
   const setActiveTabWithQuery = (index) => {
-    if (index < 0 || index >= tabs.length || isLockedTab(index)) {
+    if (index < 0 || index >= tabConfig.length || isLockedTab(index)) {
       return;
     }
 
@@ -133,7 +133,7 @@ export default function EditAdminEvent() {
   const nextTab = () => {
     const nextIndex = activeTab + 1;
 
-    if (activeTab < tabs.length - 1 && !isLockedTab(nextIndex)) {
+    if (activeTab < tabConfig.length - 1 && !isLockedTab(nextIndex)) {
       setActiveTabWithQuery(nextIndex);
       window.scrollTo({ top: 0, behavior: "smooth" });
     }
@@ -194,7 +194,7 @@ export default function EditAdminEvent() {
           <Text variant="h3">Prospect</Text>
 
           <div className="mt-4 space-y-2">
-            {tabs.map((tab, index) => {
+            {tabConfig.map((tab, index) => {
               const Icon = icons[index] || FileText;
               const isActive = activeTab === index;
               const isDisabled = isLockedTab(index);
@@ -218,7 +218,7 @@ export default function EditAdminEvent() {
                 >
                   <span className="flex items-center gap-3">
                     <Icon size={16} />
-                    {tab}
+                    {tab.sidebarLabel}
                   </span>
                 </button>
               );
@@ -235,7 +235,7 @@ export default function EditAdminEvent() {
         ) : (
           <>
             <div className="flex items-center justify-between">
-              <Text variant="h1">{tabs[activeTab]}</Text>
+              <Text variant="h1">{tabConfig[activeTab]?.title}</Text>
 
               <Button variant="secondary" onClick={exportProspect}>
                 Export
@@ -253,7 +253,7 @@ export default function EditAdminEvent() {
                 Back
               </Button>
 
-              {activeTab < tabs.length - 1 && (
+              {activeTab < tabConfig.length - 1 && (
                 <Button
                   onClick={nextTab}
                   disabled={isLockedTab(activeTab + 1)}

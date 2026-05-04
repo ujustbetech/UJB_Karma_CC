@@ -4,6 +4,7 @@ import Card from '@/components/ui/Card';
 import Text from '@/components/ui/Text';
 import FormField from '@/components/ui/FormField';
 import Input from '@/components/ui/Input';
+import DateInput from '@/components/ui/DateInput';
 import Select from '@/components/ui/Select';
 import TagsInput from '@/components/ui/TagsInput';
 import Button from '@/components/ui/Button';
@@ -172,10 +173,10 @@ export default function PersonalInfoSection({ profile }) {
         </FormField>
 
         <FormField label="Date of Birth">
-          <Input
+          <DateInput
+            type="date"
             value={clean(formData?.DOB)}
             onChange={(e) => handleChange('DOB', e.target.value)}
-            placeholder="DD/MM/YYYY or as registered"
           />
         </FormField>
 
