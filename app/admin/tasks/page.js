@@ -20,12 +20,48 @@ import {
   TODO_PURPOSE_OPTIONS,
   TODO_STATUS_OPTIONS,
 } from "@/lib/todo/constants";
-import { CheckCircle, Pencil, Play, Plus } from "lucide-react";
+import { CheckCircle, Eye, Pencil, Play, Plus } from "lucide-react";
 
-function formatDateTime(value) {
+function formatDisplayDate(value) {
+  if (!value) return "-";
+  if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value.trim())) {
+    const [year, month, day] = value.trim().split("-");
+    return `${day}/${month}/${year.slice(-2)}`;
+  }
+
+  const parsed = new Date(value?.seconds ? value.seconds * 1000 : value);
+  if (Number.isNaN(parsed.getTime())) return "-";
+
+  const day = String(parsed.getDate()).padStart(2, "0");
+  const month = String(parsed.getMonth() + 1).padStart(2, "0");
+  const year = String(parsed.getFullYear()).slice(-2);
+  return `${day}/${month}/${year}`;
+}
+
+function formatDisplayDateTime(value) {
   if (!value) return "-";
   const parsed = new Date(value?.seconds ? value.seconds * 1000 : value);
-  return Number.isNaN(parsed.getTime()) ? "-" : parsed.toLocaleString();
+  if (Number.isNaN(parsed.getTime())) return "-";
+
+  const date = formatDisplayDate(parsed);
+  const hours = String(parsed.getHours()).padStart(2, "0");
+  const minutes = String(parsed.getMinutes()).padStart(2, "0");
+  return `${date} ${hours}:${minutes}`;
+}
+
+function formatMinutesAsDuration(value) {
+  if (value === null || typeof value === "undefined" || value === "") {
+    return "-";
+  }
+
+  const minutes = Number(value);
+  if (!Number.isFinite(minutes)) return "-";
+  if (minutes < 60) return `${minutes} min`;
+
+  const hoursPart = Math.floor(minutes / 60);
+  const minutesPart = minutes % 60;
+
+  return minutesPart ? `${hoursPart} hr ${minutesPart} min` : `${hoursPart} hr`;
 }
 
 export default function TasksPage() {
@@ -222,15 +258,22 @@ export default function TasksPage() {
                   <td className="px-4 py-3">{todo.linked_name || "-"}</td>
                   <td className="px-4 py-3">{todo.user_type || "-"}</td>
                   <td className="px-4 py-3">{todo.purpose || "-"}</td>
-                  <td className="px-4 py-3">{todo.follow_up_date || "-"}</td>
+                  <td className="px-4 py-3">{formatDisplayDate(todo.follow_up_date)}</td>
                   <td className="px-4 py-3">{todo.assign_to_name || todo.assign_to || "-"}</td>
                   <td className="px-4 py-3">{todo.status || "-"}</td>
-                  <td className="px-4 py-3">{formatDateTime(todo.start_time)}</td>
-                  <td className="px-4 py-3">{formatDateTime(todo.completion_date)}</td>
-                  <td className="px-4 py-3">{todo.completion_time ?? "-"}</td>
+                  <td className="px-4 py-3">{formatDisplayDateTime(todo.start_time)}</td>
+                  <td className="px-4 py-3">{formatDisplayDateTime(todo.completion_date)}</td>
+                  <td className="px-4 py-3">{formatMinutesAsDuration(todo.completion_time)}</td>
                   <td className="px-4 py-3">
                     <div className="flex gap-2">
-                      <Tooltip content={todo.status === "Done" ? "View / Edit" : "Edit"}>
+                      <Tooltip content="View">
+                        <ActionButton
+                          icon={Eye}
+                          onClick={() => router.push(`/admin/tasks/${todo.id}`)}
+                        />
+                      </Tooltip>
+
+                      <Tooltip content="Edit">
                         <ActionButton
                           icon={Pencil}
                           onClick={() => router.push(`/admin/tasks/${todo.id}/edit`)}

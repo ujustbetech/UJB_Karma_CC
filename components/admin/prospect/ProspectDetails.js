@@ -16,6 +16,7 @@ import {
   formatDateTime,
   normalizeDateForStorage,
 } from "@/lib/utils/dateFormat";
+import { ORBITER_PROFESSION_TYPE_OPTIONS } from "@/lib/prospectFormOptions";
 
 const withRequirement = (label, required = false) => (
   <>
@@ -224,6 +225,13 @@ const ProspectFormDetails = ({ id }) => {
                     onChange={(e) =>
                       handleChange(index, key, e.target.value)
                     }
+                  />
+                ) : key === "profession" ? (
+                  <Select
+                    value={form[key] || ""}
+                    disabled={frozen || !editMode}
+                    onChange={(value) => handleChange(index, key, value)}
+                    options={ORBITER_PROFESSION_TYPE_OPTIONS}
                   />
                 ) : (
                   <Input

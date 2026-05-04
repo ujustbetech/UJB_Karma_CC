@@ -13,6 +13,7 @@ import Select from "@/components/ui/Select";
 import Textarea from "@/components/ui/Textarea";
 import Text from "@/components/ui/Text";
 import { useToast } from "@/components/ui/ToastProvider";
+import { useAdminSession } from "@/hooks/useAdminSession";
 import {
   TODO_PURPOSE_OPTIONS,
   TODO_USER_TYPE_OPTIONS,
@@ -46,6 +47,7 @@ function buildFormState(todo) {
 export default function TodoForm({ todo = null, mode = "create" }) {
   const router = useRouter();
   const toast = useToast();
+  const { admin } = useAdminSession();
   const isEdit = mode === "edit";
 
   const [loading, setLoading] = useState(false);
@@ -141,6 +143,40 @@ export default function TodoForm({ todo = null, mode = "create" }) {
     [orbitors, form.orbitor_id]
   );
 
+  const isOps = String(admin?.role || "").trim().toLowerCase() === "ops";
+  const sessionOpsEmail = String(admin?.email || "").trim().toLowerCase();
+
+  const visibleProspects = useMemo(() => {
+    if (!isOps || !sessionOpsEmail) {
+      return prospects;
+    }
+
+    return prospects.filter(
+      (prospect) =>
+        String(prospect.assignedOpsEmail || "").trim().toLowerCase() === sessionOpsEmail
+    );
+  }, [isOps, prospects, sessionOpsEmail]);
+
+  const visibleOrbitors = useMemo(() => {
+    if (!isOps || !sessionOpsEmail) {
+      return orbitors;
+    }
+
+    const visibleProspectIds = new Set(visibleProspects.map((prospect) => String(prospect.id)));
+
+    return orbitors.filter((orbitor) => {
+      const assignedOpsEmail = String(orbitor.assignedOpsEmail || "")
+        .trim()
+        .toLowerCase();
+      const sourceProspectId = String(orbitor.SourceProspectId || "").trim();
+
+      return (
+        assignedOpsEmail === sessionOpsEmail ||
+        (sourceProspectId && visibleProspectIds.has(sourceProspectId))
+      );
+    });
+  }, [isOps, orbitors, sessionOpsEmail, visibleProspects]);
+
   const resolvedOpsName =
     form.user_type === "prospect"
       ? selectedProspect?.assignedOpsName || ""
@@ -149,14 +185,14 @@ export default function TodoForm({ todo = null, mode = "create" }) {
   const linkedTypeOptions = TODO_USER_TYPE_OPTIONS;
   const prospectOptions = [
     { label: "Select prospect", value: "" },
-    ...prospects.map((prospect) => ({
+    ...visibleProspects.map((prospect) => ({
       label: `${prospect.prospectName || "Prospect"}${prospect.assignedOpsName ? ` · OPS: ${prospect.assignedOpsName}` : ""}`,
       value: prospect.id,
     })),
   ];
   const orbitorOptions = [
     { label: "Select orbitor", value: "" },
-    ...orbitors.map((orbitor) => ({
+    ...visibleOrbitors.map((orbitor) => ({
       label: `${orbitor.Name || orbitor.name || orbitor.UJBCode || orbitor.id} · ${orbitor.UJBCode || orbitor.id || ""}`,
       value: orbitor.id || orbitor.UJBCode || orbitor.ujbCode,
     })),
