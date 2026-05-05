@@ -3,6 +3,11 @@
 import { useEffect, useRef, useState } from 'react';
 import { collection, getDocs, doc, updateDoc, db } from '@/services/adminMonthlyMeetingFirebaseService';
 import { COLLECTIONS } from '@/lib/utility_collection';
+import {
+  appendMonthlyMeetingAuditLogs,
+  buildMonthlyMeetingAuditEntry,
+  diffMonthlyMeetingFields,
+} from '@/lib/monthlymeeting/monthlyMeetingAudit.mjs';
 
 import Card from '@/components/ui/Card';
 import Text from '@/components/ui/Text';
@@ -16,7 +21,7 @@ import Textarea from '@/components/ui/form/Textarea';
 
 import { useToast } from '@/components/ui/ToastProvider';
 
-export default function ReferralSection({ eventId, data, fetchData }) {
+export default function ReferralSection({ eventId, data, fetchData, currentAdmin }) {
   const { showToast } = useToast();
 
   const [referrals, setReferrals] = useState([]);
@@ -139,6 +144,28 @@ export default function ReferralSection({ eventId, data, fetchData }) {
 
       await updateDoc(doc(db, COLLECTIONS.monthlyMeeting, eventId), {
         referralSections: cleaned,
+        auditLogs: appendMonthlyMeetingAuditLogs(
+          data?.auditLogs,
+          diffMonthlyMeetingFields(
+            data || {},
+            { ...(data || {}), referralSections: cleaned },
+            ['referralSections']
+          ).map((change) =>
+            buildMonthlyMeetingAuditEntry({
+              section: 'Referrals',
+              field: change.field,
+              before: change.before,
+              after: change.after,
+              actor: currentAdmin,
+            })
+          ),
+        ),
+        updatedBy: {
+          name: currentAdmin?.name || currentAdmin?.email || 'Admin',
+          role: currentAdmin?.role || '',
+          identity: currentAdmin?.identity?.id || currentAdmin?.email || '',
+        },
+        updatedAt: new Date(),
       });
 
       setDirty(false);

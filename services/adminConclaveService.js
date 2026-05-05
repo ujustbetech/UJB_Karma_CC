@@ -141,3 +141,34 @@ export async function markAdminConclaveAttendance(conclaveId, meetingId, userId)
 
   await readApiResponse(response, "Failed to update attendance");
 }
+
+export async function uploadAdminConclaveMeetingFile(conclaveId, meetingId, { file, module }) {
+  const formData = new FormData();
+  formData.set("file", file);
+  formData.set("module", module);
+
+  const response = await fetch(
+    `/api/admin/conclave/${encodeURIComponent(conclaveId)}/meetings/${encodeURIComponent(meetingId)}/files`,
+    {
+      method: "POST",
+      credentials: "include",
+      body: formData,
+    }
+  );
+
+  return readApiResponse(response, "Failed to upload conclave file");
+}
+
+export async function deleteAdminConclaveMeetingFile(conclaveId, meetingId, { path, module }) {
+  const response = await fetch(
+    `/api/admin/conclave/${encodeURIComponent(conclaveId)}/meetings/${encodeURIComponent(meetingId)}/files`,
+    {
+      method: "DELETE",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ path, module }),
+    }
+  );
+
+  return readApiResponse(response, "Failed to delete conclave file");
+}

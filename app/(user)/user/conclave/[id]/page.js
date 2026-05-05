@@ -25,17 +25,26 @@ export default function ConclaveDetails() {
 
   const [conclave, setConclave] = useState(null);
   const [meetings, setMeetings] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
 
   useEffect(() => {
     if (!id) return;
 
     const fetchConclaveAndMeetings = async () => {
       try {
+        setLoading(true);
+        setLoadError("");
         const data = await fetchUserConclaveDetails(id);
         setConclave(data.conclave || null);
         setMeetings(Array.isArray(data.meetings) ? data.meetings : []);
       } catch (error) {
         console.error("Error fetching conclave:", error);
+        setConclave(null);
+        setMeetings([]);
+        setLoadError(error?.message || "Failed to load conclave");
+      } finally {
+        setLoading(false);
       }
     };
 
@@ -64,6 +73,20 @@ export default function ConclaveDetails() {
   return (
     <main className="min-h-screen py-6">
       <div className="space-y-5">
+        {loading ? (
+          <div className="rounded-3xl border border-slate-200 bg-white p-10 text-center text-slate-500 shadow-sm">
+            Loading conclave...
+          </div>
+        ) : null}
+
+        {!loading && loadError ? (
+          <div className="rounded-3xl border border-rose-200 bg-rose-50 p-6 text-center text-rose-700 shadow-sm">
+            {loadError}
+          </div>
+        ) : null}
+
+        {!loading && !loadError ? (
+          <>
         <UserPageHeader
           title={conclave?.conclaveStream || "Conclave"}
           description="Explore all scheduled conclave meetings, meeting modes, and quick access links from one place."
@@ -160,6 +183,8 @@ export default function ConclaveDetails() {
             </div>
           )}
         </div>
+          </>
+        ) : null}
       </div>
     </main>
   );

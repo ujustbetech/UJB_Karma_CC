@@ -95,7 +95,7 @@ export default function EventsListingPage() {
         (window.location.href = `/admin/monthlymeeting/${id}?tab=registered`);
 
     const openAddUser = (id) =>
-        (window.location.href = `/admin/monthlymeeting/${id}?tab=add-users`);
+        (window.location.href = `/admin/monthlymeeting/${id}?tab=adduser`);
 
     const openDelete = (e) => {
         setEventToDelete(e);

@@ -9,6 +9,7 @@ import {
   Users,
   ClipboardList,
   MessageCircle,
+  Handshake,
 } from "lucide-react";
 import {
   fetchUserConclaveMeetingDetails,
@@ -21,6 +22,22 @@ function toDateValue(value) {
 
   const parsed = new Date(value);
   return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function RenderList({ items = [], empty = "No data available." }) {
+  if (!Array.isArray(items) || items.length === 0) {
+    return <p className="text-sm text-slate-500">{empty}</p>;
+  }
+
+  return (
+    <div className="space-y-3">
+      {items.map((item, index) => (
+        <div key={index} className="rounded-xl border border-slate-200 p-3">
+          {item}
+        </div>
+      ))}
+    </div>
+  );
 }
 
 export default function MeetingDetails() {
@@ -37,21 +54,32 @@ export default function MeetingDetails() {
   const [showModal, setShowModal] = useState(false);
   const [declineReason, setDeclineReason] = useState("");
   const [responseType, setResponseType] = useState(null);
+  const [hasResponded, setHasResponded] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
 
   useEffect(() => {
     if (!id || !conclaveId) return;
 
     const fetchData = async () => {
       try {
+        setLoading(true);
+        setLoadError("");
         const data = await fetchUserConclaveMeetingDetails(conclaveId, id);
         setMeetingInfo(data.meeting || null);
         setConclaveInfo(data.conclave || null);
         setLeaderName(String(data.conclave?.leaderName || "").trim());
         setUserName(String(data.currentUser?.name || "").trim());
         setPhoneNumber(String(data.currentUser?.phoneNumber || "").trim());
-        setShowModal(true);
+        const existingStatus = String(data.response?.status || "").trim();
+        const alreadyResponded = existingStatus === "Accepted" || existingStatus === "Declined";
+        setHasResponded(alreadyResponded);
+        setShowModal(!alreadyResponded);
       } catch (error) {
         console.error(error);
+        setLoadError(error?.message || "Failed to load meeting");
+      } finally {
+        setLoading(false);
       }
     };
 
@@ -64,6 +92,7 @@ export default function MeetingDetails() {
     await submitConclaveMeetingResponse(conclaveId, id, {
       response: "Accepted",
     });
+    setHasResponded(true);
     setShowModal(false);
   };
 
@@ -74,6 +103,7 @@ export default function MeetingDetails() {
       response: "Declined",
       reason: declineReason,
     });
+    setHasResponded(true);
     setShowModal(false);
   };
 
@@ -83,6 +113,7 @@ export default function MeetingDetails() {
     { key: "Agenda", icon: CalendarDays },
     { key: "MoM", icon: FileText },
     { key: "Knowledge Sharing", icon: BookOpen },
+    { key: "E2A", icon: Handshake },
     { key: "Referrals", icon: Users },
     { key: "Requirements", icon: ClipboardList },
     { key: "Interactions", icon: MessageCircle },
@@ -93,15 +124,89 @@ export default function MeetingDetails() {
       case "Agenda":
         return meetingInfo?.agenda || "No agenda available";
       case "MoM":
-        return "Minutes of meeting section";
+        return (
+          <RenderList
+            items={(meetingInfo?.documentUploads || []).flatMap((upload = {}) =>
+              (upload.files || []).map((file = {}, idx) => (
+                <a
+                  key={`${upload.timestamp || "doc"}-${idx}`}
+                  href={file.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-blue-600 underline break-all"
+                >
+                  {file.name || "View document"}
+                </a>
+              ))
+            )}
+            empty="No meeting documents uploaded."
+          />
+        );
       case "Knowledge Sharing":
-        return "Knowledge sharing content";
+        return (
+          <RenderList
+            items={(meetingInfo?.knowledgeSections || []).map((item = {}) => (
+              <div>
+                <p className="font-semibold text-slate-800">{item.topic || "Untitled topic"}</p>
+                <p className="text-xs text-slate-500 mt-1">{item.name || "Unknown member"}</p>
+                <p className="text-sm mt-2 text-slate-700">{item.description || "No description"}</p>
+              </div>
+            ))}
+            empty="No knowledge-sharing entries."
+          />
+        );
       case "Referrals":
-        return "Referral details";
+        return (
+          <RenderList
+            items={(meetingInfo?.referralSections || []).map((item = {}) => (
+              <div>
+                <p className="font-semibold text-slate-800">
+                  {(item.referralFrom || "Unknown")} {" -> "} {(item.referralTo || "Unknown")}
+                </p>
+                <p className="text-sm mt-2 text-slate-700">{item.description || "No description"}</p>
+              </div>
+            ))}
+            empty="No referral entries."
+          />
+        );
+      case "E2A":
+        return (
+          <RenderList
+            items={(meetingInfo?.e2aSections || []).map((item = {}) => (
+              <div>
+                <p className="font-semibold text-slate-800">{item.e2a || "Unknown member"}</p>
+                <p className="text-sm mt-2 text-slate-700">{item.e2aDesc || "No description"}</p>
+              </div>
+            ))}
+            empty="No E2A entries."
+          />
+        );
       case "Requirements":
-        return "Requirement details";
+        return (
+          <RenderList
+            items={(meetingInfo?.requirementSections || []).map((item = {}) => (
+              <div>
+                <p className="font-semibold text-slate-800">{item.reqfrom || "Unknown member"}</p>
+                <p className="text-sm mt-2 text-slate-700">{item.reqDescription || "No description"}</p>
+              </div>
+            ))}
+            empty="No requirement entries."
+          />
+        );
       case "Interactions":
-        return "Interaction details";
+        return (
+          <RenderList
+            items={(meetingInfo?.sections || []).map((item = {}) => (
+              <div>
+                <p className="font-semibold text-slate-800">
+                  {(item.selectedParticipant1 || "Unknown")} with {(item.selectedParticipant2 || "Unknown")}
+                </p>
+                <p className="text-sm mt-2 text-slate-700">{item.interactionDate ? `Date: ${new Date(item.interactionDate).toLocaleString("en-IN")}` : "Date not set"}</p>
+              </div>
+            ))}
+            empty="No 1-to-1 interactions."
+          />
+        );
       default:
         return null;
     }
@@ -110,6 +215,20 @@ export default function MeetingDetails() {
   return (
     <div className="min-h-screen bg-gradient-to-b from-[#0b1120] via-[#0f172a] to-black flex justify-center">
       <div className="w-full max-w-md pb-16">
+        {loading ? (
+          <div className="mx-4 mt-6 rounded-3xl bg-white p-8 text-center text-slate-500">
+            Loading meeting...
+          </div>
+        ) : null}
+
+        {!loading && loadError ? (
+          <div className="mx-4 mt-6 rounded-3xl border border-rose-200 bg-rose-50 p-6 text-center text-rose-700">
+            {loadError}
+          </div>
+        ) : null}
+
+        {!loading && !loadError ? (
+          <>
         <div className="relative h-72 overflow-hidden rounded-3xl shadow-2xl mx-4 mt-6">
           <img
             src="/space.jpeg"
@@ -170,9 +289,11 @@ export default function MeetingDetails() {
             </div>
           </div>
         </div>
+          </>
+        ) : null}
       </div>
 
-      {showModal && (
+      {!loading && !loadError && !hasResponded && showModal && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 px-4">
           <div className="bg-white rounded-3xl shadow-2xl p-6 w-full max-w-sm">
             {!responseType && (

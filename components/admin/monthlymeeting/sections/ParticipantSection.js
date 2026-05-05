@@ -18,6 +18,11 @@ import {
 
 import { Users, Trash2, Pencil } from 'lucide-react';
 import { COLLECTIONS } from '@/lib/utility_collection';
+import {
+  appendMonthlyMeetingAuditLogs,
+  buildMonthlyMeetingAuditEntry,
+  diffMonthlyMeetingFields,
+} from '@/lib/monthlymeeting/monthlyMeetingAudit.mjs';
 
 import Card from '@/components/ui/Card';
 import Text from '@/components/ui/Text';
@@ -38,7 +43,7 @@ const STATUS_OPTIONS = [
 ];
 
 const ParticipantSection = forwardRef(function ParticipantSection(
-  { eventID },
+  { eventID, data, currentAdmin },
   ref
 ) {
   const toast = useToast();
@@ -190,6 +195,28 @@ const ParticipantSection = forwardRef(function ParticipantSection(
     try {
       await updateDoc(doc(db, COLLECTIONS.monthlyMeeting, eventID), {
         sections: updated,
+        auditLogs: appendMonthlyMeetingAuditLogs(
+          data?.auditLogs,
+          diffMonthlyMeetingFields(
+            data || {},
+            { ...(data || {}), sections: updated },
+            ['sections']
+          ).map((change) =>
+            buildMonthlyMeetingAuditEntry({
+              section: '1:1 Interaction',
+              field: change.field,
+              before: change.before,
+              after: change.after,
+              actor: currentAdmin,
+            })
+          ),
+        ),
+        updatedBy: {
+          name: currentAdmin?.name || currentAdmin?.email || 'Admin',
+          role: currentAdmin?.role || '',
+          identity: currentAdmin?.identity?.id || currentAdmin?.email || '',
+        },
+        updatedAt: new Date(),
       });
       toast.success('Interaction removed');
     } catch (error) {
@@ -236,6 +263,28 @@ const ParticipantSection = forwardRef(function ParticipantSection(
 
       await updateDoc(doc(db, COLLECTIONS.monthlyMeeting, eventID), {
         sections: [...sections],
+        auditLogs: appendMonthlyMeetingAuditLogs(
+          data?.auditLogs,
+          diffMonthlyMeetingFields(
+            data || {},
+            { ...(data || {}), sections: [...sections] },
+            ['sections']
+          ).map((change) =>
+            buildMonthlyMeetingAuditEntry({
+              section: '1:1 Interaction',
+              field: change.field,
+              before: change.before,
+              after: change.after,
+              actor: currentAdmin,
+            })
+          ),
+        ),
+        updatedBy: {
+          name: currentAdmin?.name || currentAdmin?.email || 'Admin',
+          role: currentAdmin?.role || '',
+          identity: currentAdmin?.identity?.id || currentAdmin?.email || '',
+        },
+        updatedAt: new Date(),
       });
 
       setDirty(false);

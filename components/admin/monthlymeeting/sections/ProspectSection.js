@@ -9,6 +9,11 @@ import {
 } from 'react';
 import { collection, getDocs, doc, updateDoc, db } from '@/services/adminMonthlyMeetingFirebaseService';
 import { COLLECTIONS } from '@/lib/utility_collection';
+import {
+  appendMonthlyMeetingAuditLogs,
+  buildMonthlyMeetingAuditEntry,
+  diffMonthlyMeetingFields,
+} from '@/lib/monthlymeeting/monthlyMeetingAudit.mjs';
 
 import Card from '@/components/ui/Card';
 import Text from '@/components/ui/Text';
@@ -31,7 +36,7 @@ import {
 
 
 const ProspectSection = forwardRef(function ProspectSection(
-  { eventId, data, fetchData },
+  { eventId, data, fetchData, currentAdmin },
   ref
 ) {
   // const { showToast } = useToast();
@@ -180,6 +185,28 @@ const ProspectSection = forwardRef(function ProspectSection(
 
       await updateDoc(doc(db, COLLECTIONS.monthlyMeeting, eventId), {
         prospectSections: cleaned,
+        auditLogs: appendMonthlyMeetingAuditLogs(
+          data?.auditLogs,
+          diffMonthlyMeetingFields(
+            data || {},
+            { ...(data || {}), prospectSections: cleaned },
+            ['prospectSections']
+          ).map((change) =>
+            buildMonthlyMeetingAuditEntry({
+              section: 'Prospects',
+              field: change.field,
+              before: change.before,
+              after: change.after,
+              actor: currentAdmin,
+            })
+          ),
+        ),
+        updatedBy: {
+          name: currentAdmin?.name || currentAdmin?.email || 'Admin',
+          role: currentAdmin?.role || '',
+          identity: currentAdmin?.identity?.id || currentAdmin?.email || '',
+        },
+        updatedAt: new Date(),
       });
 
       setDirty(false);

@@ -9,6 +9,11 @@ import {
 } from 'react';
 import { doc, updateDoc, collection, getDocs, db } from '@/services/adminMonthlyMeetingFirebaseService';
 import { COLLECTIONS } from '@/lib/utility_collection';
+import {
+  appendMonthlyMeetingAuditLogs,
+  buildMonthlyMeetingAuditEntry,
+  diffMonthlyMeetingFields,
+} from '@/lib/monthlymeeting/monthlyMeetingAudit.mjs';
 
 import { BookOpen, Sparkles } from 'lucide-react';
 
@@ -20,7 +25,7 @@ import FormField from '@/components/ui/FormField';
 import RichEditor from '@/components/ui/RichEditor';
 import { useToast } from '@/components/ui/ToastProvider';
 
-const TopicSection = forwardRef(({ eventID, data, fetchData }, ref) => {
+const TopicSection = forwardRef(({ eventID, data, fetchData, currentAdmin }, ref) => {
   const toast = useToast();
 
   const [titleOfTheDay, setTitleOfTheDay] = useState('');
@@ -138,6 +143,32 @@ const TopicSection = forwardRef(({ eventID, data, fetchData }, ref) => {
       await updateDoc(eventRef, {
         titleOfTheDay,
         description,
+        auditLogs: appendMonthlyMeetingAuditLogs(
+          data?.auditLogs,
+          diffMonthlyMeetingFields(
+            data || {},
+            {
+              ...(data || {}),
+              titleOfTheDay,
+              description,
+            },
+            ['titleOfTheDay', 'description']
+          ).map((change) =>
+            buildMonthlyMeetingAuditEntry({
+              section: 'Topic of the Day',
+              field: change.field,
+              before: change.before,
+              after: change.after,
+              actor: currentAdmin,
+            })
+          ),
+        ),
+        updatedBy: {
+          name: currentAdmin?.name || currentAdmin?.email || 'Admin',
+          role: currentAdmin?.role || '',
+          identity: currentAdmin?.identity?.id || currentAdmin?.email || '',
+        },
+        updatedAt: new Date(),
       });
 
       setDirty(false);

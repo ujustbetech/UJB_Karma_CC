@@ -2,9 +2,13 @@
 
 import { useEffect, useRef, useState, forwardRef, useImperativeHandle } from 'react';
 import { collection, getDocs, doc, updateDoc, db } from '@/services/adminMonthlyMeetingFirebaseService';
-
-import { ref as storageRef, uploadBytes, getDownloadURL, storage } from '@/services/adminMonthlyMeetingStorageService';
 import { COLLECTIONS } from '@/lib/utility_collection';
+import {
+  appendMonthlyMeetingAuditLogs,
+  buildMonthlyMeetingAuditEntry,
+  diffMonthlyMeetingFields,
+} from '@/lib/monthlymeeting/monthlyMeetingAudit.mjs';
+import { uploadAdminMonthlyMeetingFile } from '@/services/adminMonthlyMeetingService';
 
 import Card from '@/components/ui/Card';
 import Text from '@/components/ui/Text';
@@ -22,7 +26,7 @@ import RichEditor from '@/components/ui/RichEditor';
 
 import { Trash2, Upload, FileText, X, BookOpen, Lightbulb, BadgeCheck, CheckCircle2 } from 'lucide-react';
 
-const E2ASection = forwardRef(function E2ASection({ eventId, data, fetchData }, ref) {
+const E2ASection = forwardRef(function E2ASection({ eventId, data, fetchData, currentAdmin }, ref) {
   const toast = useToast();
 
   const [sections, setSections] = useState([]);
@@ -132,6 +136,20 @@ const E2ASection = forwardRef(function E2ASection({ eventId, data, fetchData }, 
       if (!s.e2a) e[`name-${i}`] = 'Required';
       if (!s.e2aDesc) e[`desc-${i}`] = 'Required';
       if (!s.e2aDate) e[`date-${i}`] = 'Required';
+      const requiresNotes = s.referenceType === 'notes' || s.referenceType === 'both';
+      const requiresDocument = s.referenceType === 'document' || s.referenceType === 'both';
+
+      if (requiresNotes && isRichTextEmpty(s.notes)) {
+        e[`notes-${i}`] = 'Notes are required';
+      }
+
+      if (
+        requiresDocument &&
+        !String(s.referenceUrl || '').trim() &&
+        !String(s.fileName || '').trim()
+      ) {
+        e[`document-${i}`] = 'Document link or upload is required';
+      }
     });
     setErrors(e);
     return e;
@@ -146,28 +164,60 @@ const E2ASection = forwardRef(function E2ASection({ eventId, data, fetchData }, 
     const errs = validate();
     if (Object.keys(errs).length) {
       focusFirstError(errs);
+      toast.error('Please fix the highlighted required fields');
       return;
     }
 
     try {
       setSaving(true);
 
-      const cleaned = sections.map((s) => ({
-        e2a: s.e2a,
-        e2aDate: s.e2aDate || '',
-        e2aDesc: s.e2aDesc || '',
+      const cleaned = sections.map((s) => {
+        const referenceType = s.referenceType || 'none';
+        const next = {
+          e2a: s.e2a,
+          e2aDate: s.e2aDate || '',
+          e2aDesc: s.e2aDesc || '',
+          status: s.status || 'Proposed',
+          referenceType,
+        };
 
-        status: s.status || 'Proposed',
+        if (referenceType === 'notes' || referenceType === 'both') {
+          next.notes = s.notes || '';
+        }
 
-        referenceType: s.referenceType || 'none',
-        notes: s.notes || '',
-        referenceUrl: s.referenceUrl || '',
-        fileName: s.fileName || '',
-      }));
+        if (referenceType === 'document' || referenceType === 'both') {
+          if (String(s.referenceUrl || '').trim()) next.referenceUrl = s.referenceUrl;
+          if (String(s.fileName || '').trim()) next.fileName = s.fileName;
+        }
+
+        return next;
+      });
 
 
       await updateDoc(doc(db, COLLECTIONS.monthlyMeeting, eventId), {
         e2aSections: cleaned,
+        auditLogs: appendMonthlyMeetingAuditLogs(
+          data?.auditLogs,
+          diffMonthlyMeetingFields(
+            data || {},
+            { ...(data || {}), e2aSections: cleaned },
+            ['e2aSections']
+          ).map((change) =>
+            buildMonthlyMeetingAuditEntry({
+              section: 'E2A',
+              field: change.field,
+              before: change.before,
+              after: change.after,
+              actor: currentAdmin,
+            })
+          ),
+        ),
+        updatedBy: {
+          name: currentAdmin?.name || currentAdmin?.email || 'Admin',
+          role: currentAdmin?.role || '',
+          identity: currentAdmin?.identity?.id || currentAdmin?.email || '',
+        },
+        updatedAt: new Date(),
       });
 
       setDirty(false);
@@ -186,11 +236,10 @@ const E2ASection = forwardRef(function E2ASection({ eventId, data, fetchData }, 
     updateField(index, 'uploading', true);
 
     try {
-      const path = `e2aDocs/${eventId}/${Date.now()}_${file.name}`;
-      const fileRef = storageRef(storage, path);
-
-      await uploadBytes(fileRef, file);
-      const url = await getDownloadURL(fileRef);
+      const { url } = await uploadAdminMonthlyMeetingFile(eventId, {
+        file,
+        module: 'e2aDocs',
+      });
 
       updateField(index, 'referenceUrl', url);
       updateField(index, 'fileName', file.name);
@@ -332,50 +381,62 @@ const E2ASection = forwardRef(function E2ASection({ eventId, data, fetchData }, 
 
 
           {(s.referenceType === 'notes' || s.referenceType === 'both') && (
-            <FormField label="Notes">
-              <RichEditor
-                value={s.notes || ''}
-                onChange={(val) => updateField(i, 'notes', val)}
-              />
+            <FormField
+              label="Notes"
+              required
+              error={errors[`notes-${i}`]}
+            >
+              <div className={`rounded-xl border ${errors[`notes-${i}`] ? 'border-red-500' : 'border-slate-200'}`}>
+                <RichEditor
+                  value={s.notes || ''}
+                  onChange={(val) => updateField(i, 'notes', val)}
+                />
+              </div>
             </FormField>
           )}
           {(s.referenceType === 'document' || s.referenceType === 'both') && (
-            <FormField label="Reference Document">
-              <label className="flex items-center gap-2 px-3 py-1.5 border rounded-md cursor-pointer bg-white hover:bg-gray-50">
-                <Upload className="w-4 h-4" />
-                Upload File
-                <input
-                  type="file"
-                  className="hidden"
-                  onChange={(e) => handleFileUpload(e.target.files[0], i)}
-                />
-              </label>
+            <FormField
+              label="Reference Document"
+              required
+              error={errors[`document-${i}`]}
+            >
+              <div className={`rounded-xl border p-3 ${errors[`document-${i}`] ? 'border-red-500' : 'border-slate-200'}`}>
+                <label className="flex items-center gap-2 px-3 py-1.5 border rounded-md cursor-pointer bg-white hover:bg-gray-50">
+                  <Upload className="w-4 h-4" />
+                  Upload File
+                  <input
+                    type="file"
+                    className="hidden"
+                    onChange={(e) => handleFileUpload(e.target.files[0], i)}
+                  />
+                </label>
 
-              {s.uploading && (
-                <span className="text-sm text-blue-600">Uploading...</span>
-              )}
+                {s.uploading && (
+                  <span className="text-sm text-blue-600">Uploading...</span>
+                )}
 
-              {s.referenceUrl && (
-                <div className="flex items-center gap-2 mt-2">
-                  <a
-                    href={s.referenceUrl}
-                    target="_blank"
-                    className="flex items-center gap-1 text-sm text-blue-600 underline"
-                  >
-                    <FileText className="w-4 h-4" />
-                    {s.fileName}
-                  </a>
+                {s.referenceUrl && (
+                  <div className="flex items-center gap-2 mt-2">
+                    <a
+                      href={s.referenceUrl}
+                      target="_blank"
+                      className="flex items-center gap-1 text-sm text-blue-600 underline"
+                    >
+                      <FileText className="w-4 h-4" />
+                      {s.fileName}
+                    </a>
 
-                  <button
-                    onClick={() => {
-                      updateField(i, 'referenceUrl', '');
-                      updateField(i, 'fileName', '');
-                    }}
-                  >
-                    <X className="w-4 h-4 text-red-500" />
-                  </button>
-                </div>
-              )}
+                    <button
+                      onClick={() => {
+                        updateField(i, 'referenceUrl', '');
+                        updateField(i, 'fileName', '');
+                      }}
+                    >
+                      <X className="w-4 h-4 text-red-500" />
+                    </button>
+                  </div>
+                )}
+              </div>
             </FormField>
           )}
 
@@ -450,3 +511,9 @@ export default E2ASection;
 
 
 
+  const isRichTextEmpty = (value) =>
+    !String(value || '')
+      .replace(/<[^>]*>/g, ' ')
+      .replace(/&nbsp;/gi, ' ')
+      .replace(/\s+/g, '')
+      .trim();

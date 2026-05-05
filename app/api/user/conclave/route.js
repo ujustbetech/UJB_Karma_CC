@@ -34,6 +34,15 @@ async function buildLeaderNamesMap(conclaves = []) {
   return Object.fromEntries(entries);
 }
 
+function normalize(value) {
+  return String(value || "").trim().toLowerCase();
+}
+
+function includesMember(values = [], probes = []) {
+  const set = new Set((Array.isArray(values) ? values : []).map(normalize).filter(Boolean));
+  return probes.some((probe) => set.has(normalize(probe)));
+}
+
 export async function GET(req) {
   const authResult = await requireUserSession(req);
 
@@ -55,13 +64,27 @@ export async function GET(req) {
     const provider = getDataProvider();
     const conclaves = await provider.conclaves.listAll();
     const leaderNames = await buildLeaderNamesMap(conclaves);
+    const currentPhone = String(authResult.context.phone || "").trim();
+    const currentName = currentPhone
+      ? (leaderNames[currentPhone] || "")
+      : "";
 
-    const records = conclaves.map((item) => ({
-      ...item,
-      orbiterCount: Array.isArray(item.orbiters) ? item.orbiters.length : 0,
-      ntMemberCount: Array.isArray(item.ntMembers) ? item.ntMembers.length : 0,
-      leaderName: leaderNames[String(item.leader || "").trim()] || "User",
-    }));
+    const records = conclaves
+      .filter((item) => {
+        const probes = [currentPhone, currentName];
+        return (
+          normalize(item?.leader) === normalize(currentPhone) ||
+          normalize(item?.leader) === normalize(currentName) ||
+          includesMember(item?.orbiters, probes) ||
+          includesMember(item?.ntMembers, probes)
+        );
+      })
+      .map((item) => ({
+        ...item,
+        orbiterCount: Array.isArray(item.orbiters) ? item.orbiters.length : 0,
+        ntMemberCount: Array.isArray(item.ntMembers) ? item.ntMembers.length : 0,
+        leaderName: leaderNames[String(item.leader || "").trim()] || "User",
+      }));
 
     return jsonSuccess({ conclaves: records });
   } catch (error) {

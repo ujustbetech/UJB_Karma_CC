@@ -32,6 +32,7 @@ export default function MeetingDetailsSection({
   fetchData,
 }) {
   const toast = useToast();
+  const meetingData = data || {};
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState({});
   const [form, setForm] = useState({
@@ -45,14 +46,14 @@ export default function MeetingDetailsSection({
 
   useEffect(() => {
     setForm({
-      meetingName: data.meetingName || "",
-      datetime: toDatetimeLocal(data.datetime),
-      agenda: data.agenda || "",
-      mode: data.mode || "online",
-      link: data.link || "",
-      venue: data.venue || "",
+      meetingName: meetingData.meetingName || "",
+      datetime: toDatetimeLocal(meetingData.datetime),
+      agenda: meetingData.agenda || "",
+      mode: meetingData.mode || "online",
+      link: meetingData.link || "",
+      venue: meetingData.venue || "",
     });
-  }, [data]);
+  }, [meetingData]);
 
   const handleChange = (name, value) => {
     setForm((prev) => ({ ...prev, [name]: value }));

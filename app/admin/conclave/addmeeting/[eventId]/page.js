@@ -32,6 +32,22 @@ import {
   Save,
 } from "lucide-react";
 
+function createEmptyMeetingData() {
+  return {
+    meetingName: "",
+    datetime: "",
+    agenda: "",
+    mode: "online",
+    link: "",
+    venue: "",
+    knowledgeSections: [],
+    sections: [],
+    requirementSections: [],
+    prospectSections: [],
+    referralSections: [],
+  };
+}
+
 export default function ConclaveMeetingDetailsPage() {
   const params = useParams();
   const searchParams = useSearchParams();
@@ -39,8 +55,9 @@ export default function ConclaveMeetingDetailsPage() {
   const meetingId = params?.eventId;
   const conclaveId = searchParams.get("conclaveId");
 
-  const [data, setData] = useState(null);
+  const [data, setData] = useState(createEmptyMeetingData());
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
   const [activeSection, setActiveSection] = useState("details");
   const [savingAll, setSavingAll] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
@@ -57,12 +74,18 @@ export default function ConclaveMeetingDetailsPage() {
     if (!conclaveId || !meetingId) return;
 
     setLoading(true);
+    setLoadError("");
 
     try {
       const meeting = await fetchAdminConclaveMeetingDetails(conclaveId, meetingId);
-      setData(meeting || {});
+      setData({
+        ...createEmptyMeetingData(),
+        ...(meeting || {}),
+      });
     } catch (error) {
       console.error(error);
+      setData(createEmptyMeetingData());
+      setLoadError(error?.message || "Failed to load conclave meeting");
     } finally {
       setLoading(false);
     }
@@ -73,6 +96,10 @@ export default function ConclaveMeetingDetailsPage() {
   }, [meetingId, conclaveId]);
 
   const handleSaveAll = async () => {
+    if (loadError) {
+      return;
+    }
+
     setSavingAll(true);
 
     const refs = [participantRef, knowledgeRef, requirementRef, prospectRef, referralRef];
@@ -91,6 +118,8 @@ export default function ConclaveMeetingDetailsPage() {
     
     setSavingAll(false);
   };
+
+  const canRenderSections = !loading && !loadError;
 
   const menuItems = [
     { id: "details", label: "Meeting Details", icon: Info },
@@ -273,33 +302,49 @@ export default function ConclaveMeetingDetailsPage() {
             <div className="grid gap-3 text-sm text-slate-600 md:grid-cols-2 xl:grid-cols-3">
               <div className="flex justify-between gap-4 rounded-lg bg-slate-50 px-3 py-2">
                 <span>Meeting Name</span>
-                <span className="text-right">{data?.meetingName || "-"}</span>
+                <span className="text-right">{data.meetingName || "-"}</span>
               </div>
               <div className="flex justify-between gap-4 rounded-lg bg-slate-50 px-3 py-2">
                 <span>Knowledge Entries</span>
-                <span>{data?.knowledgeSections?.length || 0}</span>
+                <span>{data.knowledgeSections.length}</span>
               </div>
               <div className="flex justify-between gap-4 rounded-lg bg-slate-50 px-3 py-2">
                 <span>1:1 Interactions</span>
-                <span>{data?.sections?.length || 0}</span>
+                <span>{data.sections.length}</span>
               </div>
               <div className="flex justify-between gap-4 rounded-lg bg-slate-50 px-3 py-2">
                 <span>Requirements</span>
-                <span>{data?.requirementSections?.length || 0}</span>
+                <span>{data.requirementSections.length}</span>
               </div>
               <div className="flex justify-between gap-4 rounded-lg bg-slate-50 px-3 py-2">
                 <span>Prospects</span>
-                <span>{data?.prospectSections?.length || 0}</span>
+                <span>{data.prospectSections.length}</span>
               </div>
               <div className="flex justify-between gap-4 rounded-lg bg-slate-50 px-3 py-2">
                 <span>Referrals</span>
-                <span>{data?.referralSections?.length || 0}</span>
+                <span>{data.referralSections.length}</span>
               </div>
             </div>
           )}
         </Card>
 
-        <Card>{loading ? <EventInfoSkeleton /> : renderSection()}</Card>
+        <Card>
+          {loading ? <EventInfoSkeleton /> : null}
+          {!loading && loadError ? (
+            <div className="space-y-4 p-6">
+              <Text variant="h3">Unable to load meeting</Text>
+              <Text variant="muted">
+                {loadError === "Meeting not found"
+                  ? "This meeting record could not be found for the selected conclave."
+                  : loadError}
+              </Text>
+              <div className="flex gap-3">
+                <Button onClick={fetchData}>Retry</Button>
+              </div>
+            </div>
+          ) : null}
+          {canRenderSections ? renderSection() : null}
+        </Card>
       </div>
     </div>
   );

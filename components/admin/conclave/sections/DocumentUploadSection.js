@@ -1,8 +1,11 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { ref, uploadBytes, getDownloadURL, storage } from "@/services/adminConclaveStorageService";
 import { doc, updateDoc, getDoc, db } from "@/services/adminConclaveFirebaseService";
+import {
+  deleteAdminConclaveMeetingFile,
+  uploadAdminConclaveMeetingFile,
+} from "@/services/adminConclaveService";
 
 import { COLLECTIONS } from "@/lib/utility_collection";
 
@@ -32,6 +35,14 @@ export default function DocumentUploadSection({
   const [selectedTimestamp, setSelectedTimestamp] = useState(null);
 
   const fileInputRef = useRef(null);
+
+  const buildAuditEntry = (action, details) => ({
+    id: `audit-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    section: "Documents",
+    action,
+    details,
+    timestamp: new Date().toISOString(),
+  });
 
   /* ================= FETCH ================= */
   const fetchUploads = async () => {
@@ -70,17 +81,15 @@ export default function DocumentUploadSection({
       const uploadedFiles = [];
 
       for (const file of selectedFiles) {
-        const fileRef = ref(
-          storage,
-          `Conclaves/${conclaveId}/${meetingId}/${Date.now()}_${file.name}`
-        );
-
-        await uploadBytes(fileRef, file);
-        const url = await getDownloadURL(fileRef);
+        const upload = await uploadAdminConclaveMeetingFile(conclaveId, meetingId, {
+          file,
+          module: "documents",
+        });
 
         uploadedFiles.push({
           name: file.name,
-          url,
+          url: upload.url,
+          path: upload.path,
         });
       }
 
@@ -92,15 +101,21 @@ export default function DocumentUploadSection({
         meetingId
       );
 
+      const nextUploads = [
+        ...uploads,
+        {
+          description,
+          files: uploadedFiles,
+          timestamp: Date.now(),
+        },
+      ];
+
       await updateDoc(docRef, {
-        documentUploads: [
-          ...uploads,
-          {
-            description,
-            files: uploadedFiles,
-            timestamp: Date.now(),
-          },
-        ],
+        documentUploads: nextUploads,
+        auditLogs: [
+          ...(Array.isArray(data?.auditLogs) ? data.auditLogs : []),
+          buildAuditEntry("upload", `Uploaded ${uploadedFiles.length} document(s)`),
+        ].slice(-100),
       });
 
       toast.success("Documents uploaded");
@@ -126,6 +141,18 @@ export default function DocumentUploadSection({
 
   const confirmDelete = async () => {
     try {
+      const target = uploads.find((u) => u.timestamp === selectedTimestamp);
+      if (target?.files?.length) {
+        for (const file of target.files) {
+          if (file.path) {
+            await deleteAdminConclaveMeetingFile(conclaveId, meetingId, {
+              path: file.path,
+              module: "documents",
+            });
+          }
+        }
+      }
+
       const updated = uploads.filter(
         (u) => u.timestamp !== selectedTimestamp
       );
@@ -140,6 +167,10 @@ export default function DocumentUploadSection({
 
       await updateDoc(docRef, {
         documentUploads: updated,
+        auditLogs: [
+          ...(Array.isArray(data?.auditLogs) ? data.auditLogs : []),
+          buildAuditEntry("delete", "Deleted document upload entry"),
+        ].slice(-100),
       });
 
       toast.success("Document deleted");

@@ -4,6 +4,22 @@ import { jsonError, jsonSuccess } from "@/lib/api/response.mjs";
 import { requireUserSession } from "@/lib/auth/userRequestAuth.mjs";
 import { getDataProvider } from "@/lib/data/provider.mjs";
 
+function toDate(value) {
+  if (!value) return null;
+  if (value instanceof Date) return value;
+  if (typeof value?.toDate === "function") return value.toDate();
+  if (typeof value?.seconds === "number") return new Date(value.seconds * 1000);
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function isEnrollmentOpen(event) {
+  if (typeof event?.enrollmentEnabled === "boolean") return event.enrollmentEnabled;
+  const deadline = toDate(event?.enrollmentDeadline);
+  if (!deadline) return true;
+  return deadline.getTime() >= Date.now();
+}
+
 export async function GET(req) {
   const authResult = await requireUserSession(req);
 
@@ -34,6 +50,7 @@ export async function GET(req) {
         return {
           ...event,
           isUserRegistered,
+          isEnrollmentOpen: isEnrollmentOpen(event),
         };
       })
     );

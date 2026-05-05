@@ -3,6 +3,10 @@
 import { useEffect, useState } from 'react';
 import { doc, getDoc, getDocs, updateDoc, collection, arrayUnion, db } from '@/services/adminMonthlyMeetingFirebaseService';
 import { COLLECTIONS } from '@/lib/utility_collection';
+import {
+  appendMonthlyMeetingAuditLogs,
+  buildMonthlyMeetingAuditEntry,
+} from '@/lib/monthlymeeting/monthlyMeetingAudit.mjs';
 
 import Card from '@/components/ui/Card';
 import Text from '@/components/ui/Text';
@@ -21,7 +25,7 @@ import { useToast } from '@/components/ui/ToastProvider';
 // import { Network, Users } from 'lucide-react';
 import { Send, Check, Clock, Network, Users } from 'lucide-react';
 
-export default function ConclaveSection({ eventId, fetchData }) {
+export default function ConclaveSection({ eventId, fetchData, currentAdmin }) {
   const toast = useToast();
 
   const [users, setUsers] = useState([]);
@@ -101,6 +105,7 @@ export default function ConclaveSection({ eventId, fetchData }) {
     setSaving(true);
     try {
       const eventRef = doc(db, COLLECTIONS.monthlyMeeting, eventId);
+      const beforeSnap = await getDoc(eventRef);
 
       await updateDoc(eventRef, {
         invitedUsers: arrayUnion({
@@ -108,7 +113,29 @@ export default function ConclaveSection({ eventId, fetchData }) {
           name: selectedUser.name,
           invitedAt: new Date(),
           sent: false
-        })
+        }),
+      });
+
+      const afterSnap = await getDoc(eventRef);
+      await updateDoc(eventRef, {
+        auditLogs: appendMonthlyMeetingAuditLogs(
+          afterSnap.data()?.auditLogs,
+          [
+            buildMonthlyMeetingAuditEntry({
+              section: 'Conclave',
+              field: 'invitedUsers',
+              before: `Invited count ${beforeSnap.data()?.invitedUsers?.length || 0}`,
+              after: `Invited count ${afterSnap.data()?.invitedUsers?.length || 0}`,
+              actor: currentAdmin,
+            }),
+          ]
+        ),
+        updatedBy: {
+          name: currentAdmin?.name || currentAdmin?.email || 'Admin',
+          role: currentAdmin?.role || '',
+          identity: currentAdmin?.identity?.id || currentAdmin?.email || '',
+        },
+        updatedAt: new Date(),
       });
 
       const conclaveRef = doc(db, COLLECTIONS.conclaves, selectedConclaveId);
@@ -140,7 +167,27 @@ export default function ConclaveSection({ eventId, fetchData }) {
         u.id === user.id ? { ...u, sent: true } : u
       );
 
-      await updateDoc(eventRef, { invitedUsers: updated });
+      await updateDoc(eventRef, {
+        invitedUsers: updated,
+        auditLogs: appendMonthlyMeetingAuditLogs(
+          snap.data()?.auditLogs,
+          [
+            buildMonthlyMeetingAuditEntry({
+              section: 'Conclave',
+              field: 'invitedUsers',
+              before: `Sent ${user.name || user.id}`,
+              after: `Delivered ${user.name || user.id}`,
+              actor: currentAdmin,
+            }),
+          ]
+        ),
+        updatedBy: {
+          name: currentAdmin?.name || currentAdmin?.email || 'Admin',
+          role: currentAdmin?.role || '',
+          identity: currentAdmin?.identity?.id || currentAdmin?.email || '',
+        },
+        updatedAt: new Date(),
+      });
       setInvitedList(updated);
 
       toast.success('Message sent');

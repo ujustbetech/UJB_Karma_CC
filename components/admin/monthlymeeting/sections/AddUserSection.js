@@ -5,11 +5,17 @@ import { useRouter } from 'next/navigation';
 import {
   collection,
   getDocs,
+  getDoc,
   doc,
   setDoc,
+  updateDoc,
   db,
 } from '@/services/adminMonthlyMeetingFirebaseService';
 import { COLLECTIONS } from '@/lib/utility_collection';
+import {
+  appendMonthlyMeetingAuditLogs,
+  buildMonthlyMeetingAuditEntry,
+} from '@/lib/monthlymeeting/monthlyMeetingAudit.mjs';
 
 import Text from '@/components/ui/Text';
 import Button from '@/components/ui/Button';
@@ -22,7 +28,7 @@ import Select from '@/components/ui/Select';
 import { UserPlus } from 'lucide-react';
 import { sendWhatsAppTemplateRequest } from '@/utils/whatsappClient';
 
-export default function AddUserSection({ eventId: propEventId }) {
+export default function AddUserSection({ eventId: propEventId, currentAdmin }) {
   const router = useRouter();
   const toast = useToast();
 
@@ -35,6 +41,7 @@ export default function AddUserSection({ eventId: propEventId }) {
   const [userList, setUserList] = useState([]);
   const [filteredUsers, setFilteredUsers] = useState([]);
   const [userSearch, setUserSearch] = useState('');
+  const [selectedRegistration, setSelectedRegistration] = useState(null);
 
   const [interests, setInterests] = useState({
     knowledgeSharing: false,
@@ -74,6 +81,7 @@ export default function AddUserSection({ eventId: propEventId }) {
 
   const handleSearchUser = (value) => {
     setUserSearch(value);
+    setSelectedRegistration(null);
     clearError('name');
 
     const filtered = userList.filter((user) =>
@@ -90,6 +98,33 @@ export default function AddUserSection({ eventId: propEventId }) {
     setFilteredUsers([]);
     clearError('name');
     clearError('phone');
+    void loadExistingRegistration(user.phone);
+  };
+
+  const loadExistingRegistration = async (selectedPhone) => {
+    if (!eventId || !selectedPhone) {
+      setSelectedRegistration(null);
+      return;
+    }
+
+    try {
+      const registrationRef = doc(
+        db,
+        `${COLLECTIONS.monthlyMeeting}/${eventId}/registeredUsers/${selectedPhone}`
+      );
+      const registrationSnap = await getDoc(registrationRef);
+      setSelectedRegistration(
+        registrationSnap.exists()
+          ? {
+              id: registrationSnap.id,
+              ...registrationSnap.data(),
+            }
+          : null
+      );
+    } catch (error) {
+      console.error(error);
+      setSelectedRegistration(null);
+    }
   };
 
   const handleInterestChange = (key, checked) => {
@@ -129,18 +164,48 @@ export default function AddUserSection({ eventId: propEventId }) {
         db,
         `${COLLECTIONS.monthlyMeeting}/${eventId}/registeredUsers/${phone}`
       );
-
       await setDoc(userRef, {
         name,
         phone,
+        phoneNumber: phone,
         interestedIn: interests,
         type: type || '',
-        registeredAt: new Date(),
+        attendanceStatus: selectedRegistration?.attendanceStatus === true,
+        registrationSource: selectedRegistration?.registrationSource || 'admin',
+        registeredAt: selectedRegistration?.registeredAt || new Date(),
+      });
+
+      const eventRef = doc(db, COLLECTIONS.monthlyMeeting, eventId);
+      const eventSnap = await getDoc(eventRef);
+      await updateDoc(eventRef, {
+        auditLogs: appendMonthlyMeetingAuditLogs(
+          eventSnap.data()?.auditLogs,
+          [
+            buildMonthlyMeetingAuditEntry({
+              section: 'Add User',
+              field: 'registeredUsers',
+              before: selectedRegistration ? 'Existing registration updated' : 'No prior registration',
+              after: `${name} (${phone})`,
+              actor: currentAdmin,
+            }),
+          ]
+        ),
+        updatedBy: {
+          name: currentAdmin?.name || currentAdmin?.email || 'Admin',
+          role: currentAdmin?.role || '',
+          identity: currentAdmin?.identity?.id || currentAdmin?.email || '',
+        },
+        updatedAt: new Date(),
       });
 
       await sendWhatsAppMessage(phone, eventId);
+      await loadExistingRegistration(phone);
 
-      toast.success('User registered and message sent');
+      toast.success(
+        selectedRegistration
+          ? 'User already existed. Message sent again.'
+          : 'User registered and message sent'
+      );
       router.push(`/admin/monthlymeeting/${eventId}`);
     } catch (error) {
       console.error(error);
@@ -191,6 +256,18 @@ export default function AddUserSection({ eventId: propEventId }) {
             <Input value={phone} readOnly error={!!errors.phone} />
           </div>
         </FormField>
+
+        {selectedRegistration ? (
+          <Card className="border border-emerald-200 bg-emerald-50 p-4">
+            <Text className="text-sm font-medium text-emerald-800">
+              This user is already registered for the meeting.
+            </Text>
+            <Text className="mt-1 text-xs text-emerald-700">
+              Sending from this tab will reuse the same registration record and resend the
+              existing message flow without creating a duplicate entry.
+            </Text>
+          </Card>
+        ) : null}
 
         <FormField label="Interested In">
           <div className="flex flex-wrap gap-2">
@@ -264,7 +341,11 @@ export default function AddUserSection({ eventId: propEventId }) {
 
         <div className="flex justify-end border-t pt-4">
           <Button variant="primary" onClick={handleSubmit} disabled={loading}>
-            {loading ? 'Registering...' : 'Register & Send'}
+            {loading
+              ? 'Processing...'
+              : selectedRegistration
+                ? 'Send Message'
+                : 'Register & Send'}
           </Button>
         </div>
       </div>
