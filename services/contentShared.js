@@ -10,6 +10,10 @@ export function validateContentForm({
   thumbnailFiles,
 }) {
   const errors = {};
+  const normalizedFormat = String(contentFormat || "").trim().toLowerCase();
+  const isImageFormat = normalizedFormat === "image";
+  const isVideoFormat = normalizedFormat === "video";
+  const isTextFormat = normalizedFormat === "text";
 
   if (!contentType) errors.contentType = "Required";
   if (!contentFormat) errors.contentFormat = "Required";
@@ -19,8 +23,10 @@ export function validateContentForm({
     errors.parternameId = "Required";
   }
   if (!contDiscription) errors.contDiscription = "Required";
-  if (!contentFiles.length) errors.contentFiles = "Content file required";
-  if (!thumbnailFiles.length) errors.thumbnailFiles = "Thumbnail required";
+  if (!isTextFormat && !contentFiles.length) errors.contentFiles = "Content file required";
+  if (!isTextFormat && (isVideoFormat || !isImageFormat) && !thumbnailFiles.length) {
+    errors.thumbnailFiles = "Thumbnail required";
+  }
 
   return errors;
 }

@@ -40,6 +40,56 @@ export default function ContentPage() {
     if (format === "Video") return <Video size={16} />;
     return <FileText size={16} />;
   };
+  const isTextFormat = (format) =>
+    String(format || "").trim().toLowerCase() === "text";
+
+  const stripHtml = (value) =>
+    String(value || "")
+      .replace(/<[^>]*>/g, " ")
+      .replace(/&nbsp;/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+
+  const getTextPreview = (content) =>
+    stripHtml(content?.textContentHtml || content?.contDiscription || "");
+  const getPrimaryImage = (content) => {
+    const format = String(content?.contentFormat || "").trim().toLowerCase();
+    if (format === "image") {
+      return content?.contentFileImages?.[0] || content?.Thumbnail?.[0] || "";
+    }
+    return content?.Thumbnail?.[0] || "";
+  };
+  const isImageFormat = (format) =>
+    String(format || "").trim().toLowerCase() === "image";
+
+  const truncateWords = (value, limit = 5) => {
+    const words = String(value || "").trim().split(/\s+/).filter(Boolean);
+    if (words.length <= limit) {
+      return {
+        text: words.join(" "),
+        truncated: false,
+      };
+    }
+    return {
+      text: words.slice(0, limit).join(" "),
+      truncated: true,
+    };
+  };
+
+  const getProfileImage = (item) => {
+    if (Array.isArray(item?.lpProfile) && item.lpProfile[0]) return item.lpProfile[0];
+    if (typeof item?.lpProfile === "string" && item.lpProfile.trim()) return item.lpProfile.trim();
+    return "";
+  };
+
+  const isUjustBeOwner = (item) =>
+    String(item?.ownershipType || "").trim().toLowerCase() === "ujustbe" ||
+    String(item?.partnerNamelp || "").trim().toLowerCase() === "ujustbe";
+
+  const getPartnerTypeLabel = (item) => {
+    if (isUjustBeOwner(item)) return "Brand";
+    return item?.partnerDesig || "Profile unavailable";
+  };
 
   if (loading) {
     return (
@@ -63,7 +113,10 @@ export default function ContentPage() {
         {/* GRID */}
         <div className="grid grid-cols-1 gap-6">
 
-          {contents.map((content) => (
+          {contents.map((content) => {
+            const profileImage = getProfileImage(content);
+            const showUjustBeLogo = !profileImage && isUjustBeOwner(content);
+            return (
             <Link
               href={`/user/dewdrop/content/${content.id}`}
               key={content.id}
@@ -71,9 +124,9 @@ export default function ContentPage() {
             >
               {/* THUMBNAIL */}
               <div className="relative h-48 bg-gray-100">
-                {content.Thumbnail?.[0] ? (
+                {getPrimaryImage(content) ? (
                   <img
-                    src={content.Thumbnail[0]}
+                    src={getPrimaryImage(content)}
                     alt={content.contentName || "Content thumbnail"}
                     className="w-full h-full object-cover"
                     onError={(event) => {
@@ -84,13 +137,26 @@ export default function ContentPage() {
                 ) : null}
                 <div
                   className={`absolute inset-0 ${
-                    content.Thumbnail?.[0] ? "hidden" : "flex"
+                    getPrimaryImage(content) ? "hidden" : "flex"
                   } items-center justify-center bg-gradient-to-br from-slate-100 to-slate-200 text-slate-500`}
                 >
-                  <div className="flex flex-col items-center gap-2">
-                    <ImageOff size={28} />
-                    <span className="text-sm font-medium">No image available</span>
-                  </div>
+                  {isTextFormat(content.contentFormat) ? (
+                    <div className="mx-4 w-full rounded-2xl border border-indigo-100 bg-white/90 px-5 py-4 text-left text-slate-700 shadow-sm">
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-indigo-500 mb-2">
+                        Text Content
+                      </p>
+                      <p className="text-sm leading-6 line-clamp-4 text-slate-700">
+                        {getTextPreview(content) || "No text content added."}
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col items-center gap-2">
+                      <ImageOff size={28} />
+                      <span className="text-sm font-medium">
+                        {isImageFormat(content.contentFormat) ? "Image unavailable" : "Media preview unavailable"}
+                      </span>
+                    </div>
+                  )}
                 </div>
 
                 {/* FORMAT BADGE */}
@@ -109,9 +175,25 @@ export default function ContentPage() {
                 </h3>
 
                 {/* DESCRIPTION */}
-                <p className="text-sm text-gray-500 line-clamp-2 mb-4">
-                  {content.contDiscription}
-                </p>
+                {isTextFormat(content.contentFormat) ? (
+                  <p className="text-sm leading-6 text-gray-500 line-clamp-2 mb-4">
+                    {(() => {
+                      const summary = truncateWords(content.contDiscription, 5);
+                      return (
+                        <>
+                          {summary.text || "No description added."}
+                          {summary.truncated ? (
+                            <span className="ml-1 font-medium text-indigo-600">View more</span>
+                          ) : null}
+                        </>
+                      );
+                    })()}
+                  </p>
+                ) : (
+                  <p className="text-sm leading-6 text-gray-500 line-clamp-2 mb-4">
+                    {stripHtml(content.contDiscription)}
+                  </p>
+                )}
 
                 {/* TAGS */}
                 <div className="flex flex-wrap gap-2 mb-4">
@@ -128,10 +210,10 @@ export default function ContentPage() {
 
                 {/* PARTNER INFO */}
                 <div className="flex items-center gap-3 mb-4">
-                  {content.lpProfile?.[0] ? (
+                  {profileImage ? (
                     <img
-                      src={content.lpProfile[0]}
-                      alt={content.partnerNamelp || "Partner"}
+                      src={profileImage}
+                      alt={content.partnerNamelp || "UjustBe"}
                       className="w-10 h-10 rounded-full object-cover"
                       onError={(event) => {
                         event.currentTarget.style.display = "none";
@@ -139,19 +221,26 @@ export default function ContentPage() {
                       }}
                     />
                   ) : null}
+                  {showUjustBeLogo ? (
+                    <img
+                      src="/ujustbe-logo.svg"
+                      alt="UjustBe"
+                      className="h-10 w-10 rounded-full border border-slate-200 bg-white p-1 object-contain"
+                    />
+                  ) : null}
                   <div
                     className={`${
-                      content.lpProfile?.[0] ? "hidden" : "flex"
+                      profileImage || showUjustBeLogo ? "hidden" : "flex"
                     } h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-slate-500`}
                   >
                     <User size={18} />
                   </div>
                   <div>
                     <p className="text-sm font-medium text-gray-700">
-                      {content.partnerNamelp || "Partner"}
+                      {content.partnerNamelp || "UjustBe"}
                     </p>
                     <p className="text-xs text-gray-400">
-                      {content.partnerDesig || "Profile unavailable"}
+                      {getPartnerTypeLabel(content)}
                     </p>
                   </div>
                 </div>
@@ -169,15 +258,12 @@ export default function ContentPage() {
                       {content.totallike || 0}
                     </span>
                   </div>
-
-                  <span className="font-medium text-indigo-600">
-                    CP {content.totalCp || 0}
-                  </span>
                 </div>
 
               </div>
             </Link>
-          ))}
+            );
+          })}
 
         </div>
       </div>

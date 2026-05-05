@@ -49,6 +49,22 @@ export default function ContentCategoryPage() {
         id: null,
     });
 
+    const formatTimestamp = (timestamp) => {
+        if (!timestamp) return "—";
+        if (typeof timestamp?.toDate === "function") {
+            return timestamp.toDate().toLocaleString();
+        }
+        if (timestamp?.seconds) {
+            return new Date(timestamp.seconds * 1000).toLocaleString();
+        }
+        return "—";
+    };
+
+    const getEditedLogs = (activity) => {
+        if (!Array.isArray(activity)) return [];
+        return activity.filter((entry) => entry?.type === "edited");
+    };
+
     const perPage = 10;
     // const [loading, setLoading] = useState(true);
 
@@ -118,6 +134,7 @@ export default function ContentCategoryPage() {
                     {
                         type: 'created',
                         at: Timestamp.now(),
+                        by: auth?.currentUser?.email || 'admin',
                     },
                 ],
             });
@@ -137,9 +154,11 @@ export default function ContentCategoryPage() {
             contentCategory: editingName,
             contentCategoryLower: editingName.toLowerCase().trim(),
             updatedAt: Timestamp.now(),
+            updatedBy: auth?.currentUser?.email || 'admin',
             activity: arrayUnion({
                 type: 'edited',
                 at: Timestamp.now(),
+                by: auth?.currentUser?.email || 'admin',
             }),
         });
 
@@ -206,6 +225,8 @@ export default function ContentCategoryPage() {
     const columns = [
         { label: "Sr no" },
         { label: "Category Name" },
+        { label: "Added By" },
+        { label: "Edited Category Log" },
         { label: "Updated" },
         { label: "Status" },
         { label: "Usage" },
@@ -285,7 +306,7 @@ export default function ContentCategoryPage() {
                                         {loading ? (
                                             [...Array(6)].map((_, i) => (
                                                 <tr key={i} className='border-0'>
-                                                    <td colSpan={6} className="px-4 py-4">
+                                                    <td colSpan={8} className="px-4 py-4">
                                                         <div className="h-4 w-full bg-slate-200 rounded animate-pulse" />
                                                     </td>
                                                 </tr>
@@ -299,13 +320,57 @@ export default function ContentCategoryPage() {
                                                     </td>
 
                                                     <td className="px-4 py-3 font-medium text-slate-800">
-                                                        {cat.contentCategory}
+                                                        {editingId === cat.id ? (
+                                                            <div className="flex items-center gap-2">
+                                                                <input
+                                                                    value={editingName}
+                                                                    onChange={(e) => setEditingName(e.target.value)}
+                                                                    className="w-full border border-slate-200 px-2 py-1 rounded"
+                                                                    onKeyDown={(e) => {
+                                                                        if (e.key === 'Enter') handleEditSave(cat.id);
+                                                                        if (e.key === 'Escape') {
+                                                                            setEditingId(null);
+                                                                            setEditingName('');
+                                                                        }
+                                                                    }}
+                                                                    autoFocus
+                                                                />
+                                                                <Button size="sm" onClick={() => handleEditSave(cat.id)}>
+                                                                    Save
+                                                                </Button>
+                                                                <Button
+                                                                    size="sm"
+                                                                    variant="secondary"
+                                                                    onClick={() => {
+                                                                        setEditingId(null);
+                                                                        setEditingName('');
+                                                                    }}
+                                                                >
+                                                                    Cancel
+                                                                </Button>
+                                                            </div>
+                                                        ) : (
+                                                            cat.contentCategory
+                                                        )}
+                                                    </td>
+
+                                                    <td className="px-4 py-3 text-slate-700">
+                                                        {cat.createdBy || "admin"}
                                                     </td>
 
                                                     <td className="px-4 py-3 text-slate-600">
-                                                        {cat.updatedAt?.seconds
-                                                            ? new Date(cat.updatedAt.seconds * 1000).toLocaleString()
-                                                            : "—"}
+                                                        {(() => {
+                                                            const editLogs = getEditedLogs(cat.activity);
+                                                            if (!editLogs.length) return "Not edited yet";
+
+                                                            const latestEdit = editLogs[editLogs.length - 1];
+                                                            const editor = latestEdit?.by || cat.updatedBy || "admin";
+                                                            return `${editor} at ${formatTimestamp(latestEdit?.at)}`;
+                                                        })()}
+                                                    </td>
+
+                                                    <td className="px-4 py-3 text-slate-600">
+                                                        {formatTimestamp(cat.updatedAt)}
                                                     </td>
 
                                                     <td className="px-4 py-3">
@@ -325,10 +390,21 @@ export default function ContentCategoryPage() {
 
                                                     <td className="px-4 py-3">
                                                         <div className="flex items-center justify-end gap-3">
-                                                            <Button size="sm" variant="ghost">
+                                                            <Button
+                                                                size="sm"
+                                                                variant="ghost"
+                                                                onClick={() => {
+                                                                    setEditingId(cat.id);
+                                                                    setEditingName(cat.contentCategory || '');
+                                                                }}
+                                                            >
                                                                 <Pencil size={16} />
                                                             </Button>
-                                                            <Button size="sm" variant="ghost">
+                                                            <Button
+                                                                size="sm"
+                                                                variant="ghost"
+                                                                onClick={() => setDeleteModal({ open: true, id: cat.id })}
+                                                            >
                                                                 <Trash2 size={16} />
                                                             </Button>
                                                         </div>

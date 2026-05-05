@@ -1,39 +1,33 @@
-import {
-  getDownloadURL,
-  ref,
-  uploadBytesResumable,
-} from "firebase/storage";
-import { storage } from "@/lib/firebase/firebaseClient";
-
 export async function uploadContentFiles(files, onProgress) {
   if (!files?.length) return [];
 
   const urls = [];
 
-  for (const file of files) {
-    const storageRef = ref(storage, `content/${Date.now()}-${file.name}`);
-    const uploadTask = uploadBytesResumable(storageRef, file);
+  for (let index = 0; index < files.length; index += 1) {
+    const file = files[index];
+    const formData = new FormData();
+    formData.append("file", file);
 
-    await new Promise((resolve, reject) => {
-      uploadTask.on(
-        "state_changed",
-        (snapshot) => {
-          if (!onProgress) return;
-
-          const percent = Math.round(
-            (snapshot.bytesTransferred / snapshot.totalBytes) * 100
-          );
-
-          onProgress(percent);
-        },
-        reject,
-        async () => {
-          const url = await getDownloadURL(uploadTask.snapshot.ref);
-          urls.push(url);
-          resolve();
-        }
-      );
+    const response = await fetch("/api/admin/content/upload", {
+      method: "POST",
+      body: formData,
+      credentials: "include",
     });
+
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok || body?.success === false) {
+      throw new Error(body?.message || "Failed to upload content file");
+    }
+
+    const fileUrl = body?.data?.url || body?.url;
+    if (!fileUrl) {
+      throw new Error("Upload completed but file URL is missing");
+    }
+
+    urls.push(fileUrl);
+    if (onProgress) {
+      onProgress(Math.round(((index + 1) / files.length) * 100));
+    }
   }
 
   return urls;

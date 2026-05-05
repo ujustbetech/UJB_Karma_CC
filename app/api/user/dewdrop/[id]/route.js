@@ -6,6 +6,8 @@ import { jsonError, jsonSuccess } from "@/lib/api/response.mjs";
 import { requireUserSession } from "@/lib/auth/userRequestAuth.mjs";
 import { adminDb } from "@/lib/firebase/firebaseAdmin";
 
+const VIEW_COOLDOWN_MS = 30 * 60 * 1000;
+
 function serializeValue(value) {
   if (!value) return value;
   if (typeof value.toDate === "function") {
@@ -51,7 +53,9 @@ export async function GET(req, { params }) {
       });
     }
 
+    const userId = String(authResult?.context?.identity?.id || "").trim();
     const ref = adminDb.collection("ContentData").doc(contentId);
+    const viewRef = ref.collection("viewTracking").doc(userId || "anonymous");
     const snap = await ref.get();
 
     if (!snap.exists) {
@@ -61,7 +65,47 @@ export async function GET(req, { params }) {
       });
     }
 
-    await ref.set({ totalViews: FieldValue.increment(1) }, { merge: true });
+    const contentData = snap.data() || {};
+    if (contentData.switchValue === false || String(contentData.status || "").toLowerCase() !== "published") {
+      return jsonError("Content not available", {
+        status: 404,
+        code: API_ERROR_CODES.NOT_FOUND,
+      });
+    }
+
+    if (userId) {
+      await adminDb.runTransaction(async (tx) => {
+        const viewSnap = await tx.get(viewRef);
+        const nowMs = Date.now();
+        const isFirstViewByUser = !viewSnap.exists;
+        const lastViewedAtMs = Number(viewSnap.data()?.lastViewedAtMs || 0);
+        const shouldCount = !lastViewedAtMs || nowMs - lastViewedAtMs >= VIEW_COOLDOWN_MS;
+
+        if (shouldCount) {
+          const increments = {
+            totalViews: FieldValue.increment(1),
+            views_count: FieldValue.increment(1),
+          };
+
+          if (isFirstViewByUser) {
+            increments.unique_views_count = FieldValue.increment(1);
+          }
+
+          tx.set(ref, increments, { merge: true });
+          tx.set(
+            viewRef,
+            {
+              userId,
+              contentId,
+              lastViewedAtMs: nowMs,
+              updatedAt: new Date(),
+            },
+            { merge: true }
+          );
+        }
+      });
+    }
+
     const updated = await ref.get();
 
     return jsonSuccess({
@@ -128,6 +172,21 @@ export async function PATCH(req, { params }) {
     }
 
     const ref = adminDb.collection("ContentData").doc(contentId);
+    const snap = await ref.get();
+    if (!snap.exists) {
+      return jsonError("Content not found", {
+        status: 404,
+        code: API_ERROR_CODES.NOT_FOUND,
+      });
+    }
+    const contentData = snap.data() || {};
+    if (contentData.switchValue === false || String(contentData.status || "").toLowerCase() !== "published") {
+      return jsonError("Content not available", {
+        status: 404,
+        code: API_ERROR_CODES.NOT_FOUND,
+      });
+    }
+
     await ref.set({ totallike: FieldValue.increment(1) }, { merge: true });
     const updated = await ref.get();
 

@@ -70,6 +70,10 @@ function normalizeRole(value) {
   return String(value || "").trim().toLowerCase();
 }
 
+function isFeaturedContent(item) {
+  return String(item?.contentType || "").trim().toLowerCase() === "featured";
+}
+
 function calculateHomePayload({
   userData,
   currentPhone,
@@ -265,11 +269,14 @@ function calculateHomePayload({
   const dewdropStories = dewdropContents
     .map((docSnap) => ({ id: docSnap.id, ...(docSnap.data() || {}) }))
     .filter((item) => item.switchValue === true)
-    .sort((left, right) =>
-      String(right.AdminCreatedby || "").localeCompare(
-        String(left.AdminCreatedby || "")
-      )
-    )
+    .sort((left, right) => {
+      const leftFeatured = isFeaturedContent(left);
+      const rightFeatured = isFeaturedContent(right);
+      if (leftFeatured !== rightFeatured) {
+        return leftFeatured ? -1 : 1;
+      }
+      return getTimeMs(right.AdminCreatedby) - getTimeMs(left.AdminCreatedby);
+    })
     .slice(0, 8);
 
   let totalReferrals = 0;

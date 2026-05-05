@@ -51,7 +51,8 @@ export default function ContentListingPage() {
         { key: "name", label: "Content Name" },
         { key: "format", label: "Format" },
         { key: "ctype", label: "Type" },
-        { key: "views", label: "Views" },
+        { key: "views_count", label: "Views (Total)" },
+        { key: "unique_views_count", label: "Views (Unique)" },
         { key: "likes", label: "Likes" },
         { key: "status", label: "Status" },
         { key: "actions", label: "Actions" },
@@ -72,7 +73,8 @@ export default function ContentListingPage() {
             "Content Name",
             "Format",
             "Type",
-            "Views",
+            "Views (Total)",
+            "Views (Unique)",
             "Likes",
             "Status",
         ];
@@ -83,7 +85,8 @@ export default function ContentListingPage() {
             c.name,
             c.format,
             c.type,
-            c.views,
+            c.views_count ?? c.views ?? 0,
+            c.unique_views_count ?? 0,
             c.likes,
             c.status,
         ]);
@@ -111,7 +114,8 @@ export default function ContentListingPage() {
             "Content Name": c.name,
             "Format": c.format,
             "Type": c.type,
-            "Views": c.views,
+            "Views (Total)": c.views_count ?? c.views ?? 0,
+            "Views (Unique)": c.unique_views_count ?? 0,
             "Likes": c.likes,
             "Status": c.status,
         }));
@@ -198,8 +202,8 @@ export default function ContentListingPage() {
                 {loading ? (
                     <div className="p-4 space-y-3">
                         {Array.from({ length: 8 }).map((_, i) => (
-                            <div key={i} className="grid grid-cols-10 gap-4 h-12">
-                                {Array.from({ length: 10 }).map((__, j) => (
+                                <div key={i} className="grid grid-cols-11 gap-4 h-12">
+                                {Array.from({ length: 11 }).map((__, j) => (
                                     <div key={j} className="h-8 bg-slate-100 rounded animate-pulse" />
                                 ))}
                             </div>
@@ -219,7 +223,8 @@ export default function ContentListingPage() {
                                     <td className="px-4 py-3 font-medium">{c.name}</td>
                                     <td className="px-4 py-3">{c.format}</td>
                                     <td className="px-4 py-3">{c.type}</td>
-                                    <td className="px-4 py-3 font-semibold">{c.views}</td>
+                                    <td className="px-4 py-3 font-semibold">{c.views_count ?? c.views ?? 0}</td>
+                                    <td className="px-4 py-3">{c.unique_views_count ?? 0}</td>
                                     <td className="px-4 py-3">{c.likes}</td>
                                     <td className="px-4 py-3">
                                         <StatusBadge status={c.status} />
