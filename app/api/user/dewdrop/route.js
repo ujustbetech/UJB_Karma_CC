@@ -23,6 +23,19 @@ function serializeValue(value) {
   return value;
 }
 
+function getTimeMs(value) {
+  if (!value) return 0;
+  if (value instanceof Date) return value.getTime();
+  if (typeof value?.toDate === "function") return value.toDate().getTime();
+  if (typeof value?.seconds === "number") return value.seconds * 1000;
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? 0 : parsed.getTime();
+}
+
+function isFeaturedContent(item) {
+  return String(item?.contentType || "").trim().toLowerCase() === "featured";
+}
+
 export async function GET(req) {
   const authResult = await requireUserSession(req);
 
@@ -43,13 +56,24 @@ export async function GET(req) {
   try {
     const snapshot = await adminDb
       .collection("ContentData")
+      .where("switchValue", "==", true)
       .orderBy("AdminCreatedby", "desc")
       .get();
 
-    const contents = snapshot.docs.map((docSnap) => ({
-      id: docSnap.id,
-      ...serializeValue(docSnap.data()),
-    }));
+    const contents = snapshot.docs
+      .map((docSnap) => ({
+        id: docSnap.id,
+        ...serializeValue(docSnap.data()),
+      }))
+      .filter((item) => String(item.status || "").toLowerCase() === "published")
+      .sort((left, right) => {
+        const leftFeatured = isFeaturedContent(left);
+        const rightFeatured = isFeaturedContent(right);
+        if (leftFeatured !== rightFeatured) {
+          return leftFeatured ? -1 : 1;
+        }
+        return getTimeMs(right.AdminCreatedby) - getTimeMs(left.AdminCreatedby);
+      });
 
     return jsonSuccess({ contents });
   } catch (error) {

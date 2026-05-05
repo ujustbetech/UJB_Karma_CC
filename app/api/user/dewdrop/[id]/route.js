@@ -65,15 +65,33 @@ export async function GET(req, { params }) {
       });
     }
 
+    const contentData = snap.data() || {};
+    if (contentData.switchValue === false || String(contentData.status || "").toLowerCase() !== "published") {
+      return jsonError("Content not available", {
+        status: 404,
+        code: API_ERROR_CODES.NOT_FOUND,
+      });
+    }
+
     if (userId) {
       await adminDb.runTransaction(async (tx) => {
         const viewSnap = await tx.get(viewRef);
         const nowMs = Date.now();
+        const isFirstViewByUser = !viewSnap.exists;
         const lastViewedAtMs = Number(viewSnap.data()?.lastViewedAtMs || 0);
         const shouldCount = !lastViewedAtMs || nowMs - lastViewedAtMs >= VIEW_COOLDOWN_MS;
 
         if (shouldCount) {
-          tx.set(ref, { totalViews: FieldValue.increment(1) }, { merge: true });
+          const increments = {
+            totalViews: FieldValue.increment(1),
+            views_count: FieldValue.increment(1),
+          };
+
+          if (isFirstViewByUser) {
+            increments.unique_views_count = FieldValue.increment(1);
+          }
+
+          tx.set(ref, increments, { merge: true });
           tx.set(
             viewRef,
             {
@@ -154,6 +172,21 @@ export async function PATCH(req, { params }) {
     }
 
     const ref = adminDb.collection("ContentData").doc(contentId);
+    const snap = await ref.get();
+    if (!snap.exists) {
+      return jsonError("Content not found", {
+        status: 404,
+        code: API_ERROR_CODES.NOT_FOUND,
+      });
+    }
+    const contentData = snap.data() || {};
+    if (contentData.switchValue === false || String(contentData.status || "").toLowerCase() !== "published") {
+      return jsonError("Content not available", {
+        status: 404,
+        code: API_ERROR_CODES.NOT_FOUND,
+      });
+    }
+
     await ref.set({ totallike: FieldValue.increment(1) }, { merge: true });
     const updated = await ref.get();
 

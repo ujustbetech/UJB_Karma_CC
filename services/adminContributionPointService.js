@@ -19,8 +19,20 @@ export async function fetchCpBoardMembers() {
 }
 
 export async function fetchCpBoardSummary(ujbCode) {
+  const normalizedUjbCode = Array.isArray(ujbCode)
+    ? String(ujbCode[0] || "").trim()
+    : String(ujbCode || "").trim();
+
+  if (!normalizedUjbCode) {
+    return {
+      user: null,
+      activities: [],
+      totals: { total: 0, relation: 0, health: 0, wealth: 0 },
+    };
+  }
+
   const response = await fetch(
-    `/api/admin/contribution-points/${encodeURIComponent(ujbCode)}`,
+    `/api/admin/contribution-points/${encodeURIComponent(normalizedUjbCode)}`,
     {
       method: "GET",
       credentials: "include",
