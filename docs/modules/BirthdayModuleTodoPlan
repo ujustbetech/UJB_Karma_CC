@@ -1,0 +1,206 @@
+# Birthday Module — Redesign Plan (Updated)
+
+## Goal
+
+Rebuild the Birthday module with 3 pages:
+
+1. **Birthday List** — All users from `userDetail` with DOB, with canva/template status linked inline (approve/reject/add)
+2. **Dashboard** — Today / Tomorrow / Yesterday / Day‑before‑yesterday birthdays, filtered to only **approved** canva entries + unsent messages
+3. **Add Canva** — Create new birthday creative (defaults to `pending`)
+
+> [!NOTE]
+> The previous "All Users Birthday List" and "Canva Status List" are now **merged into one page** (`/admin/birthday/list`). This page reads from `userDetail` and cross-references `birthdayCanva` to show canva status inline per user.
+
+---
+
+## Open Questions
+
+> [!IMPORTANT]
+> 1. **Yesterday / Day‑before‑yesterday** — Should we allow sending birthday messages for past dates (belated wishes), or is the past-date list view-only?
+> 2. **Approval workflow** — Who should be able to approve/reject a canva? Any admin, or only super-admins?
+> 3. **Unsent messages scope** — Should "unsent" only count for **today**, or also include **yesterday** and **day‑before‑yesterday** (missed wishes)?
+
+---
+
+## Page Structure
+
+| Sidebar Label | Route | Source Collection | Purpose |
+|---|---|---|---|
+| Dashboard | `/admin/birthday` | `birthdayCanva` (approved only) | 4-day window + send WhatsApp + unsent list |
+| Birthday List | `/admin/birthday/list` | `userDetail` + `birthdayCanva` cross-ref | All users with DOB, canva status linked inline |
+| Add Canva | `/admin/birthday/add` | `userDetail` → `birthdayCanva` | Create new birthday creative |
+
+---
+
+## Current Data Model
+
+### `userDetail` collection (source of truth for ALL users)
+| Field | Type | Notes |
+|---|---|---|
+| `Name` | string | |
+| `MobileNo` | string/number | Also used as doc ID for `birthdayCanva` |
+| `DOB` or `dob` | string | `DD/MM/YYYY` or `YYYY-MM-DD` |
+| `Email` | string | |
+| `ProfilePhotoURL` | string | |
+| `Mentor Name` | string | |
+| `Mentor Phone` | string | |
+| `Gender` | string | |
+
+### `birthdayCanva` collection (doc ID = phone)
+| Field | Type |
+|---|---|
+| `name`, `phone`, `email`, `dob`, `dobTimestamp`, `imageUrl` | existing |
+| `registeredAt`, `updatedAt` | existing |
+| `birthdayMessageSent`, `birthdayMessageSentDate` | existing |
+
+---
+
+## Proposed Changes
+
+### Data Model Changes
+
+#### [MODIFY] `birthdayCanva` collection — New fields
+
+```diff
+ {
+   name, phone, email, dob, dobTimestamp, imageUrl,
+   registeredAt, updatedAt,
+   birthdayMessageSent, birthdayMessageSentDate,
++  status: "pending" | "approved" | "rejected",
++  statusChangedAt: Timestamp,
++  statusChangedBy: string,
+ }
+```
+
+Existing entries without `status` treated as `"pending"`.
+
+---
+
+### Backend — Workflow Library
+
+#### [MODIFY] [adminBirthdayApiWorkflow.mjs](file:///c:/KhizarShaikh/Project/UJB_Karma_CC/lib/birthday/adminBirthdayApiWorkflow.mjs)
+
+1. **`saveBirthdayEntry()`** — default `status: "pending"` on new entries
+2. **`fetchBirthdayUsersForAdmin()`** — expand to 4-day window, `status === "approved"` filter, return `unsentList`
+3. **New: `updateBirthdayEntryStatus()`** — set status + audit fields
+4. **New: `fetchAllUserBirthdays()`** — read `userDetail` (all users with DOB), read `birthdayCanva` (all entries), cross-reference by phone → return merged list with canva status per user
+
+---
+
+### Backend — API Routes
+
+#### [MODIFY] [route.js](file:///c:/KhizarShaikh/Project/UJB_Karma_CC/app/api/admin/birthday/route.js) — `POST`: save with `status: "pending"`
+
+#### [MODIFY] [route.js (messages)](file:///c:/KhizarShaikh/Project/UJB_Karma_CC/app/api/admin/birthday/messages/route.js) — `GET`: 4-day window + approved-only + unsent list
+
+#### [NEW] `app/api/admin/birthday/users/route.js` — `GET`: all users from `userDetail` with canva status cross-referenced
+
+#### [NEW] `app/api/admin/birthday/[id]/status/route.js` — `PATCH`: update approval status
+
+#### [KEEP] Existing routes unchanged:
+- `/api/admin/birthday/[id]` — GET/PATCH/DELETE
+- `/api/admin/birthday/[id]/mark-sent` — PATCH
+- `/api/admin/birthday/[id]/exists` — GET
+- `/api/admin/birthday/options` — GET
+- `/api/send-birthday` — POST
+
+---
+
+### Frontend — Pages
+
+#### [MODIFY] `/admin/birthday` — Dashboard
+
+**Rewrite `BirthdayClient.js`**
+
+- **Stat bar**: Day‑before‑yesterday / Yesterday / Today / Tomorrow counts + Unsent count (highlighted)
+- **Unsent Messages section** at top — all users who need a message but haven't received one
+- **4 day sections** — each shows approved canva users with birthday in that window
+- Each row: avatar, name, phone, canva thumbnail, sent status, send button
+
+---
+
+#### [MODIFY] `/admin/birthday/list` — Birthday List (merged)
+
+**Rewrite `BirthdayListClient.js`**
+
+Data source: `GET /api/admin/birthday/users` (reads `userDetail` cross-referenced with `birthdayCanva`)
+
+- **Search bar** — filter by name
+- **Filter dropdown** — All / Has Canva / No Canva / Pending / Approved / Rejected
+- **Paginated table** with columns:
+
+| Column | Source | Notes |
+|---|---|---|
+| Name | `userDetail.Name` | |
+| Phone | `userDetail.MobileNo` | |
+| DOB | `userDetail.DOB` | Formatted `DD Mon` |
+| Upcoming | Computed | "Today" / "X days" |
+| Canva | `birthdayCanva` | Image thumbnail or "—" |
+| Status | `birthdayCanva.status` | Badge: 🟢 Approved / 🟡 Pending / 🔴 Rejected / ⚪ No Canva |
+| Actions | — | Context-dependent buttons |
+
+**Actions per row (context-dependent):**
+
+| User State | Available Actions |
+|---|---|
+| No Canva | ➕ Add Canva (link to `/admin/birthday/add?phone=X&name=Y`) |
+| Canva Pending | ✅ Approve, ❌ Reject, ✏️ Edit, 🗑️ Delete |
+| Canva Approved | ❌ Reject, ✏️ Edit, 🗑️ Delete |
+| Canva Rejected | ✅ Approve, ✏️ Edit, 🗑️ Delete |
+
+---
+
+#### [MODIFY] `/admin/birthday/add` — Add Canva
+
+**Update `AddBirthdayClient.js`**
+
+- Backend saves with `status: "pending"` by default
+- Add info banner: "This creative will be saved as **Pending** and needs approval"
+- Optionally pre-fill user if query params `?phone=X&name=Y` passed from the list page
+
+---
+
+#### [KEEP] `/admin/birthday/edit/[id]` — Edit Canva
+- Show current `status` as read-only badge
+- Keep DOB + image editing unchanged
+
+---
+
+### Frontend — Navigation
+
+#### [MODIFY] [nav.config.js](file:///c:/KhizarShaikh/Project/UJB_Karma_CC/components/layout/nav.config.js)
+
+```diff
+ {
+   label: "Birthdays",
+   icon: Gift,
+   children: [
+     { label: "Dashboard", href: "/admin/birthday" },
+     { label: "Birthday List", href: "/admin/birthday/list" },
+     { label: "Add Canva", href: "/admin/birthday/add" },
+   ],
+ },
+```
+
+---
+
+### Frontend — Service Layer
+
+#### [MODIFY] [adminBirthdayService.js](file:///c:/KhizarShaikh/Project/UJB_Karma_CC/services/adminBirthdayService.js)
+- New: `fetchAllUserBirthdays()` → `GET /api/admin/birthday/users`
+- New: `updateBirthdayStatus(id, status)` → `PATCH /api/admin/birthday/{id}/status`
+
+---
+
+## Verification Plan
+
+### Automated Tests
+- All new/modified API endpoints tested via browser
+- Backward compat — existing docs without `status` default to `pending`
+
+### Manual Verification
+1. **Birthday List** — all users with DOB appear, canva status badges correct, actions work
+2. **Dashboard** — only approved entries in 4-day window, unsent list accurate
+3. **Add Canva** — new entry saved as pending, appears on list but NOT dashboard
+4. **Approve flow** — approve on list → appears on dashboard
+5. **Send flow** — send from dashboard, marks as sent, leaves unsent list

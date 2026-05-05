@@ -1,14 +1,20 @@
-import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
-import { storage } from "@/lib/firebase/firebaseClient";
-
 export async function uploadBirthdayImage(userId, image) {
   if (!image) return "";
 
-  const imageRef = ref(
-    storage,
-    `birthdayImages/${userId}/${Date.now()}_${image.name}`
-  );
+  const formData = new FormData();
+  formData.append("file", image);
+  formData.append("userId", userId);
 
-  await uploadBytes(imageRef, image);
-  return getDownloadURL(imageRef);
+  const response = await fetch("/api/admin/birthday/upload", {
+    method: "POST",
+    body: formData,
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.message || "Failed to upload image");
+  }
+
+  const data = await response.json();
+  return data.imageUrl;
 }
