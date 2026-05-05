@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import Swal from "sweetalert2";
 import emailjs from "@emailjs/browser";
 
@@ -131,13 +131,13 @@ const Assessment = ({ id, fetchData }) => {
     prospectPhone: "",
     orbiterName: "",
   });
+  const [enabledStatuses, setEnabledStatuses] = useState([
+    "Choose to enroll",
+    "Decline by UJustBe",
+    "Decline by Prospect",
+  ]);
 
   const isFrozen = loading || FINAL_STATUSES.has(status);
-
-  const currentConfig = useMemo(
-    () => STATUS_CONFIG[status] || null,
-    [status]
-  );
 
   useEffect(() => {
     const fetchStatus = async () => {
@@ -166,6 +166,12 @@ const Assessment = ({ id, fetchData }) => {
           prospectPhone: prospect.prospectPhone || "",
           orbiterName: prospect.orbiterName || "Orbiter",
         });
+        setEnabledStatuses(
+          Array.isArray(responseData.enabledStatuses) &&
+            responseData.enabledStatuses.length > 0
+            ? responseData.enabledStatuses
+            : ["Choose to enroll", "Decline by UJustBe", "Decline by Prospect"]
+        );
       } catch (error) {
         console.error("Error fetching authentic choice:", error);
       }
@@ -191,10 +197,44 @@ const Assessment = ({ id, fetchData }) => {
       variant?.recipients?.prospect ||
       DEFAULT_AUTHENTIC_CHOICE_TEMPLATE.channels.email.variants?.[variantKey]
         ?.recipients?.prospect;
-    const body = applyTemplateVariables(recipientTemplate?.body, {
+    let yesUrl = "";
+    let needTimeUrl = "";
+    if (selectedStatus === "Choose to enroll" && id) {
+      try {
+        const tokenRes = await fetch("/api/admin/prospect-actions/tokens", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          credentials: "include",
+          body: JSON.stringify({
+            prospectId: id,
+            actions: ["choose_to_enroll_yes", "choose_to_enroll_need_time"],
+          }),
+        });
+        const tokenData = await tokenRes.json().catch(() => ({}));
+        if (tokenRes.ok && tokenData?.urls) {
+          yesUrl = tokenData.urls.choose_to_enroll_yes || "";
+          needTimeUrl = tokenData.urls.choose_to_enroll_need_time || "";
+        }
+      } catch (error) {
+        console.error("Failed to generate choose-to-enroll action links:", error);
+      }
+    }
+    let body = applyTemplateVariables(recipientTemplate?.body, {
       prospect_name: prospectMeta.prospectName,
       note: buildAuthenticChoiceNote(selectedStatus, note),
+      yes_journey_url: yesUrl,
+      need_time_url: needTimeUrl,
     }) || `Status updated: ${selectedStatus}`;
+    if (
+      selectedStatus === "Choose to enroll" &&
+      yesUrl &&
+      needTimeUrl &&
+      !String(body).includes(yesUrl)
+    ) {
+      body = `${body}\n\nYes to This Journey: ${yesUrl}\nNeed Some Time: ${needTimeUrl}`;
+    }
 
     try {
       await emailjs.send(
@@ -385,7 +425,7 @@ const Assessment = ({ id, fetchData }) => {
           <p className="text-gray-700 mb-4">Date: {currentDate}</p>
 
           <div className="flex flex-wrap gap-3">
-            {Object.keys(STATUS_CONFIG).map((choice) => (
+            {enabledStatuses.map((choice) => (
               <button
                 key={choice}
                 onClick={() => confirmSaveStatus(choice)}

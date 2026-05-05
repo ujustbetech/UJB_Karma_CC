@@ -13,6 +13,12 @@ import { getFallbackJourneyEmailTemplate } from "@/lib/journey/journey_email";
 import { getFallbackJourneyWhatsAppTemplate } from "@/lib/journey/journey_whatsapp";
 
 const JOURNEY_TEMPLATES_COLLECTION = "journey_templates";
+const LEGACY_CHOOSE_TO_ENROLL_BODY =
+  "Dear {{prospect_name}},\n\nSubject: Welcome to UJustBe Universe - Ready to Make Your Authentic Choice?\n\nWe are happy to inform you that your enrollment into UJustBe has been approved because we find you aligned with the basic contributor criteria of the UJustBe Universe.\n\nNow, we invite you to make your authentic choice:\nTo say Yes to this journey.\nTo say Yes to discovering, contributing, and growing.\nTo say Yes to being part of a community where you just be - and that is more than enough.\n\nIf this resonates with you, simply reply to this email with your confirmation as Yes. Once we receive your approval, we will share the details of the next steps in the enrollment process.";
+const UPDATED_CHOOSE_TO_ENROLL_BODY =
+  "Dear {{prospect_name}},\n\nSubject: Welcome to UJustBe Universe - Ready to Make Your Authentic Choice?\n\nWe are happy to inform you that your enrollment into UJustBe has been approved because we find you aligned with the basic contributor criteria of the UJustBe Universe.\n\nNow, we invite you to make your authentic choice:\nTo say Yes to this journey.\nTo say Yes to discovering, contributing, and growing.\nTo say Yes to being part of a community where you just be - and that is more than enough.\n\nPlease use the action links shared below in this email to select one of the two options:\n1) Yes to This Journey\n2) Need Some Time\n\nOnce we receive your choice, we will guide you with the next steps.";
+const UPDATED_CHOOSE_TO_ENROLL_BODY_WITH_LINK_VARIABLES =
+  "Dear {{prospect_name}},\n\nSubject: Welcome to UJustBe Universe - Ready to Make Your Authentic Choice?\n\nWe are happy to inform you that your enrollment into UJustBe has been approved because we find you aligned with the basic contributor criteria of the UJustBe Universe.\n\nNow, we invite you to make your authentic choice:\nTo say Yes to this journey.\nTo say Yes to discovering, contributing, and growing.\nTo say Yes to being part of a community where you just be - and that is more than enough.\n\nPlease use the action links shared below in this email to select one of the two options:\n1) Yes to This Journey: {{yes_journey_url}}\n2) Need Some Time: {{need_time_url}}\n\nOnce we receive your choice, we will guide you with the next steps.";
 
 const DEFAULT_JOURNEY_TEMPLATES = [
   {
@@ -242,6 +248,52 @@ async function ensureDefaultTemplatesIfMissing(admin) {
 
   if (hasMissingTemplate) {
     await batch.commit();
+  }
+
+  const authenticChoiceRef = collectionRef.doc("authentic_choice");
+  const authenticChoiceSnap = await authenticChoiceRef.get();
+  if (!authenticChoiceSnap.exists) {
+    return;
+  }
+
+  const authenticChoiceData = authenticChoiceSnap.data() || {};
+  const currentBody = String(
+    authenticChoiceData?.channels?.email?.variants?.choose_to_enroll?.recipients
+      ?.prospect?.body || ""
+  );
+
+  if (
+    currentBody === LEGACY_CHOOSE_TO_ENROLL_BODY ||
+    currentBody === UPDATED_CHOOSE_TO_ENROLL_BODY
+  ) {
+    await authenticChoiceRef.set(
+      {
+        channels: {
+          email: {
+            variants: {
+              choose_to_enroll: {
+                recipients: {
+                  prospect: {
+                    body: UPDATED_CHOOSE_TO_ENROLL_BODY_WITH_LINK_VARIABLES,
+                    variableKeys: [
+                      "prospect_name",
+                      "yes_journey_url",
+                      "need_time_url",
+                    ],
+                  },
+                },
+              },
+            },
+          },
+        },
+        updatedAt: new Date(),
+        updatedBy: {
+          name: String(admin?.name || "").trim(),
+          email: String(admin?.email || "").trim(),
+        },
+      },
+      { merge: true }
+    );
   }
 }
 

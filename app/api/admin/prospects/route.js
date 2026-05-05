@@ -18,6 +18,9 @@ import {
   getFormAuditLogs,
 } from "@/lib/prospectFormAudit";
 import { buildProspectEngagementUpdate } from "@/lib/prospectEngagement";
+import {
+  triggerPreEnrollmentOrMeetingDoneAutomation,
+} from "@/lib/prospectAutomation/service.mjs";
 
 const prospectCollectionName = publicEnv.collections.prospect;
 const userCollectionName = publicEnv.collections.userDetail;
@@ -30,6 +33,11 @@ const FINAL_AUTHENTIC_CHOICE_STATUSES = new Set([
   "Decline by UJustBe",
   "Decline by Prospect",
 ]);
+const DEFAULT_ENABLED_AUTHENTIC_CHOICE_STATUSES = [
+  "Choose to enroll",
+  "Decline by UJustBe",
+  "Decline by Prospect",
+];
 
 function getAdultDobMax() {
   const date = new Date();
@@ -133,6 +141,17 @@ function getProspectLifecycleStatus(prospect = {}) {
   }
 
   return "Active";
+}
+
+function getEnabledAuthenticChoiceStatuses(prospect = {}) {
+  const configured = Array.isArray(prospect?.authenticChoiceConfig?.enabledStatuses)
+    ? prospect.authenticChoiceConfig.enabledStatuses
+        .map((item) => String(item || "").trim())
+        .filter(Boolean)
+    : [];
+  return configured.length > 0
+    ? configured
+    : [...DEFAULT_ENABLED_AUTHENTIC_CHOICE_STATUSES];
 }
 
 function normalizeMeetingEvent(event, admin) {
@@ -1130,6 +1149,7 @@ export async function GET(req) {
       if (section === "authenticchoice") {
         return NextResponse.json({
           prospect,
+          enabledStatuses: getEnabledAuthenticChoiceStatuses(prospect),
           authenticChoiceLogs: Array.isArray(prospect.authenticChoiceLogs)
             ? prospect.authenticChoiceLogs
             : [],
@@ -1433,6 +1453,33 @@ export async function PATCH(req) {
         { merge: true }
       );
 
+      if (Array.isArray(normalizedUpdate.events)) {
+        const hadDoneMeeting = previousEvents.some(
+          (event) => String(event?.status || "").trim() === "Done"
+        );
+        const hasDoneMeeting = normalizedUpdate.events.some(
+          (event) => String(event?.status || "").trim() === "Done"
+        );
+        if (!hadDoneMeeting && hasDoneMeeting) {
+          const refreshedSnap = await dbResult.adminDb
+            .collection(prospectCollectionName)
+            .doc(id)
+            .get();
+          const refreshedProspect = refreshedSnap.exists
+            ? { id: refreshedSnap.id, ...(refreshedSnap.data() || {}) }
+            : null;
+          if (refreshedProspect) {
+            await triggerPreEnrollmentOrMeetingDoneAutomation(
+              dbResult.adminDb,
+              refreshedProspect,
+              "code_meeting_done"
+            ).catch((error) => {
+              console.error("Meeting done automation error:", error);
+            });
+          }
+        }
+      }
+
       return NextResponse.json({ success: true });
     }
 
@@ -1544,6 +1591,26 @@ export async function PATCH(req) {
           },
           { merge: true }
         );
+
+        const wasFirstPreEnrollment =
+          (!Array.isArray(prospectData.sections) || prospectData.sections.length === 0) &&
+          Array.isArray(update.sections) &&
+          update.sections.length > 0;
+        if (wasFirstPreEnrollment) {
+          const refreshedSnap = await prospectRef.get();
+          const refreshedProspect = refreshedSnap.exists
+            ? { id: refreshedSnap.id, ...(refreshedSnap.data() || {}) }
+            : null;
+          if (refreshedProspect) {
+            await triggerPreEnrollmentOrMeetingDoneAutomation(
+              dbResult.adminDb,
+              refreshedProspect,
+              "pre_enrollment_first_submit"
+            ).catch((error) => {
+              console.error("Pre-enrollment automation error:", error);
+            });
+          }
+        }
 
         nextAuditEntries.push(
           buildFormAuditEntry({
@@ -1692,6 +1759,16 @@ export async function PATCH(req) {
       }
 
       const prospectData = prospectSnap.data() || {};
+      const enabledStatuses = getEnabledAuthenticChoiceStatuses(prospectData);
+      if (!enabledStatuses.includes(selectedStatus)) {
+        return NextResponse.json(
+          {
+            message: "Selected authentic choice status is disabled.",
+            enabledStatuses,
+          },
+          { status: 400 }
+        );
+      }
       const existingLogs = Array.isArray(prospectData.authenticChoiceLogs)
         ? prospectData.authenticChoiceLogs
         : [];

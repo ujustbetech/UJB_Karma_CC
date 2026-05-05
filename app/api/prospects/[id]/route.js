@@ -10,6 +10,7 @@ import {
   buildFormAuditEntry,
   diffChangedFields,
 } from "@/lib/prospectFormAudit";
+import { triggerAssessmentSubmittedAutomation } from "@/lib/prospectAutomation/service.mjs";
 
 const prospectCollectionName = publicEnv.collections.prospect;
 const userCollectionName = publicEnv.collections.userDetail;
@@ -501,6 +502,10 @@ export async function POST(req, { params }) {
         }, normalizedPayload);
       }
     }
+
+    await triggerAssessmentSubmittedAutomation(dbResult.adminDb, prospect).catch((error) => {
+      console.error("Assessment submitted automation error:", error);
+    });
 
     return NextResponse.json({ success: true, isSubmitted: true });
   } catch (error) {

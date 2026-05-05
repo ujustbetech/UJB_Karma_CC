@@ -497,6 +497,34 @@ const EnrollmentStage = ({ id, fetchData }) => {
           prospect_name: prospectMeta.prospectName || "Prospect",
           date: row.date,
         }) || fallbackEmailBody;
+      let finalEmailBody = emailBody;
+      if (
+        row.label === "Enrollment Fees Mail Status" &&
+        row.status === "Fee mail sent" &&
+        id
+      ) {
+        try {
+          const tokenRes = await fetch("/api/admin/prospect-actions/tokens", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            credentials: "include",
+            body: JSON.stringify({
+              prospectId: id,
+              actions: ["enrollment_fee_option1", "enrollment_fee_option2"],
+            }),
+          });
+          const tokenData = await tokenRes.json().catch(() => ({}));
+          if (tokenRes.ok && tokenData?.urls) {
+            const option1Url = tokenData.urls.enrollment_fee_option1 || "";
+            const option2Url = tokenData.urls.enrollment_fee_option2 || "";
+            finalEmailBody = `${emailBody}\n\nOption 1: ${option1Url}\nOption 2: ${option2Url}`;
+          }
+        } catch (error) {
+          console.error("Failed to generate enrollment-fee action links:", error);
+        }
+      }
       const whatsappChannel =
         template?.channels?.whatsapp ||
         DEFAULT_ENROLLMENT_STATUS_TEMPLATE.channels.whatsapp;
@@ -522,7 +550,7 @@ const EnrollmentStage = ({ id, fetchData }) => {
           {
             to_email: prospectMeta.email,
             prospect_name: prospectMeta.prospectName || "Prospect",
-            body: emailBody,
+            body: finalEmailBody,
           },
           emailChannel?.publicKey ||
             DEFAULT_ENROLLMENT_STATUS_TEMPLATE.channels.email.publicKey
