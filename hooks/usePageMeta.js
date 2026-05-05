@@ -29,8 +29,9 @@ export function usePageMeta() {
     let isMounted = true;
     const prospectMatch = pathname?.match(/^\/admin\/prospect\/edit\/([^/]+)$/);
     const monthlyMeetingMatch = pathname?.match(/^\/admin\/monthlymeeting\/([^/]+)$/);
+    const dewdropMatch = pathname?.match(/^\/admin\/dewdrop\/([^/]+)$/);
 
-    if (!prospectMatch && !monthlyMeetingMatch) {
+    if (!prospectMatch && !monthlyMeetingMatch && !dewdropMatch) {
       setDynamicTitle("");
       return () => {
         isMounted = false;
@@ -61,7 +62,9 @@ export function usePageMeta() {
       }
     };
 
-    loadProspectName();
+    if (prospectMatch) {
+      loadProspectName();
+    }
 
     if (monthlyMeetingMatch) {
       const loadMonthlyMeetingName = async () => {
@@ -94,6 +97,39 @@ export function usePageMeta() {
       };
 
       loadMonthlyMeetingName();
+    }
+
+    if (dewdropMatch) {
+      const loadDewdropContentName = async () => {
+        try {
+          const contentId = decodeURIComponent(dewdropMatch[1]);
+          const res = await fetch(`/api/admin/content/${contentId}`, {
+            credentials: "include",
+          });
+          const data = await res.json().catch(() => ({}));
+
+          if (!res.ok) {
+            throw new Error(data.message || "Failed to load content");
+          }
+
+          if (isMounted) {
+            const content = data?.content || {};
+            const name = String(content?.contentName || "").trim();
+            const owner =
+              String(content?.ownershipType || "").trim().toLowerCase() === "partner"
+                ? String(content?.partnerNamelp || "").trim() || "UjustBe"
+                : "UjustBe";
+
+            setDynamicTitle(name ? `${name} by ${owner}` : "Edit Content");
+          }
+        } catch {
+          if (isMounted) {
+            setDynamicTitle("Edit Content");
+          }
+        }
+      };
+
+      loadDewdropContentName();
     }
 
     return () => {

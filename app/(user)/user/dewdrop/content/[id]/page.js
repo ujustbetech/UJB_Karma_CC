@@ -42,7 +42,7 @@ export default function ContentDetails() {
   if (!content) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#0b1120] text-white">
-        Loading...
+        <div className="h-14 w-14 rounded-full border-4 border-orange-200 border-t-orange-500 animate-spin" />
       </div>
     );
   }
@@ -52,6 +52,11 @@ export default function ContentDetails() {
     if (format === "Video") return <Video size={16} />;
     return <FileText size={16} />;
   };
+
+  const mediaUrl =
+    content.contentFileImages?.[0] ||
+    content.contentFile?.[0] ||
+    "";
 
   return (
     <div className="min-h-screen bg-[#0b1120] flex justify-center pb-24">
@@ -89,8 +94,11 @@ export default function ContentDetails() {
           {content.contentFormat === "Video" ? (
             <video
               controls
+              autoPlay
+              muted
+              playsInline
               className="w-full max-h-[500px] object-cover"
-              src={content.contentFile?.[0]}
+              src={mediaUrl}
             />
           ) : (
             <div className="relative min-h-[280px] bg-slate-100">

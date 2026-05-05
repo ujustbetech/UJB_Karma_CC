@@ -27,12 +27,23 @@ function validateAdmin(req) {
   return { ok: true };
 }
 
+async function getContentId(paramsLike) {
+  const resolved = await paramsLike;
+  const raw = resolved?.id;
+  const value = Array.isArray(raw) ? raw[0] : raw;
+  return String(value || "").trim();
+}
+
 export async function GET(req, { params }) {
   const guard = validateAdmin(req);
   if (!guard.ok) return guard.response;
 
   try {
-    const id = String(params?.id || "").trim();
+    const id = await getContentId(params);
+    if (!id) {
+      return NextResponse.json({ message: "Content id is required" }, { status: 400 });
+    }
+
     const snap = await adminDb.collection(CONTENT_COLLECTION).doc(id).get();
     if (!snap.exists) {
       return NextResponse.json({ message: "Content not found" }, { status: 404 });
@@ -52,7 +63,11 @@ export async function PATCH(req, { params }) {
   if (!guard.ok) return guard.response;
 
   try {
-    const id = String(params?.id || "").trim();
+    const id = await getContentId(params);
+    if (!id) {
+      return NextResponse.json({ message: "Content id is required" }, { status: 400 });
+    }
+
     const body = await req.json();
     const payload = buildContentWritePayload(body);
     payload.updatedAt = new Date();
@@ -72,7 +87,11 @@ export async function DELETE(req, { params }) {
   if (!guard.ok) return guard.response;
 
   try {
-    const id = String(params?.id || "").trim();
+    const id = await getContentId(params);
+    if (!id) {
+      return NextResponse.json({ message: "Content id is required" }, { status: 400 });
+    }
+
     await adminDb.collection(CONTENT_COLLECTION).doc(id).delete();
     return NextResponse.json({ success: true });
   } catch (error) {

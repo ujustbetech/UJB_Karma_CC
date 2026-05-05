@@ -28,7 +28,11 @@ export default function EditContentPage() {
   const params = useParams();
   const router = useRouter();
   const toast = useToast();
-  const contentId = params?.id;
+  const contentId = useMemo(() => {
+    const raw = params?.id;
+    const value = Array.isArray(raw) ? raw[0] : raw;
+    return String(value || "").trim();
+  }, [params]);
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -101,7 +105,12 @@ export default function EditContentPage() {
 
     if (contentId) {
       load();
+      return;
     }
+
+    setLoading(false);
+    toast.error("Invalid content id");
+    router.push("/admin/dewdrop/manage");
   }, [contentId, router, toast]);
 
   const categoryOptions = useMemo(
@@ -198,9 +207,17 @@ export default function EditContentPage() {
     return <Text variant="muted">Loading...</Text>;
   }
 
+  const ownerLabel =
+    ownershipType === "Partner"
+      ? (partnerNamelp || "UjustBe")
+      : "UjustBe";
+  const headerTitle = contentName
+    ? `${contentName} by ${ownerLabel}`
+    : `Edit Content by ${ownerLabel}`;
+
   return (
     <Card className="space-y-6">
-      <Text variant="h1">Edit Content</Text>
+      
 
       <div className="grid gap-4 md:grid-cols-2">
         <FormField label="Content Name">

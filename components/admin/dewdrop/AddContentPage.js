@@ -23,6 +23,9 @@ import { uploadContentFiles } from "@/services/contentUploadService";
 
 const CONTENT_TYPES = ["Normal", "Featured"];
 const CONTENT_FORMATS = ["Image", "Video", "Audio", "Text"];
+const VIDEO_MAX_MB = 200;
+const DEFAULT_CONTENT_MAX_MB = 25;
+const THUMBNAIL_MAX_MB = 5;
 
 export default function AddContentPage() {
   const toast = useToast();
@@ -53,6 +56,9 @@ export default function AddContentPage() {
   const [thumbnailFile, setThumbnailFile] = useState(null);
   const [mainPreview, setMainPreview] = useState("");
   const [thumbnailPreview, setThumbnailPreview] = useState("");
+  const normalizedFormat = String(contentFormat || "").trim().toLowerCase();
+  const isImageFormat = normalizedFormat === "image";
+  const isVideoFormat = normalizedFormat === "video";
 
   useEffect(() => {
     fetchContentReferenceData()
@@ -135,8 +141,14 @@ export default function AddContentPage() {
     contDiscription,
     ownershipType,
     parternameId,
-    thumbnailFiles: thumbnailFile ? [thumbnailFile] : [],
+    thumbnailFiles: isImageFormat ? [] : (thumbnailFile ? [thumbnailFile] : []),
   });
+
+  useEffect(() => {
+    if (!isImageFormat) return;
+    setThumbnailFile(null);
+    setThumbnailPreview("");
+  }, [isImageFormat]);
 
   const handleSave = async (status) => {
     const formData = buildFormData();
@@ -152,6 +164,16 @@ export default function AddContentPage() {
       return;
     }
 
+    if (isImageFormat && mainFile && !String(mainFile.type || "").startsWith("image/")) {
+      setErrors((current) => ({ ...current, contentFiles: "Only image files are allowed for Image format" }));
+      return;
+    }
+
+    if (isVideoFormat && mainFile && !String(mainFile.type || "").startsWith("video/")) {
+      setErrors((current) => ({ ...current, contentFiles: "Only video files are allowed for Video format" }));
+      return;
+    }
+
     setLoading(true);
     setProgress(0);
 
@@ -160,8 +182,11 @@ export default function AddContentPage() {
       let Thumbnail = [];
 
       if (status !== "draft") {
-        const contentSizeError = validateFileSizes(formData.contentFiles, 25);
-        const thumbnailSizeError = validateFileSizes(formData.thumbnailFiles, 5);
+        const contentMaxMb = isVideoFormat ? VIDEO_MAX_MB : DEFAULT_CONTENT_MAX_MB;
+        const contentSizeError = validateFileSizes(formData.contentFiles, contentMaxMb);
+        const thumbnailSizeError = isImageFormat
+          ? null
+          : validateFileSizes(formData.thumbnailFiles, THUMBNAIL_MAX_MB);
         if (contentSizeError || thumbnailSizeError) {
           throw new Error(contentSizeError || thumbnailSizeError);
         }
@@ -169,7 +194,7 @@ export default function AddContentPage() {
         setUploading(true);
         [contentFileImages, Thumbnail] = await Promise.all([
           uploadContentFiles(formData.contentFiles, setProgress),
-          uploadContentFiles(formData.thumbnailFiles, setProgress),
+          isImageFormat ? Promise.resolve([]) : uploadContentFiles(formData.thumbnailFiles, setProgress),
         ]);
       }
 
@@ -301,10 +326,11 @@ export default function AddContentPage() {
           </FormField>
         </div>
 
-        <div className="grid gap-4 md:grid-cols-2">
+      <div className="grid gap-4 md:grid-cols-2">
           <FormField label="Main File" error={errors.contentFiles} required={ownershipType !== "draft"}>
             <Input
               type="file"
+              accept={isImageFormat ? "image/*" : isVideoFormat ? "video/*" : undefined}
               onChange={(e) => {
                 const file = e.target.files?.[0] || null;
                 setMainFile(file);
@@ -314,18 +340,20 @@ export default function AddContentPage() {
             {mainFile && <Text variant="muted">{mainFile.name}</Text>}
           </FormField>
 
-          <FormField label="Thumbnail" error={errors.thumbnailFiles} required={ownershipType !== "draft"}>
-            <Input
-              type="file"
-              accept="image/*"
-              onChange={(e) => {
-                const file = e.target.files?.[0] || null;
-                setThumbnailFile(file);
-                setThumbnailPreview(file ? URL.createObjectURL(file) : "");
-              }}
-            />
-            {thumbnailFile && <Text variant="muted">{thumbnailFile.name}</Text>}
-          </FormField>
+          {!isImageFormat ? (
+            <FormField label="Thumbnail" error={errors.thumbnailFiles} required={ownershipType !== "draft"}>
+              <Input
+                type="file"
+                accept="image/*"
+                onChange={(e) => {
+                  const file = e.target.files?.[0] || null;
+                  setThumbnailFile(file);
+                  setThumbnailPreview(file ? URL.createObjectURL(file) : "");
+                }}
+              />
+              {thumbnailFile && <Text variant="muted">{thumbnailFile.name}</Text>}
+            </FormField>
+          ) : null}
         </div>
 
         <Checkbox
