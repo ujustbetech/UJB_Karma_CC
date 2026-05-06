@@ -2,24 +2,14 @@
 
 import React, { useState, useEffect } from "react";
 import "react-quill-new/dist/quill.snow.css";
-import emailjs from "@emailjs/browser";
 import dynamic from "next/dynamic";
 import { useRouter, useSearchParams } from "next/navigation";
-import { sendWhatsAppTemplateRequest } from "@/utils/whatsappClient";
 import { formatDate, formatDateTime } from "@/lib/utils/dateFormat";
-import { getFallbackJourneyEmailTemplate } from "@/lib/journey/journey_email";
 
 const ReactQuill = dynamic(() => import("react-quill-new"), {
   ssr: false,
   loading: () => <p>Loading editor...</p>,
 });
-
-const PRE_ENROLLMENT_TEMPLATE_ID = "pre_enrollment_form";
-const DEFAULT_PRE_ENROLLMENT_EMAIL_TEMPLATE = {
-  channels: {
-    email: getFallbackJourneyEmailTemplate(PRE_ENROLLMENT_TEMPLATE_ID),
-  },
-};
 
 const requiredHeading = (label) => (
   <>
@@ -27,40 +17,6 @@ const requiredHeading = (label) => (
     <span className="text-red-600"> *</span>
   </>
 );
-
-const applyTemplateVariables = (value, replacements) =>
-  String(value || "").replace(/\{\{\s*(.*?)\s*\}\}/g, (_, key) => {
-    const normalizedKey = String(key || "").trim();
-    return Object.prototype.hasOwnProperty.call(replacements, normalizedKey)
-      ? replacements[normalizedKey]
-      : `{{${normalizedKey}}}`;
-  });
-
-const fetchPreEnrollmentEmailTemplate = async () => {
-  try {
-    const res = await fetch(
-      `/api/admin/journey-templates?id=${PRE_ENROLLMENT_TEMPLATE_ID}`,
-      {
-        credentials: "include",
-      }
-    );
-    const responseData = await res.json().catch(() => ({}));
-
-    if (!res.ok || !responseData.template) {
-      throw new Error(
-        responseData.message || "Failed to load pre enrollment email template"
-      );
-    }
-
-    return responseData.template;
-  } catch (error) {
-    console.error(
-      "Pre enrollment email template fetch failed, using fallback:",
-      error
-    );
-    return DEFAULT_PRE_ENROLLMENT_EMAIL_TEMPLATE;
-  }
-};
 
 const AditionalInfo = ({ id, data = { sections: [] } }) => {
   const router = useRouter();
@@ -183,63 +139,6 @@ const AditionalInfo = ({ id, data = { sections: [] } }) => {
       setHasData(true);
       setEditMode(false);
 
-      const origin =
-        typeof window !== "undefined"
-          ? window.location.origin
-          : "https://ujustbe.vercel.app";
-      const formLink = `${origin}/user/prospects/${id}/feedback`;
-
-      const orbiterName = data.orbiterName || "Orbiter";
-      const prospectEmail = data.email || "orbiter@example.com";
-      const prospectName = data.prospectName || "Prospect";
-      const phone = data.prospectPhone || "9999999999";
-
-      const emailBody = `
-Dear ${prospectName},
-
-It was a pleasure connecting with you and introducing UJustBe!
-
-Please take a few minutes to fill out this feedback form: ${formLink}
-
-Thank you!
-`;
-
-      await sendAssessmentEmail(
-        orbiterName,
-        prospectEmail,
-        prospectName,
-        formLink
-      );
-
-      await sendAssesmentMessage(
-        orbiterName,
-        prospectName,
-        emailBody,
-        phone
-      );
-
-      const sendAuditRes = await fetch(
-        `/api/admin/prospects?id=${id}&section=additionalinfo`,
-        {
-          method: "PATCH",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          credentials: "include",
-          body: JSON.stringify({
-            auditAction: "sent",
-          }),
-        }
-      );
-      const sendAuditData = await sendAuditRes.json().catch(() => ({}));
-      if (sendAuditRes.ok) {
-        setAuditLogs(Array.isArray(sendAuditData.auditLogs) ? sendAuditData.auditLogs.filter(
-          (log) =>
-            log?.formName === "UJB Enrollment Form" ||
-            log?.formName === "Feedback Form"
-        ) : []);
-      }
-
       const returnTab = searchParams.get("returnTab");
       if (returnTab && id) {
         router.push(`/admin/prospect/edit/${id}?tab=${returnTab}`);
@@ -252,82 +151,6 @@ Thank you!
     }
 
     setLoading(false);
-  };
-
-  const sanitizeText = (text) => {
-    return text
-      .replace(/[\n\t]/g, " ")
-      .replace(/ {5,}/g, "    ")
-      .trim();
-  };
-
-  const sendAssesmentMessage = async (
-    orbiterName,
-    prospectName,
-    bodyText,
-    phone
-  ) => {
-    try {
-      await sendWhatsAppTemplateRequest({
-        phone,
-        templateName: "enrollment_journey",
-        parameters: [
-          sanitizeText(bodyText),
-          sanitizeText(orbiterName),
-        ],
-      });
-      console.log("WhatsApp message sent");
-    } catch (error) {
-      console.error("WhatsApp failed", error);
-    }
-  };
-
-  const sendAssessmentEmail = async (
-    orbiterName,
-    prospectEmail,
-    prospectName,
-    formLink
-  ) => {
-    const template = await fetchPreEnrollmentEmailTemplate();
-    const emailChannel =
-      template?.channels?.email ||
-      DEFAULT_PRE_ENROLLMENT_EMAIL_TEMPLATE.channels.email;
-    const variant =
-      emailChannel?.variants?.default ||
-      DEFAULT_PRE_ENROLLMENT_EMAIL_TEMPLATE.channels.email.variants.default;
-    const recipientTemplate =
-      variant?.recipients?.prospect ||
-      DEFAULT_PRE_ENROLLMENT_EMAIL_TEMPLATE.channels.email.variants.default
-        .recipients.prospect;
-    const body = applyTemplateVariables(recipientTemplate?.body || "", {
-      form_link: formLink,
-    });
-
-    const templateParams = {
-      prospect_name: prospectName,
-      to_email: prospectEmail,
-      body,
-      orbiter_name: orbiterName,
-    };
-
-    try {
-
-      await emailjs.send(
-        emailChannel?.serviceId ||
-          DEFAULT_PRE_ENROLLMENT_EMAIL_TEMPLATE.channels.email.serviceId,
-        emailChannel?.templateId ||
-          DEFAULT_PRE_ENROLLMENT_EMAIL_TEMPLATE.channels.email.templateId,
-        templateParams,
-        emailChannel?.publicKey ||
-          DEFAULT_PRE_ENROLLMENT_EMAIL_TEMPLATE.channels.email.publicKey
-      );
-
-    } catch (error) {
-
-      console.error("Email failed", error);
-
-    }
-
   };
 
   const renderEditor = (field, placeholder) => (

@@ -19,6 +19,9 @@ const UPDATED_CHOOSE_TO_ENROLL_BODY =
   "Dear {{prospect_name}},\n\nSubject: Welcome to UJustBe Universe - Ready to Make Your Authentic Choice?\n\nWe are happy to inform you that your enrollment into UJustBe has been approved because we find you aligned with the basic contributor criteria of the UJustBe Universe.\n\nNow, we invite you to make your authentic choice:\nTo say Yes to this journey.\nTo say Yes to discovering, contributing, and growing.\nTo say Yes to being part of a community where you just be - and that is more than enough.\n\nPlease use the action links shared below in this email to select one of the two options:\n1) Yes to This Journey\n2) Need Some Time\n\nOnce we receive your choice, we will guide you with the next steps.";
 const UPDATED_CHOOSE_TO_ENROLL_BODY_WITH_LINK_VARIABLES =
   "Dear {{prospect_name}},\n\nSubject: Welcome to UJustBe Universe - Ready to Make Your Authentic Choice?\n\nWe are happy to inform you that your enrollment into UJustBe has been approved because we find you aligned with the basic contributor criteria of the UJustBe Universe.\n\nNow, we invite you to make your authentic choice:\nTo say Yes to this journey.\nTo say Yes to discovering, contributing, and growing.\nTo say Yes to being part of a community where you just be - and that is more than enough.\n\nPlease use the action links shared below in this email to select one of the two options:\n1) Yes to This Journey: {{yes_journey_url}}\n2) Need Some Time: {{need_time_url}}\n\nOnce we receive your choice, we will guide you with the next steps.";
+const FEE_MAIL_SENT_VARIANT_KEY = "enrollment_fees_mail_status_fee_mail_sent";
+const UPDATED_FEE_MAIL_SENT_BODY_WITH_LINK_VARIABLES =
+  "Hi {{prospect_name}},\n\nThank you for making an authentic choice in becoming an Orbiter in the UJustBe Universe.\n\nBelow are the details regarding the one-time Orbiter Enrollment Fee:\n\nOrbiter Enrollment Fee\nAmount: Rs. 1,000 (Lifetime)\n\nYou are invited to choose one of the following payment methods:\n\nDirect Payment to UJustBe's Account:\nYou can directly transfer the enrollment fee to UJustBe's account. Once your referral is closed, the reciprocation amount will be credited directly to your account registered with UJustBe.\n\nAdjustment from Referral Reciprocation:\nThe enrollment fee will be adjusted against your referral reciprocation. Once the adjustment is completed, subsequent referral reciprocation fees will be transferred to your account.\n\nNext Steps:\nPlease click one of the options below:\n\nOption 1: Pay Rs. 1000 directly to UJustBe: {{option1_url}}\nOption 2: Adjust fee from referral reciprocation: {{option2_url}}\n\nOnce we receive your confirmation, we will send you an invoice and guide you through the next steps to complete the process.\n\nIf you have any questions or need further assistance, please feel free to reach out. We look forward to your confirmation.";
 
 const DEFAULT_JOURNEY_TEMPLATES = [
   {
@@ -279,6 +282,56 @@ async function ensureDefaultTemplatesIfMissing(admin) {
                       "prospect_name",
                       "yes_journey_url",
                       "need_time_url",
+                    ],
+                  },
+                },
+              },
+            },
+          },
+        },
+        updatedAt: new Date(),
+        updatedBy: {
+          name: String(admin?.name || "").trim(),
+          email: String(admin?.email || "").trim(),
+        },
+      },
+      { merge: true }
+    );
+  }
+
+  const enrollmentStatusRef = collectionRef.doc("enrollment_status");
+  const enrollmentStatusSnap = await enrollmentStatusRef.get();
+  if (!enrollmentStatusSnap.exists) {
+    return;
+  }
+
+  const enrollmentStatusData = enrollmentStatusSnap.data() || {};
+  const currentFeeMailBody = String(
+    enrollmentStatusData?.channels?.email?.variants?.[FEE_MAIL_SENT_VARIANT_KEY]
+      ?.recipients?.prospect?.body || ""
+  );
+
+  const shouldUpgradeFeeMailBody =
+    currentFeeMailBody &&
+    currentFeeMailBody.includes("Option 1:") &&
+    currentFeeMailBody.includes("Option 2:") &&
+    !currentFeeMailBody.includes("{{option1_url}}") &&
+    !currentFeeMailBody.includes("{{option2_url}}");
+
+  if (shouldUpgradeFeeMailBody) {
+    await enrollmentStatusRef.set(
+      {
+        channels: {
+          email: {
+            variants: {
+              [FEE_MAIL_SENT_VARIANT_KEY]: {
+                recipients: {
+                  prospect: {
+                    body: UPDATED_FEE_MAIL_SENT_BODY_WITH_LINK_VARIABLES,
+                    variableKeys: [
+                      "prospect_name",
+                      "option1_url",
+                      "option2_url",
                     ],
                   },
                 },

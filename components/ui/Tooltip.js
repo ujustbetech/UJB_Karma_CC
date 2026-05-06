@@ -19,7 +19,7 @@ export default function Tooltip({ content, children }) {
           className={clsx(
             "pointer-events-none absolute -top-2 left-1/2 -translate-x-1/2 -translate-y-full",
             "z-50 rounded-md bg-slate-900 px-2 py-1",
-            "text-xs text-white whitespace-nowrap shadow-sm"
+            "text-xs text-white shadow-sm"
           )}
         >
           {content}

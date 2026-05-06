@@ -30,8 +30,9 @@ export function usePageMeta() {
     const prospectMatch = pathname?.match(/^\/admin\/prospect\/edit\/([^/]+)$/);
     const monthlyMeetingMatch = pathname?.match(/^\/admin\/monthlymeeting\/([^/]+)$/);
     const dewdropMatch = pathname?.match(/^\/admin\/dewdrop\/([^/]+)$/);
+    const todoViewMatch = pathname?.match(/^\/admin\/tasks\/([^/]+)$/);
 
-    if (!prospectMatch && !monthlyMeetingMatch && !dewdropMatch) {
+    if (!prospectMatch && !monthlyMeetingMatch && !dewdropMatch && !todoViewMatch) {
       setDynamicTitle("");
       return () => {
         isMounted = false;
@@ -130,6 +131,33 @@ export function usePageMeta() {
       };
 
       loadDewdropContentName();
+    }
+
+    if (todoViewMatch) {
+      const loadTodoTitle = async () => {
+        try {
+          const todoId = decodeURIComponent(todoViewMatch[1]);
+          const res = await fetch(`/api/admin/todos/${todoId}`, {
+            credentials: "include",
+          });
+          const data = await res.json().catch(() => ({}));
+
+          if (!res.ok) {
+            throw new Error(data.message || "Failed to load TODO");
+          }
+
+          if (isMounted) {
+            const linkedName = String(data?.todo?.linked_name || "").trim();
+            setDynamicTitle(linkedName ? `TODO for "${linkedName}"` : "TODO");
+          }
+        } catch {
+          if (isMounted) {
+            setDynamicTitle("TODO");
+          }
+        }
+      };
+
+      loadTodoTitle();
     }
 
     return () => {

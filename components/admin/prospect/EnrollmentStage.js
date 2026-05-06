@@ -492,12 +492,8 @@ const EnrollmentStage = ({ id, fetchData }) => {
         emailVariant?.recipients?.prospect ||
         DEFAULT_ENROLLMENT_STATUS_TEMPLATE.channels.email.variants?.[variantKey]
           ?.recipients?.prospect;
-      const emailBody =
-        applyTemplateVariables(emailRecipientTemplate?.body, {
-          prospect_name: prospectMeta.prospectName || "Prospect",
-          date: row.date,
-        }) || fallbackEmailBody;
-      let finalEmailBody = emailBody;
+      let option1Url = "";
+      let option2Url = "";
       if (
         row.label === "Enrollment Fees Mail Status" &&
         row.status === "Fee mail sent" &&
@@ -517,13 +513,30 @@ const EnrollmentStage = ({ id, fetchData }) => {
           });
           const tokenData = await tokenRes.json().catch(() => ({}));
           if (tokenRes.ok && tokenData?.urls) {
-            const option1Url = tokenData.urls.enrollment_fee_option1 || "";
-            const option2Url = tokenData.urls.enrollment_fee_option2 || "";
-            finalEmailBody = `${emailBody}\n\nOption 1: ${option1Url}\nOption 2: ${option2Url}`;
+            option1Url = tokenData.urls.enrollment_fee_option1 || "";
+            option2Url = tokenData.urls.enrollment_fee_option2 || "";
           }
         } catch (error) {
           console.error("Failed to generate enrollment-fee action links:", error);
         }
+      }
+      const emailBody =
+        applyTemplateVariables(emailRecipientTemplate?.body, {
+          prospect_name: prospectMeta.prospectName || "Prospect",
+          date: row.date,
+          option1_url: option1Url,
+          option2_url: option2Url,
+        }) || fallbackEmailBody;
+      let finalEmailBody = emailBody;
+      if (
+        row.label === "Enrollment Fees Mail Status" &&
+        row.status === "Fee mail sent" &&
+        option1Url &&
+        option2Url &&
+        !String(emailBody).includes(option1Url) &&
+        !String(emailBody).includes(option2Url)
+      ) {
+        finalEmailBody = `${emailBody}\n\nOption 1: ${option1Url}\nOption 2: ${option2Url}`;
       }
       const whatsappChannel =
         template?.channels?.whatsapp ||
