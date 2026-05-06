@@ -131,6 +131,10 @@ const BirthdayTable = ({ title, date, list, tone = "slate", loading, sentMessage
                       {title} • {date}
                     </div>
                     <div className="text-sm font-extrabold text-slate-900 truncate">{user.name}</div>
+                    <div className="mt-1 flex items-center gap-1 text-[10px] font-medium text-slate-500">
+                      <Phone size={11} className="text-slate-300" />
+                      <span className="truncate">{user.phone}</span>
+                    </div>
                   </div>
                 </div>
                 <div className="shrink-0 pt-1">
@@ -183,7 +187,8 @@ const BirthdayTable = ({ title, date, list, tone = "slate", loading, sentMessage
           <thead>
             <tr className="border-b border-slate-100 bg-slate-50/70">
               <th className="hidden lg:table-cell px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-slate-400">Window</th>
-              <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-slate-400">Member</th>
+              <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-slate-400">Phone</th>
+              <th className="hidden md:table-cell px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-slate-400">Member</th>
               <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-slate-400">Status</th>
               <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-slate-400 text-right">Action</th>
             </tr>
@@ -202,6 +207,9 @@ const BirthdayTable = ({ title, date, list, tone = "slate", loading, sentMessage
                       </span>
                       <span className="text-xs font-medium text-slate-500">{date}</span>
                     </div>
+                  </td>
+                  <td className="hidden md:table-cell px-4 py-3 text-sm font-medium text-slate-600">
+                    {user.phone}
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-3">
