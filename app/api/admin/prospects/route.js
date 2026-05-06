@@ -175,6 +175,67 @@ function normalizeMeetingEvent(event, admin) {
   return normalizedEvent;
 }
 
+function formatMeetingDateTimeLabel(event) {
+  const rawValue = String(event?.dateISO || event?.date || "").trim();
+  if (!rawValue) return "selected date/time";
+
+  const parsed = new Date(rawValue);
+  if (Number.isNaN(parsed.getTime())) {
+    return rawValue;
+  }
+
+  const day = String(parsed.getDate()).padStart(2, "0");
+  const month = String(parsed.getMonth() + 1).padStart(2, "0");
+  const year = parsed.getFullYear();
+  const hours = String(parsed.getHours()).padStart(2, "0");
+  const minutes = String(parsed.getMinutes()).padStart(2, "0");
+
+  return `${day}/${month}/${year} ${hours}:${minutes}`;
+}
+
+function buildMeetingEngagementNote(previousEvents = [], nextEvents = [], singleEvent = null) {
+  const normalizedPrevious = Array.isArray(previousEvents) ? previousEvents : [];
+  const normalizedNext = Array.isArray(nextEvents) ? nextEvents : [];
+
+  if (normalizedNext.length > 0) {
+    const latestNext = normalizedNext[normalizedNext.length - 1];
+    const latestPrevious = normalizedPrevious[normalizedPrevious.length - 1] || null;
+
+    if (normalizedNext.length > normalizedPrevious.length) {
+      return `Meeting scheduled at ${formatMeetingDateTimeLabel(latestNext)}.`;
+    }
+
+    if (latestPrevious) {
+      const previousDate = String(latestPrevious?.dateISO || latestPrevious?.date || "").trim();
+      const nextDate = String(latestNext?.dateISO || latestNext?.date || "").trim();
+      const previousMode = String(latestPrevious?.mode || "").trim().toLowerCase();
+      const nextMode = String(latestNext?.mode || "").trim().toLowerCase();
+      const previousHistoryCount = Array.isArray(latestPrevious?.rescheduleHistory)
+        ? latestPrevious.rescheduleHistory.length
+        : 0;
+      const nextHistoryCount = Array.isArray(latestNext?.rescheduleHistory)
+        ? latestNext.rescheduleHistory.length
+        : 0;
+
+      if (
+        previousDate !== nextDate ||
+        previousMode !== nextMode ||
+        nextHistoryCount > previousHistoryCount
+      ) {
+        return `Meeting rescheduled at ${formatMeetingDateTimeLabel(latestNext)}.`;
+      }
+    }
+
+    return `Meeting updated at ${formatMeetingDateTimeLabel(latestNext)}.`;
+  }
+
+  if (singleEvent && typeof singleEvent === "object") {
+    return `Meeting updated at ${formatMeetingDateTimeLabel(singleEvent)}.`;
+  }
+
+  return "Meeting logs updated.";
+}
+
 function getMeetingIdentity(event, index) {
   return [
     String(event?.id ?? "no-id"),
@@ -996,6 +1057,7 @@ export async function POST(req) {
       assignedOpsUserId: String(body.assignedOpsUserId || "").trim(),
       assignedOpsName: String(body.assignedOpsName || "").trim(),
       assignedOpsEmail: String(body.assignedOpsEmail || "").trim().toLowerCase(),
+      currentStage: "Assessment Form",
       recordStatus: "Active",
       ...buildProspectEngagementUpdate(
         "Prospect added and assessment email sent to the MentOrbiter."
@@ -1420,17 +1482,28 @@ export async function PATCH(req) {
       const existingProspect = existingProspectSnap.exists
         ? existingProspectSnap.data() || {}
         : {};
+      const normalizedCurrentStage = String(existingProspect.currentStage || "")
+        .trim()
+        .toLowerCase();
+      const isMeetingStageActive = normalizedCurrentStage === "meeting";
+      const isPassedStage = new Set([
+        "pre enrollment form",
+        "feedback form",
+        "authentic choice",
+        "enrollment status",
+        "enrollment process",
+        "enrolled",
+      ]).has(normalizedCurrentStage);
+      const previousEvents = Array.isArray(existingProspect.events)
+        ? existingProspect.events
+        : existingProspect.event
+        ? [existingProspect.event]
+        : [];
 
       if (Array.isArray(update.events)) {
         normalizedUpdate.events = update.events.map((event) =>
           normalizeMeetingEvent(event, authResult.admin)
         );
-        const previousEvents = Array.isArray(existingProspect.events)
-          ? existingProspect.events
-          : existingProspect.event
-          ? [existingProspect.event]
-          : [];
-
         const completionError = validateMeetingCompletion(
           normalizedUpdate.events,
           previousEvents
@@ -1445,13 +1518,40 @@ export async function PATCH(req) {
         normalizedUpdate.event = normalizeMeetingEvent(update.event, authResult.admin);
       }
 
-      await dbResult.adminDb.collection(prospectCollectionName).doc(id).set(
-        {
-          ...normalizedUpdate,
-          ...buildProspectEngagementUpdate("Meeting logs updated."),
-        },
-        { merge: true }
+      const meetingUpdatePayload = {
+        ...normalizedUpdate,
+        updatedAt: new Date(),
+      };
+
+      const hasMeetingEventPayload =
+        (Array.isArray(normalizedUpdate.events) && normalizedUpdate.events.length > 0) ||
+        (normalizedUpdate.event && typeof normalizedUpdate.event === "object");
+      const meetingEngagementNote = buildMeetingEngagementNote(
+        previousEvents,
+        normalizedUpdate.events,
+        normalizedUpdate.event
       );
+
+      if (hasMeetingEventPayload && !isPassedStage && normalizedCurrentStage !== "meeting") {
+        meetingUpdatePayload.currentStage = "Meeting";
+      }
+
+      if (isMeetingStageActive) {
+        Object.assign(
+          meetingUpdatePayload,
+          buildProspectEngagementUpdate(meetingEngagementNote)
+        );
+      } else if (hasMeetingEventPayload && !isPassedStage) {
+        Object.assign(
+          meetingUpdatePayload,
+          buildProspectEngagementUpdate(meetingEngagementNote)
+        );
+      }
+
+      await dbResult.adminDb
+        .collection(prospectCollectionName)
+        .doc(id)
+        .set(meetingUpdatePayload, { merge: true });
 
       if (Array.isArray(normalizedUpdate.events)) {
         const hadDoneMeeting = previousEvents.some(
@@ -1461,6 +1561,16 @@ export async function PATCH(req) {
           (event) => String(event?.status || "").trim() === "Done"
         );
         if (!hadDoneMeeting && hasDoneMeeting) {
+          await dbResult.adminDb.collection(prospectCollectionName).doc(id).set(
+            {
+              currentStage: "Pre Enrollment Form",
+              ...buildProspectEngagementUpdate(
+                "First meeting marked done. Proceed to Pre Enrollment Form."
+              ),
+            },
+            { merge: true }
+          );
+
           const refreshedSnap = await dbResult.adminDb
             .collection(prospectCollectionName)
             .doc(id)

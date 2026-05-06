@@ -111,6 +111,10 @@ export default function ProspectsListingPage() {
       return { stage: "Intro Meeting", progress: 20 };
     }
 
+    if (String(prospect.currentStage || "").trim()) {
+      return { stage: String(prospect.currentStage).trim(), progress: 35 };
+    }
+
     return { stage: "Prospect Created", progress: 5 };
   };
 
@@ -142,6 +146,17 @@ export default function ProspectsListingPage() {
   const formatDate = (dateValue) => {
     if (!dateValue) return "-";
 
+    if (dateValue instanceof Date) {
+      return Number.isNaN(dateValue.getTime()) ? "-" : format(dateValue, "dd/MM/yyyy HH:mm");
+    }
+
+    if (typeof dateValue?.toDate === "function") {
+      const parsed = dateValue.toDate();
+      return parsed instanceof Date && !Number.isNaN(parsed.getTime())
+        ? format(parsed, "dd/MM/yyyy HH:mm")
+        : "-";
+    }
+
     if (typeof dateValue === "string") {
       const date = new Date(dateValue);
       return Number.isNaN(date.getTime()) ? "-" : format(date, "dd/MM/yyyy HH:mm");
@@ -149,6 +164,10 @@ export default function ProspectsListingPage() {
 
     if (dateValue?.seconds) {
       return format(new Date(dateValue.seconds * 1000), "dd/MM/yyyy HH:mm");
+    }
+
+    if (typeof dateValue?._seconds === "number") {
+      return format(new Date(dateValue._seconds * 1000), "dd/MM/yyyy HH:mm");
     }
 
     return "-";

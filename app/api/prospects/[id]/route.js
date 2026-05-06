@@ -11,6 +11,7 @@ import {
   diffChangedFields,
 } from "@/lib/prospectFormAudit";
 import { triggerAssessmentSubmittedAutomation } from "@/lib/prospectAutomation/service.mjs";
+import { buildProspectEngagementUpdate } from "@/lib/prospectEngagement";
 
 const prospectCollectionName = publicEnv.collections.prospect;
 const userCollectionName = publicEnv.collections.userDetail;
@@ -457,6 +458,9 @@ export async function POST(req, { params }) {
 
     await formCollectionRef.add(finalData);
 
+    const assessmentEngagementNote =
+      "Assessment form submitted by MentOrbiter. Ready for meeting scheduling.";
+
     await dbResult.adminDb
       .collection(prospectCollectionName)
       .doc(id)
@@ -477,7 +481,8 @@ export async function POST(req, { params }) {
               changedFields: diffChangedFields({}, finalData),
             }),
           ]),
-          updatedAt: new Date(),
+          currentStage: "Meeting",
+          ...buildProspectEngagementUpdate(assessmentEngagementNote),
         },
         { merge: true }
       );
@@ -503,7 +508,12 @@ export async function POST(req, { params }) {
       }
     }
 
-    await triggerAssessmentSubmittedAutomation(dbResult.adminDb, prospect).catch((error) => {
+    await triggerAssessmentSubmittedAutomation(dbResult.adminDb, {
+      ...prospect,
+      currentStage: "Meeting",
+      lastEngagementDate: new Date(),
+      lastEngagementNote: assessmentEngagementNote,
+    }).catch((error) => {
       console.error("Assessment submitted automation error:", error);
     });
 
