@@ -7,6 +7,8 @@ import Input from '@/components/ui/Input';
 import Select from '@/components/ui/Select';
 import TagsInput from '@/components/ui/TagsInput';
 import Button from '@/components/ui/Button';
+import CommercialModelEditor from '@/components/admin/orbiters/CommercialModelEditor';
+import { createDefaultCommercialModel } from '@/utils/commercialModel';
 
 import {
   Briefcase,
@@ -53,25 +55,12 @@ export default function ServicesSection({ profile }) {
     setFormData({ ...formData, services: updated });
   };
 
-  const updateAgreed = (i, path, value) => {
+  const updateCommercialModel = (i, commercialModel) => {
     const updated = [...services];
-    const current = updated[i]?.agreedValue || {
-      mode: 'single',
-      single: { type: '', value: '' },
-      multiple: { slabs: [] }
+    updated[i] = {
+      ...updated[i],
+      commercialModel,
     };
-
-    if (path === 'mode') {
-      current.mode = value;
-    }
-    if (path === 'type') {
-      current.single.type = value;
-    }
-    if (path === 'value') {
-      current.single.value = value;
-    }
-
-    updated[i].agreedValue = { ...current };
     setFormData({ ...formData, services: updated });
   };
 
@@ -94,11 +83,8 @@ export default function ServicesSection({ profile }) {
       images: [],
       status: activeCount >= 5 ? 'Archived' : 'Active',
       isVisible: activeCount >= 5 ? false : true,
-      agreedValue: {
-        mode: 'single',
-        single: { type: '', value: '' },
-        multiple: { slabs: [] }
-      }
+      commercialModel: createDefaultCommercialModel(),
+      previewDealValue: '',
     };
 
     setFormData({
@@ -123,47 +109,6 @@ export default function ServicesSection({ profile }) {
 
     setFormData({ ...formData, services: updated });
   };
-
-
-
-  const addSlab = (index) => {
-    const updated = [...services];
-
-    const slabs =
-      updated[index]?.agreedValue?.multiple?.slabs || [];
-
-    slabs.push({
-      from: '',
-      to: '',
-      type: '',
-      value: ''
-    });
-
-    updated[index].agreedValue = {
-      ...updated[index].agreedValue,
-      multiple: { slabs }
-    };
-
-    setFormData({ ...formData, services: updated });
-  };
-
-  const removeSlab = (index, slabIndex) => {
-    const updated = [...services];
-    const slabs = [...updated[index].agreedValue.multiple.slabs];
-
-    slabs.splice(slabIndex, 1);
-
-    updated[index].agreedValue.multiple.slabs = slabs;
-    setFormData({ ...formData, services: updated });
-  };
-
-  const updateSlab = (index, slabIndex, key, value) => {
-    const updated = [...services];
-    updated[index].agreedValue.multiple.slabs[slabIndex][key] = value;
-    setFormData({ ...formData, services: updated });
-  };
-
-
   /* ---------------- UI ---------------- */
 
   return (
@@ -256,119 +201,19 @@ export default function ServicesSection({ profile }) {
             </Text>
 
             <div className="grid grid-cols-3 gap-4 mt-3">
-              <FormField label="Mode">
-                <Select
-                  value={srv?.agreedValue?.mode || 'single'}
-                  onChange={(v) =>
-                    updateAgreed(index, 'mode', v)
+              <div className="col-span-3">
+                <CommercialModelEditor
+                  value={srv?.commercialModel}
+                  onChange={(nextModel) =>
+                    updateCommercialModel(index, nextModel)
                   }
-                  options={[
-                    { label: 'Single', value: 'single' },
-                    { label: 'Multiple Slabs', value: 'multiple' }
-                  ]}
+                  previewDealValue={srv?.previewDealValue || ''}
+                  onPreviewDealValueChange={(nextValue) =>
+                    updateService(index, 'previewDealValue', nextValue)
+                  }
                 />
-              </FormField>
+              </div>
             </div>
-
-            {/* SINGLE MODE */}
-            {srv?.agreedValue?.mode === 'single' && (
-              <div className="grid grid-cols-3 gap-4 mt-4">
-                <FormField label="Type">
-                  <Select
-                    value={srv?.agreedValue?.single?.type || ''}
-                    onChange={(v) =>
-                      updateAgreed(index, 'type', v)
-                    }
-                    options={[
-                      { label: 'Percentage', value: 'percentage' },
-                      { label: 'Amount', value: 'amount' }
-                    ]}
-                  />
-                </FormField>
-
-                <FormField label="Value">
-                  <Input
-                    type="number"
-                    value={srv?.agreedValue?.single?.value || ''}
-                    onChange={(e) =>
-                      updateAgreed(index, 'value', e.target.value)
-                    }
-                  />
-                </FormField>
-              </div>
-            )}
-
-            {/* MULTIPLE SLABS */}
-            {srv?.agreedValue?.mode === 'multiple' && (
-              <div className="mt-4 space-y-3">
-                <Button
-                  variant="outline"
-                  onClick={() => addSlab(index)}
-                >
-                  + Add Slab
-                </Button>
-
-                {(srv?.agreedValue?.multiple?.slabs || []).map(
-                  (slab, sIdx) => (
-                    <Card key={sIdx}>
-                      <div className="grid grid-cols-4 gap-3">
-                        <FormField label="From">
-                          <Input
-                            type="number"
-                            value={slab.from || ''}
-                            onChange={(e) =>
-                              updateSlab(index, sIdx, 'from', e.target.value)
-                            }
-                          />
-                        </FormField>
-
-                        <FormField label="To">
-                          <Input
-                            type="number"
-                            value={slab.to || ''}
-                            onChange={(e) =>
-                              updateSlab(index, sIdx, 'to', e.target.value)
-                            }
-                          />
-                        </FormField>
-
-                        <FormField label="Type">
-                          <Select
-                            value={slab.type || ''}
-                            onChange={(v) =>
-                              updateSlab(index, sIdx, 'type', v)
-                            }
-                            options={[
-                              { label: 'Percentage', value: 'percentage' },
-                              { label: 'Amount', value: 'amount' }
-                            ]}
-                          />
-                        </FormField>
-
-                        <FormField label="Value">
-                          <Input
-                            type="number"
-                            value={slab.value || ''}
-                            onChange={(e) =>
-                              updateSlab(index, sIdx, 'value', e.target.value)
-                            }
-                          />
-                        </FormField>
-                      </div>
-
-                      <div className="mt-2 text-right">
-                        <Button
-                          variant="ghost"
-                          onClick={() => removeSlab(index, sIdx)}
-                        >
-                          Remove
-                        </Button>
-                      </div>
-                    </Card>
-                  )
-                )}
-              </div>
-            )}
 
 
             {/* ========== POSITIONING ========== */}

@@ -6,6 +6,7 @@ import { uploadOrbiterProfileAsset } from '@/services/orbiterProfileAssetService
 import {
   commercialModelToAgreedValue,
   normalizeCommercialModel,
+  validateCommercialModel,
 } from '@/utils/commercialModel';
 
 /* ---------------- FILE HELPERS ---------------- */
@@ -489,6 +490,26 @@ const handleBankProofChange = (file) => {
     try {
       setLoading(true);
 
+      const invalidOfferings = [
+        ...(formData.services || []).map((service, index) => ({
+          type: 'Service',
+          name: service?.name || `Service ${index + 1}`,
+          validation: validateCommercialModel(service?.commercialModel),
+        })),
+        ...(formData.products || []).map((product, index) => ({
+          type: 'Product',
+          name: product?.name || `Product ${index + 1}`,
+          validation: validateCommercialModel(product?.commercialModel),
+        })),
+      ].filter((entry) => !entry.validation.isValid);
+
+      if (invalidOfferings.length) {
+        const firstInvalid = invalidOfferings[0];
+        throw new Error(
+          `${firstInvalid.type} "${firstInvalid.name}" has an invalid commercial model. ${firstInvalid.validation.errors[0]}`
+        );
+      }
+
       const mobile = formData?.MobileNo || 'nomobile';
       const basePath = getBasePath(ujbcode, mobile);
 
@@ -602,6 +623,13 @@ if (!bankProofFile && formData.bankDetails?.proofFile?.url) {
 
           return {
             ...srv,
+            commercialModel: normalizeCommercialModel(
+              srv.commercialModel,
+              srv.agreedValue
+            ),
+            agreedValue: commercialModelToAgreedValue(
+              normalizeCommercialModel(srv.commercialModel, srv.agreedValue)
+            ),
             images: normalizedImages,
             imageURL: coverImage,
           };
@@ -643,6 +671,13 @@ if (!bankProofFile && formData.bankDetails?.proofFile?.url) {
 
           return {
             ...product,
+            commercialModel: normalizeCommercialModel(
+              product.commercialModel,
+              product.agreedValue
+            ),
+            agreedValue: commercialModelToAgreedValue(
+              normalizeCommercialModel(product.commercialModel, product.agreedValue)
+            ),
             images: normalizedImages,
             imageURL: coverImage,
           };
@@ -730,7 +765,15 @@ if (!bankProofFile && formData.bankDetails?.proofFile?.url) {
       }
 
       if (payload.user) {
-        setFormData(payload.user);
+        setFormData({
+          ...payload.user,
+          services: Array.isArray(payload.user.services)
+            ? payload.user.services.map((service) => normalizeOfferingEntry(service))
+            : [],
+          products: Array.isArray(payload.user.products)
+            ? payload.user.products.map((product) => normalizeOfferingEntry(product))
+            : [],
+        });
         setDocId(payload.user.id || docId || ujbcode);
       }
 

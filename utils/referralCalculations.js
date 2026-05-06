@@ -6,7 +6,7 @@ import {
   COMMISSION_VALUE_TYPES,
   normalizeCommercialModel,
   normalizeCommissionType,
-} from "@/utils/commercialModel";
+} from "./commercialModel.js";
 
 const toNumber = (v, fallback = 0) => {
   const n = Number(v);
