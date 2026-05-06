@@ -135,9 +135,21 @@ function getProspectLifecycleStatus(prospect = {}) {
   const status = String(
     prospect.recordStatus || prospect.lifecycleStatus || ""
   ).trim();
+  const approvalStatus = String(prospect.approvalStatus || "").trim().toLowerCase();
+  const workflowStatus = String(prospect.status || "").trim().toLowerCase();
+  const isDraft = prospect.isDraft === true;
 
   if (status === "Archive") {
     return "Archive";
+  }
+
+  if (
+    status.toLowerCase() === "draft" ||
+    approvalStatus === "draft" ||
+    workflowStatus === "draft" ||
+    isDraft
+  ) {
+    return "Draft";
   }
 
   return "Active";

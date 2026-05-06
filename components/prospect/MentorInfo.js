@@ -42,13 +42,13 @@ export default function MentorInfo({ mentor }) {
 
           <div className="text-left">
             <p className="text-sm font-semibold text-slate-800">
-              Mentor Information
+              MentOrbiter Information
             </p>
 
             <div className="flex items-center gap-2 mt-1">
-              <span className="text-xs text-slate-500">
-                {mentor?.Name}
-              </span>
+                <span className="text-xs text-slate-500">
+                  {mentor?.Name}
+                </span>
 
               {mentor?.id && (
                 <span className="text-xs bg-orange-100 text-orange-600 px-2 py-0.5 rounded-full font-medium">
@@ -75,17 +75,17 @@ export default function MentorInfo({ mentor }) {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
           <InfoItem
             icon={User}
-            label="Mentor Name"
+            label="MentOrbiter Name"
             value={mentor?.Name}
           />
           <InfoItem
             icon={Phone}
-            label="Phone Number"
+            label="MentOrbiter Phone"
             value={mentor?.MobileNo}
           />
           <InfoItem
             icon={Mail}
-            label="Email Address"
+            label="MentOrbiter Email"
             value={mentor?.Email}
           />
         </div>
