@@ -44,8 +44,8 @@ export default function AdminContributionPointsPage() {
           <Text variant="muted">View CP board members and totals.</Text>
         </div>
 
-        <Link href="/admin/contribution-points/activity">
-          <Button>Import Activity</Button>
+        <Link href="/admin/contribution-points/add">
+          <Button>Add Activity</Button>
         </Link>
       </div>
 

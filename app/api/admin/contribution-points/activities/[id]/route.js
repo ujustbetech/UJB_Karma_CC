@@ -40,9 +40,11 @@ export async function PATCH(req, { params }) {
   }
 
   try {
-    const id = String(params?.id || "").trim();
+    const resolvedParams = await params;
+    const idFromParams = String(resolvedParams?.id || "").trim();
     const body = await req.json();
     const action = String(body?.action || "").trim();
+    const id = idFromParams || String(body?.id || body?.form?.id || "").trim();
 
     if (!id) {
       return NextResponse.json({ message: "Missing activity id" }, { status: 400 });
@@ -74,8 +76,10 @@ export async function DELETE(req, { params }) {
   }
 
   try {
-    const id = String(params?.id || "").trim();
+    const resolvedParams = await params;
+    const idFromParams = String(resolvedParams?.id || "").trim();
     const body = await req.json().catch(() => ({}));
+    const id = idFromParams || String(body?.id || "").trim();
     const activity = {
       ...(body?.activity || {}),
       id,
