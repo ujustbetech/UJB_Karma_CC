@@ -30,6 +30,24 @@ export async function createUserProspect(payload) {
   return data.prospect;
 }
 
+export async function createUserDraftProspect(payload) {
+  const response = await fetch("/api/user/prospects/draft", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify(payload),
+  });
+
+  const data = await readApiResponse(
+    response,
+    "Failed to create draft prospect"
+  );
+  return {
+    prospect: data.prospect,
+    messageTrigger: data.messageTrigger,
+  };
+}
+
 export async function fetchCurrentUserProfile() {
   const response = await fetch("/api/user/profile", {
     method: "GET",

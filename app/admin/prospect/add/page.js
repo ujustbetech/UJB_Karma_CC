@@ -10,8 +10,10 @@ import DateInput from "@/components/ui/DateInput";
 import Select from "@/components/ui/Select";
 import FormField from "@/components/ui/FormField";
 import {
-  PROSPECT_OCCASION_OPTIONS,
+  getProspectSourceDetailLabel,
   PROSPECT_OCCUPATION_OPTIONS,
+  PROSPECT_SOURCE_DETAIL_OPTIONS,
+  PROSPECT_SOURCE_OPTIONS,
 } from "@/lib/prospectFormOptions";
 
 import Swal from "sweetalert2";
@@ -33,26 +35,6 @@ const DEFAULT_PROSPECT_ASSESSMENT_TEMPLATE = {
     ),
   },
 };
-const SOURCE_OPTIONS = [
-  { label: "Select a source", value: "" },
-  { label: "Social Media", value: "Social Media" },
-  { label: "Website", value: "Website" },
-  { label: "Orbiter", value: "Orbiter" },
-];
-const SOURCE_DETAIL_OPTIONS = {
-  Orbiter: PROSPECT_OCCASION_OPTIONS,
-  Website: [
-    { label: "Select an option", value: "" },
-    { label: "UJustBe", value: "UJustBe" },
-  ],
-  "Social Media": [
-    { label: "Select an option", value: "" },
-    { label: "Instagram", value: "Instagram" },
-    { label: "Facebook", value: "Facebook" },
-    { label: "YouTube", value: "YouTube" },
-  ],
-};
-
 function getAdultDobMax() {
   const date = new Date();
   date.setFullYear(date.getFullYear() - 18);
@@ -311,7 +293,10 @@ export default function Register() {
     }
 
     if (!type) {
-      nextErrors.type = "Source detail is required";
+      nextErrors.type =
+        source === "Orbiter"
+          ? "Occasion for intimation is required"
+          : "Source detail is required";
     }
 
     if (!selectedOpsEmail) {
@@ -613,20 +598,12 @@ export default function Register() {
                 setSource(v);
                 setType("");
               }}
-              options={SOURCE_OPTIONS}
+              options={PROSPECT_SOURCE_OPTIONS}
             />
           </FormField>
 
           <FormField
-            label={
-              source === "Orbiter"
-                ? "Orbiter Source"
-                : source === "Website"
-                ? "Website Source"
-                : source === "Social Media"
-                ? "Social Media Source"
-                : "Source Detail"
-            }
+            label={getProspectSourceDetailLabel(source)}
             required
             error={errors.type}
           >
@@ -636,11 +613,9 @@ export default function Register() {
                 setErrors((prev) => ({ ...prev, type: "" }));
                 setType(v);
               }}
-              options={
-                SOURCE_DETAIL_OPTIONS[source] || [
-                  { label: "Select a source first", value: "" },
-                ]
-              }
+              options={PROSPECT_SOURCE_DETAIL_OPTIONS[source] || [
+                { label: "Select a source first", value: "" },
+              ]}
             />
           </FormField>
 

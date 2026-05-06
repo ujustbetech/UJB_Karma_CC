@@ -10,6 +10,7 @@ import {
 } from "@/lib/prospectAutomation/notifications.mjs";
 import { buildProspectEngagementUpdate } from "@/lib/prospectEngagement";
 import { publicEnv } from "@/lib/config/publicEnv";
+const AUTOMATION_ISSUES_COLLECTION = "prospect_automation_issues";
 
 function baseUrl(req) {
   const origin = new URL(req.url).origin;
@@ -34,6 +35,30 @@ async function loadProspect(db, prospectId) {
   const snap = await ref.get();
   if (!snap.exists) return null;
   return { ref, data: { id: snap.id, ...(snap.data() || {}) } };
+}
+
+async function createEmailDeliveryIssue({
+  db,
+  prospect = {},
+  ruleKey,
+  reason,
+  details = "",
+}) {
+  try {
+    await db.collection(AUTOMATION_ISSUES_COLLECTION).add({
+      prospect_id: String(prospect.id || "").trim(),
+      prospect_name: String(prospect.prospectName || "").trim() || "Prospect",
+      issue_type: "email_delivery_failed",
+      status: "open",
+      rule_key: String(ruleKey || "").trim(),
+      message: `Prospect action email failed: ${String(reason || "unknown_error")}`.trim(),
+      details: String(details || "").trim(),
+      created_at: new Date(),
+      resolved_at: null,
+    });
+  } catch (error) {
+    console.error("Failed to persist email delivery issue:", error);
+  }
 }
 
 export async function GET(req, { params }) {
@@ -93,12 +118,27 @@ export async function GET(req, { params }) {
         { merge: true }
       );
 
-      await sendEnrollmentStatusProspectEmail({
+      const emailResult = await sendEnrollmentStatusProspectEmail({
         prospect,
         rowLabel: "Enrollment documents mail",
         rowStatus: "Documents sent",
         rowDate: today,
       });
+      if (!emailResult?.ok) {
+        console.error("Prospect action email failed:", {
+          action,
+          prospectId: prospect.id,
+          reason: emailResult?.reason,
+          details: emailResult?.details,
+        });
+        await createEmailDeliveryIssue({
+          db: adminDb,
+          prospect,
+          ruleKey: "choose_to_enroll_yes_documents_sent_email",
+          reason: emailResult?.reason,
+          details: emailResult?.details,
+        });
+      }
 
       return NextResponse.redirect(`${baseUrl(req)}/prospect-actions/thanks`);
     }
@@ -163,12 +203,27 @@ export async function GET(req, { params }) {
         },
         { merge: true }
       );
-      await sendEnrollmentStatusProspectEmail({
+      const emailResult = await sendEnrollmentStatusProspectEmail({
         prospect,
         rowLabel: "Enrollment fees Option Opted for",
         rowStatus: status,
         rowDate: today,
       });
+      if (!emailResult?.ok) {
+        console.error("Prospect action email failed:", {
+          action,
+          prospectId: prospect.id,
+          reason: emailResult?.reason,
+          details: emailResult?.details,
+        });
+        await createEmailDeliveryIssue({
+          db: adminDb,
+          prospect,
+          ruleKey: `enrollment_fee_email_${action}`,
+          reason: emailResult?.reason,
+          details: emailResult?.details,
+        });
+      }
 
       return NextResponse.redirect(`${baseUrl(req)}/prospect-actions/thanks`);
     }

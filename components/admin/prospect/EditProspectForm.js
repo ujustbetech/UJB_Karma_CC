@@ -11,8 +11,10 @@ import Select from "@/components/ui/Select";
 import FormField from "@/components/ui/FormField";
 import { useToast } from "@/components/ui/ToastProvider";
 import {
-  PROSPECT_OCCASION_OPTIONS,
+  getProspectSourceDetailLabel,
   PROSPECT_OCCUPATION_OPTIONS,
+  PROSPECT_SOURCE_DETAIL_OPTIONS,
+  PROSPECT_SOURCE_OPTIONS,
 } from "@/lib/prospectFormOptions";
 
 const INDIA_DIAL_CODE = "+91";
@@ -52,6 +54,7 @@ export default function EditProspect({ id, data }) {
     orbiterName: data?.orbiterName || "",
     orbiterContact: data?.orbiterContact || "",
     orbiterEmail: data?.orbiterEmail || "",
+    source: data?.source || "",
     type: data?.type || "",
     prospectName: data?.prospectName || "",
     prospectPhone: data?.prospectPhone || "",
@@ -165,19 +168,26 @@ export default function EditProspect({ id, data }) {
     const maxAdultDob = new Date(`${getAdultDobMax()}T23:59:59`);
 
     if (!String(form.orbiterName || "").trim()) {
-      nextErrors.orbiterName = "Orbiter name is required.";
+      nextErrors.orbiterName = "MentOrbiter name is required.";
     }
 
     if (!INDIAN_MOBILE_REGEX.test(normalizedOrbiterPhone)) {
-      nextErrors.orbiterContact = `Orbiter phone must be a valid ${INDIA_DIAL_CODE} Indian mobile number.`;
+      nextErrors.orbiterContact = `MentOrbiter phone must be a valid ${INDIA_DIAL_CODE} Indian mobile number.`;
     }
 
     if (form.orbiterEmail && !EMAIL_REGEX.test(String(form.orbiterEmail).trim())) {
-      nextErrors.orbiterEmail = "Enter a valid orbiter email address.";
+      nextErrors.orbiterEmail = "Enter a valid MentOrbiter email address.";
+    }
+
+    if (!String(form.source || "").trim()) {
+      nextErrors.source = "Source is required.";
     }
 
     if (!String(form.type || "").trim()) {
-      nextErrors.type = "Occasion for intimation is required.";
+      nextErrors.type =
+        form.source === "Orbiter"
+          ? "Occasion for intimation is required."
+          : "Source detail is required.";
     }
 
     if (!String(form.assignedOpsEmail || "").trim()) {
@@ -239,11 +249,12 @@ export default function EditProspect({ id, data }) {
           occupation: String(form.occupation || "").trim(),
           hobbies: String(form.hobbies || "").trim(),
           email: String(form.email || "").trim(),
-      orbiterEmail: String(form.orbiterEmail || "").trim(),
-      assignedOpsUserId: String(form.assignedOpsUserId || "").trim(),
-      assignedOpsName: String(form.assignedOpsName || "").trim(),
-      assignedOpsEmail: String(form.assignedOpsEmail || "").trim().toLowerCase(),
-      dob: String(form.dob || "").trim(),
+          source: String(form.source || "").trim(),
+          orbiterEmail: String(form.orbiterEmail || "").trim(),
+          assignedOpsUserId: String(form.assignedOpsUserId || "").trim(),
+          assignedOpsName: String(form.assignedOpsName || "").trim(),
+          assignedOpsEmail: String(form.assignedOpsEmail || "").trim().toLowerCase(),
+          dob: String(form.dob || "").trim(),
         }),
       });
       const responseData = await res.json().catch(() => ({}));
@@ -265,12 +276,12 @@ export default function EditProspect({ id, data }) {
 
       <Card>
         <form className="space-y-6">
-          <Text variant="h3">Orbiter Details</Text>
+          <Text variant="h3">MentOrbiter Details</Text>
 
-          <FormField label="Search Orbiter">
+          <FormField label="Search MentOrbiter">
             <div className="relative">
               <Input
-                placeholder="Search orbiter"
+                placeholder="Search MentOrbiter"
                 value={userSearch}
                 onChange={(e) => handleSearchUser(e.target.value)}
               />
@@ -292,15 +303,15 @@ export default function EditProspect({ id, data }) {
           </FormField>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <FormField label="Orbiter Name" error={errors.orbiterName}>
+            <FormField label="MentOrbiter Name" error={errors.orbiterName}>
               <Input value={form.orbiterName} disabled />
             </FormField>
 
-            <FormField label="Orbiter Phone" error={errors.orbiterContact}>
+            <FormField label="MentOrbiter Phone" error={errors.orbiterContact}>
               <Input value={form.orbiterContact} disabled />
             </FormField>
 
-            <FormField label="Orbiter Email" error={errors.orbiterEmail}>
+            <FormField label="MentOrbiter Email" error={errors.orbiterEmail}>
               <Input value={form.orbiterEmail} disabled />
             </FormField>
           </div>
@@ -352,13 +363,38 @@ export default function EditProspect({ id, data }) {
                   onChange={(e) => handleFieldChange("hobbies", e.target.value)}
               />
             </FormField>
+
+            <FormField label="Source" required error={errors.source}>
+              <Select
+                value={form.source}
+                onChange={(value) => {
+                  setForm((prev) => ({
+                    ...prev,
+                    source: value,
+                    type: "",
+                  }));
+                  setErrors((prev) => ({
+                    ...prev,
+                    source: "",
+                    type: "",
+                  }));
+                }}
+                options={PROSPECT_SOURCE_OPTIONS}
+              />
+            </FormField>
           </div>
 
-          <FormField label="Occasion for Intimation" required error={errors.type}>
+          <FormField
+            label={getProspectSourceDetailLabel(form.source)}
+            required
+            error={errors.type}
+          >
             <Select
               value={form.type}
               onChange={(v) => handleFieldChange("type", v)}
-              options={PROSPECT_OCCASION_OPTIONS}
+              options={PROSPECT_SOURCE_DETAIL_OPTIONS[form.source] || [
+                { label: "Select a source first", value: "" },
+              ]}
             />
           </FormField>
 

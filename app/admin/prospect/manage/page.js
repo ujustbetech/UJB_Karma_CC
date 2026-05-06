@@ -44,7 +44,7 @@ export default function ProspectsListingPage() {
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [orbiterFilter, setOrbiterFilter] = useState("");
-  const [statusFilter, setStatusFilter] = useState("Active");
+  const [statusFilter, setStatusFilter] = useState("");
 
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [prospectToDelete, setProspectToDelete] = useState(null);
@@ -71,6 +71,10 @@ export default function ProspectsListingPage() {
   }, [search]);
 
   const getProspectStage = (prospect) => {
+    if (String(prospect.currentStage || "").trim()) {
+      return { stage: String(prospect.currentStage).trim(), progress: 35 };
+    }
+
     if (prospect.status === "Choose to enroll") {
       return { stage: "Enrolled", progress: 100 };
     }
@@ -111,6 +115,10 @@ export default function ProspectsListingPage() {
       return { stage: "Intro Meeting", progress: 20 };
     }
 
+    if (String(prospect.currentStage || "").trim()) {
+      return { stage: String(prospect.currentStage).trim(), progress: 35 };
+    }
+
     return { stage: "Prospect Created", progress: 5 };
   };
 
@@ -142,6 +150,17 @@ export default function ProspectsListingPage() {
   const formatDate = (dateValue) => {
     if (!dateValue) return "-";
 
+    if (dateValue instanceof Date) {
+      return Number.isNaN(dateValue.getTime()) ? "-" : format(dateValue, "dd/MM/yyyy HH:mm");
+    }
+
+    if (typeof dateValue?.toDate === "function") {
+      const parsed = dateValue.toDate();
+      return parsed instanceof Date && !Number.isNaN(parsed.getTime())
+        ? format(parsed, "dd/MM/yyyy HH:mm")
+        : "-";
+    }
+
     if (typeof dateValue === "string") {
       const date = new Date(dateValue);
       return Number.isNaN(date.getTime()) ? "-" : format(date, "dd/MM/yyyy HH:mm");
@@ -149,6 +168,10 @@ export default function ProspectsListingPage() {
 
     if (dateValue?.seconds) {
       return format(new Date(dateValue.seconds * 1000), "dd/MM/yyyy HH:mm");
+    }
+
+    if (typeof dateValue?._seconds === "number") {
+      return format(new Date(dateValue._seconds * 1000), "dd/MM/yyyy HH:mm");
     }
 
     return "-";
@@ -246,7 +269,7 @@ export default function ProspectsListingPage() {
             onClick={() => {
               setSearch("");
               setOrbiterFilter("");
-              setStatusFilter("Active");
+              setStatusFilter("");
             }}
           >
             <div className="flex items-center gap-3">
@@ -330,6 +353,8 @@ export default function ProspectsListingPage() {
                     value={statusFilter}
                     onChange={setStatusFilter}
                     options={[
+                      { label: "All", value: "" },
+                      { label: "Draft", value: "Draft" },
                       { label: "Active", value: "Active" },
                       { label: "Archive", value: "Archive" },
                     ]}
@@ -341,7 +366,7 @@ export default function ProspectsListingPage() {
                   onClick={() => {
                     setSearch("");
                     setOrbiterFilter("");
-                    setStatusFilter("Active");
+                    setStatusFilter("");
                   }}
                 >
                   Clear
