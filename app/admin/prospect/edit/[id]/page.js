@@ -38,6 +38,28 @@ const tabConfig = [
   { sidebarLabel: "Engagement Logs", title: "Engagement Logs" },
 ];
 
+const tabKeyToIndex = {
+  "prospect-details": 0,
+  "assessment-form": 1,
+  meeting: 2,
+  "pre-enrollment-form": 3,
+  "feedback-form": 4,
+  "authentic-choice": 5,
+  "enrollment-status": 6,
+  "engagement-logs": 7,
+};
+
+const tabIndexToKey = [
+  "prospect-details",
+  "assessment-form",
+  "meeting",
+  "pre-enrollment-form",
+  "feedback-form",
+  "authentic-choice",
+  "enrollment-status",
+  "engagement-logs",
+];
+
 const icons = [
   FileText,
   ClipboardCheck,
@@ -95,16 +117,21 @@ export default function EditAdminEvent() {
     isDeclinedByUJustBe && index > AUTHENTIC_CHOICE_TAB_INDEX;
 
   useEffect(() => {
+    const tabKeyParam = String(searchParams.get("tabKey") || "").trim().toLowerCase();
+    const mappedTabIndex = Object.prototype.hasOwnProperty.call(tabKeyToIndex, tabKeyParam)
+      ? tabKeyToIndex[tabKeyParam]
+      : null;
     const tabParam = Number.parseInt(searchParams.get("tab") || "", 10);
+    const resolvedTab = Number.isInteger(mappedTabIndex) ? mappedTabIndex : tabParam;
 
     if (
-      Number.isInteger(tabParam) &&
-      tabParam >= 0 &&
-      tabParam < tabConfig.length &&
-      !isLockedTab(tabParam) &&
-      tabParam !== activeTab
+      Number.isInteger(resolvedTab) &&
+      resolvedTab >= 0 &&
+      resolvedTab < tabConfig.length &&
+      !isLockedTab(resolvedTab) &&
+      resolvedTab !== activeTab
     ) {
-      setActiveTab(tabParam);
+      setActiveTab(resolvedTab);
     }
   }, [activeTab, isDeclinedByUJustBe, searchParams]);
 
@@ -127,6 +154,7 @@ export default function EditAdminEvent() {
 
     const params = new URLSearchParams(searchParams.toString());
     params.set("tab", String(index));
+    params.set("tabKey", tabIndexToKey[index] || String(index));
     router.replace(`/admin/prospect/edit/${id}?${params.toString()}`);
   };
 

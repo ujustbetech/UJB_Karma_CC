@@ -20,7 +20,7 @@ import {
   TODO_PURPOSE_OPTIONS,
   TODO_STATUS_OPTIONS,
 } from "@/lib/todo/constants";
-import { CheckCircle, Eye, Pencil, Play, Plus } from "lucide-react";
+import { Eye, Plus } from "lucide-react";
 
 function formatDisplayDate(value) {
   if (!value) return "-";
@@ -133,56 +133,6 @@ export default function TasksPage() {
     setPage(1);
   }, [statusFilter, purposeFilter, assignToFilter, search]);
 
-  const handleStart = async (id) => {
-    try {
-      const res = await fetch(`/api/admin/todos/${id}/start`, {
-        method: "POST",
-        credentials: "include",
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        throw new Error(data.message || "Failed to start TODO");
-      }
-
-      if (data.todo) {
-        setTodos((prev) =>
-          prev.map((todo) => (todo.id === id ? { ...todo, ...data.todo } : todo))
-        );
-      } else {
-        await loadTodos();
-      }
-
-      toast.success("TODO started");
-    } catch (error) {
-      toast.error(error.message || "Failed to start TODO");
-    }
-  };
-
-  const handleDone = async (id) => {
-    try {
-      const res = await fetch(`/api/admin/todos/${id}/done`, {
-        method: "POST",
-        credentials: "include",
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        throw new Error(data.message || "Failed to complete TODO");
-      }
-
-      if (data.todo) {
-        setTodos((prev) =>
-          prev.map((todo) => (todo.id === id ? { ...todo, ...data.todo } : todo))
-        );
-      } else {
-        await loadTodos();
-      }
-
-      toast.success("TODO completed");
-    } catch (error) {
-      toast.error(error.message || "Failed to complete TODO");
-    }
-  };
-
   const columns = [
     { key: "linked", label: "Linked Person" },
     { key: "type", label: "Type" },
@@ -273,30 +223,6 @@ export default function TasksPage() {
                         />
                       </Tooltip>
 
-                      <Tooltip content="Edit">
-                        <ActionButton
-                          icon={Pencil}
-                          onClick={() => router.push(`/admin/tasks/${todo.id}/edit`)}
-                        />
-                      </Tooltip>
-
-                      {todo.status === "Pending" && (
-                        <Tooltip content="Start">
-                          <ActionButton
-                            icon={Play}
-                            onClick={() => handleStart(todo.id)}
-                          />
-                        </Tooltip>
-                      )}
-
-                      {todo.status === "In Progress" && (
-                        <Tooltip content="Done">
-                          <ActionButton
-                            icon={CheckCircle}
-                            onClick={() => handleDone(todo.id)}
-                          />
-                        </Tooltip>
-                      )}
                     </div>
                   </td>
                 </TableRow>

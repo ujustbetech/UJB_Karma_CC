@@ -9,7 +9,6 @@ import {
   buildTodoCollection,
   isOpsAdmin,
   serializeTodoRecord,
-  toDateOnlyKey,
 } from "@/lib/todo/adminTodoServer.mjs";
 
 function getDbOrError() {
@@ -76,17 +75,6 @@ export async function POST(req, { params }) {
     }
 
     const now = new Date();
-    const todayKey = toDateOnlyKey(now);
-    const followUpKey = toDateOnlyKey(todo.follow_up_date);
-
-    if (followUpKey && todayKey < followUpKey) {
-      return NextResponse.json(
-        {
-          message: "TODO can only be started on or after its follow-up date.",
-        },
-        { status: 400 }
-      );
-    }
 
     await todoRef.set(
       {
