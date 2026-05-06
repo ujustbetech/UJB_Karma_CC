@@ -505,9 +505,11 @@ const handleBankProofChange = (file) => {
 
       if (invalidOfferings.length) {
         const firstInvalid = invalidOfferings[0];
-        throw new Error(
+        toast.error(
           `${firstInvalid.type} "${firstInvalid.name}" has an invalid commercial model. ${firstInvalid.validation.errors[0]}`
         );
+        setLoading(false);
+        return;
       }
 
       const mobile = formData?.MobileNo || 'nomobile';
