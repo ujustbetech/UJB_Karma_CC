@@ -3,6 +3,10 @@
 import { useEffect, useState } from 'react';
 import { encryptData, decryptData } from '@/utils/encryption';
 import { uploadOrbiterProfileAsset } from '@/services/orbiterProfileAssetService';
+import {
+  commercialModelToAgreedValue,
+  normalizeCommercialModel,
+} from '@/utils/commercialModel';
 
 /* ---------------- FILE HELPERS ---------------- */
 
@@ -53,11 +57,17 @@ function normalizeOfferingImages(images, fallbackImageURL = '') {
 function normalizeOfferingEntry(entry = {}) {
   const images = normalizeOfferingImages(entry.images, entry.imageURL || '');
   const coverImage = images.find((image) => image.isCover)?.url || images[0]?.url || entry.imageURL || '';
+  const commercialModel = normalizeCommercialModel(
+    entry.commercialModel,
+    entry.agreedValue
+  );
 
   return {
     ...entry,
     images,
     imageURL: coverImage,
+    commercialModel,
+    agreedValue: commercialModelToAgreedValue(commercialModel),
   };
 }
 

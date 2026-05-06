@@ -1,5 +1,13 @@
 // src/utils/referralCalculations.js
 
+import {
+  buildCommissionDistribution,
+  calculateCommissionFromCommercialModel,
+  COMMISSION_VALUE_TYPES,
+  normalizeCommercialModel,
+  normalizeCommissionType,
+} from "@/utils/commercialModel";
+
 const toNumber = (v, fallback = 0) => {
   const n = Number(v);
   return Number.isNaN(n) ? fallback : n;
@@ -11,7 +19,7 @@ export const REFERRAL_REWARD_TYPES = {
 };
 
 export const normalizeReferralRewardType = (type) =>
-  type === REFERRAL_REWARD_TYPES.FIXED
+  normalizeCommissionType(type) === COMMISSION_VALUE_TYPES.FIXED
     ? REFERRAL_REWARD_TYPES.FIXED
     : REFERRAL_REWARD_TYPES.PERCENTAGE;
 
@@ -19,6 +27,26 @@ const formatRewardLabel = (type, value) =>
   type === REFERRAL_REWARD_TYPES.PERCENTAGE ? `${value}%` : `₹${value}`;
 
 const findMatchingRewardEntry = (deal, item) => {
+  const commercialModel = normalizeCommercialModel(
+    item?.commercialModel,
+    item?.agreedValue
+  );
+  const commercialMatch = calculateCommissionFromCommercialModel(
+    deal,
+    commercialModel
+  );
+
+  if (commercialMatch) {
+    return {
+      mode:
+        commercialModel.modelType === "multi_slab" ? "multiple" : "single",
+      type: normalizeReferralRewardType(commercialMatch.commissionType),
+      value: toNumber(commercialMatch.commissionValue, 0),
+      slab: commercialMatch.matchedSlab || null,
+      source: "commercialModel",
+    };
+  }
+
   const av = item?.agreedValue;
 
   if (!av) {
@@ -141,23 +169,7 @@ export const buildDealDistribution = (dealValue, referralData) => {
 
   const reward = getReferralRewardDetails(deal, item);
   const agreedAmount = reward.rewardAmount;
-
-  const r2 = (n) => Math.round(n * 100) / 100;
-
-  const orbiterShare = r2(agreedAmount * 0.5);
-  const orbiterMentorShare = r2(agreedAmount * 0.15);
-  const cosmoMentorShare = r2(agreedAmount * 0.15);
-
-  let ujustbeShare = r2(agreedAmount * 0.2);
-
-  const total =
-    orbiterShare +
-    orbiterMentorShare +
-    cosmoMentorShare +
-    ujustbeShare;
-
-  const diff = r2(agreedAmount - total);
-  if (diff !== 0) ujustbeShare = r2(ujustbeShare + diff);
+  const distribution = buildCommissionDistribution(agreedAmount);
 
   return {
     dealValue: deal,
@@ -169,10 +181,10 @@ export const buildDealDistribution = (dealValue, referralData) => {
     rewardValue: reward.rewardValue,
     rewardLabel: reward.rewardLabel,
     agreedAmount,
-    orbiterShare,
-    orbiterMentorShare,
-    cosmoMentorShare,
-    ujustbeShare,
+    orbiterShare: distribution.referrer,
+    orbiterMentorShare: distribution.referrerMentor,
+    cosmoMentorShare: distribution.receiverMentor,
+    ujustbeShare: distribution.platform,
     timestamp: new Date().toISOString(),
   };
 };
