@@ -85,10 +85,10 @@ export async function POST(req) {
 
     const mentorSnap = await adminDb
       .collection(COLLECTIONS.userDetail)
-      .doc(originalPhone)
+      .doc(user.id)
       .get();
 
-    if (mentorSnap.exists()) {
+    if (mentorSnap.exists) {
       const mentorData = mentorSnap.data();
 
       const mentorName = sanitizeText(mentorData["Mentor Name"] || "Mentor");
@@ -153,13 +153,14 @@ export async function POST(req) {
     });
 
   } catch (error) {
-    console.error(
-      "WhatsApp Error:",
-      error.response?.data || error
-    );
+    const errorDetails = error.response?.data || error.message || error;
+    console.error("WhatsApp Error:", errorDetails);
 
     return Response.json(
-      { error: "Failed to send message" },
+      { 
+        success: false,
+        message: typeof errorDetails === 'string' ? errorDetails : "Failed to send WhatsApp message" 
+      },
       { status: 500 }
     );
   }

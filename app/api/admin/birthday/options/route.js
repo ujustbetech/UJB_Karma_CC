@@ -3,7 +3,7 @@ import { requireAdminSession } from "@/lib/auth/adminRequestAuth.mjs";
 import { hasAdminAccess } from "@/lib/auth/accessControl";
 import { adminDb } from "@/lib/firebase/firebaseAdmin";
 import { COLLECTIONS } from "@/lib/utility_collection";
-import { fetchBirthdayUserOptions } from "@/lib/birthday/adminBirthdayApiWorkflow.mjs";
+import { fetchBirthdayUserOptions } from "@/lib/birthday/adminBirthdayApiWorkflow";
 
 function validateAdmin(req) {
   const auth = requireAdminSession(req, hasAdminAccess);

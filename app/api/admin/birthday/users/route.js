@@ -3,7 +3,7 @@ import { requireAdminSession } from "@/lib/auth/adminRequestAuth.mjs";
 import { hasAdminAccess } from "@/lib/auth/accessControl";
 import { adminDb } from "@/lib/firebase/firebaseAdmin";
 import { COLLECTIONS } from "@/lib/utility_collection";
-import { fetchBirthdayUsersForAdmin } from "@/lib/birthday/adminBirthdayApiWorkflow";
+import { fetchAllUserBirthdays } from "@/lib/birthday/adminBirthdayApiWorkflow";
 
 function validateAdmin(req) {
   const auth = requireAdminSession(req, hasAdminAccess);
@@ -27,11 +27,8 @@ export async function GET(req) {
   if (!guard.ok) return guard.response;
 
   try {
-    const payload = await fetchBirthdayUsersForAdmin(
-      adminDb, 
-      COLLECTIONS.userDetail
-    );
-    return NextResponse.json(payload);
+    const users = await fetchAllUserBirthdays(adminDb, COLLECTIONS.userDetail);
+    return NextResponse.json({ users });
   } catch (error) {
     return NextResponse.json(
       { message: error?.message || "Failed to load birthday users" },
@@ -39,5 +36,3 @@ export async function GET(req) {
     );
   }
 }
-
-

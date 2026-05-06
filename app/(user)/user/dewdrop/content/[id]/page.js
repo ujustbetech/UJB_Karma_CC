@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import { Eye, Heart, Music, Video, FileText, Tag, ImageOff, User } from "lucide-react";
 import {
@@ -10,6 +10,7 @@ import {
 
 export default function ContentDetails() {
   const { id } = useParams();
+  const audioRef = useRef(null);
 
   const [content, setContent] = useState(null);
   const [liked, setLiked] = useState(false);
@@ -27,6 +28,27 @@ export default function ContentDetails() {
 
     fetchContent();
   }, [id]);
+
+  const isAudioFormat =
+    String(content?.contentFormat || "").trim().toLowerCase() === "audio";
+  const mediaUrl =
+    content?.contentFileImages?.[0] ||
+    content?.contentFile?.[0] ||
+    "";
+  const imageUrl = content?.contentFileImages?.[0] || content?.Thumbnail?.[0] || "";
+
+  useEffect(() => {
+    if (!isAudioFormat || !audioRef.current || !mediaUrl) return;
+    const player = audioRef.current;
+    const tryPlay = async () => {
+      try {
+        await player.play();
+      } catch {
+        // Browser autoplay policy may block; controls remain available.
+      }
+    };
+    tryPlay();
+  }, [isAudioFormat, mediaUrl]);
 
   const handleLike = async () => {
     if (liked) return;
@@ -52,20 +74,33 @@ export default function ContentDetails() {
     if (format === "Video") return <Video size={16} />;
     return <FileText size={16} />;
   };
-
-  const mediaUrl =
-    content.contentFileImages?.[0] ||
-    content.contentFile?.[0] ||
+  const isTextFormat =
+    String(content?.contentFormat || "").trim().toLowerCase() === "text";
+  const textContentHtml = content.textContentHtml || content.contDiscription || "";
+  const profileImage =
+    (Array.isArray(content.lpProfile) && content.lpProfile[0]) ||
+    (typeof content.lpProfile === "string" && content.lpProfile.trim()) ||
     "";
+  const showUjustBeLogo =
+    !profileImage &&
+    (
+      String(content.ownershipType || "").trim().toLowerCase() === "ujustbe" ||
+      String(content.partnerNamelp || "").trim().toLowerCase() === "ujustbe"
+    );
+  const partnerTypeLabel = showUjustBeLogo ||
+    String(content.ownershipType || "").trim().toLowerCase() === "ujustbe" ||
+    String(content.partnerNamelp || "").trim().toLowerCase() === "ujustbe"
+    ? "Brand"
+    : (content.partnerDesig || "Profile unavailable");
 
   return (
     <div className="min-h-screen bg-[#0b1120] flex justify-center pb-24">
       <div className="w-full max-w-md bg-white rounded-3xl shadow-2xl overflow-hidden mt-6">
         <div className="flex items-center gap-3 p-4 border-b">
-          {content.lpProfile?.[0] ? (
+          {profileImage ? (
             <img
-              src={content.lpProfile[0]}
-              alt={content.partnerNamelp || "Partner"}
+              src={profileImage}
+              alt={content.partnerNamelp || "UjustBe"}
               className="w-10 h-10 rounded-full object-cover"
               onError={(event) => {
                 event.currentTarget.style.display = "none";
@@ -73,19 +108,26 @@ export default function ContentDetails() {
               }}
             />
           ) : null}
+          {showUjustBeLogo ? (
+            <img
+              src="/ujustbe-logo.svg"
+              alt="UjustBe"
+              className="h-10 w-10 rounded-full border border-slate-200 bg-white p-1 object-contain"
+            />
+          ) : null}
           <div
             className={`${
-              content.lpProfile?.[0] ? "hidden" : "flex"
+              profileImage || showUjustBeLogo ? "hidden" : "flex"
             } h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-slate-500`}
           >
             <User size={18} />
           </div>
           <div>
             <p className="text-sm font-semibold text-gray-800">
-              {content.partnerNamelp || "Partner"}
+              {content.partnerNamelp || "UjustBe"}
             </p>
             <p className="text-xs text-gray-400">
-              {content.partnerDesig || "Profile unavailable"}
+              {partnerTypeLabel}
             </p>
           </div>
         </div>
@@ -100,11 +142,33 @@ export default function ContentDetails() {
               className="w-full max-h-[500px] object-cover"
               src={mediaUrl}
             />
+          ) : isAudioFormat ? (
+            <div className="min-h-[220px] p-6 bg-gradient-to-br from-slate-900 to-indigo-950 text-white flex flex-col items-center justify-center gap-4">
+              <div className="h-14 w-14 rounded-full bg-white/10 border border-white/20 flex items-center justify-center">
+                <Music size={24} />
+              </div>
+              <audio
+                ref={audioRef}
+                controls
+                autoPlay
+                className="w-full max-w-md"
+                src={mediaUrl}
+              />
+            </div>
+          ) : isTextFormat ? (
+            <div className="min-h-[280px] p-5 bg-gradient-to-br from-slate-50 to-indigo-50/60 text-slate-800 overflow-auto">
+              <div
+                className="rounded-2xl border border-indigo-100 bg-white p-5 shadow-sm prose prose-sm max-w-none prose-headings:mt-0 prose-headings:text-slate-800 prose-p:text-slate-700 prose-p:leading-7 prose-li:leading-7 prose-strong:text-slate-800"
+                dangerouslySetInnerHTML={{
+                  __html: textContentHtml || "<p>No text content added.</p>",
+                }}
+              />
+            </div>
           ) : (
             <div className="relative min-h-[280px] bg-slate-100">
-              {content.Thumbnail?.[0] ? (
+              {imageUrl ? (
                 <img
-                  src={content.Thumbnail[0]}
+                  src={imageUrl}
                   alt={content.contentName || "Content thumbnail"}
                   className="w-full max-h-[500px] object-cover"
                   onError={(event) => {
@@ -115,12 +179,12 @@ export default function ContentDetails() {
               ) : null}
               <div
                 className={`${
-                  content.Thumbnail?.[0] ? "hidden" : "flex"
+                  imageUrl ? "hidden" : "flex"
                 } absolute inset-0 items-center justify-center bg-gradient-to-br from-slate-100 to-slate-200 text-slate-500`}
               >
                 <div className="flex flex-col items-center gap-3">
                   <ImageOff size={36} />
-                  <span className="text-sm font-medium">No image available</span>
+                  <span className="text-sm font-medium">Media preview unavailable</span>
                 </div>
               </div>
             </div>
@@ -147,7 +211,9 @@ export default function ContentDetails() {
             {content.contentName}
           </h2>
 
-          <p className="text-sm text-gray-600 mb-4">{content.contDiscription}</p>
+          {!isTextFormat ? (
+            <p className="text-sm text-gray-600 mb-4">{content.contDiscription}</p>
+          ) : null}
 
           <div className="flex flex-wrap gap-2 mb-4">
             {content.inputTag?.map((tag, index) => (
@@ -178,10 +244,6 @@ export default function ContentDetails() {
                 {content.totallike || 0}
               </button>
             </div>
-
-            <span className="font-semibold text-indigo-600">
-              CP {content.totalCp || 0}
-            </span>
           </div>
         </div>
       </div>

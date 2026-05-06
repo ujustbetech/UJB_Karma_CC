@@ -11,6 +11,7 @@ import FormField from "@/components/ui/FormField";
 import RadioGroup from "@/components/ui/RadioGroup";
 import TagsInput from "@/components/ui/TagsInput";
 import Checkbox from "@/components/ui/Checkbox";
+import RichEditor from "@/components/ui/RichEditor";
 import { useToast } from "@/components/ui/ToastProvider";
 import { useAdminSession } from "@/hooks/useAdminSession";
 import {
@@ -41,6 +42,7 @@ export default function AddContentPage() {
   const [contentFormat, setContentFormat] = useState("");
   const [contentName, setContentName] = useState("");
   const [contDiscription, setContDiscription] = useState("");
+  const [textContent, setTextContent] = useState("");
   const [contentCategoryId, setContentCategoryId] = useState("");
   const [contentCategoryName, setContentCategoryName] = useState("");
   const [ownershipType, setOwnershipType] = useState("UjustBe");
@@ -59,6 +61,15 @@ export default function AddContentPage() {
   const normalizedFormat = String(contentFormat || "").trim().toLowerCase();
   const isImageFormat = normalizedFormat === "image";
   const isVideoFormat = normalizedFormat === "video";
+  const isTextFormat = normalizedFormat === "text";
+
+  const isRichTextEmpty = (value) =>
+    String(value || "")
+      .replace(/<[^>]*>/g, "")
+      .replace(/&nbsp;/g, " ")
+      .trim().length === 0;
+
+  const hasErrors = Object.keys(errors).length > 0;
 
   useEffect(() => {
     fetchContentReferenceData()
@@ -114,6 +125,7 @@ export default function AddContentPage() {
     setContentFormat("");
     setContentName("");
     setContDiscription("");
+    setTextContent("");
     setContentCategoryId("");
     setContentCategoryName("");
     setOwnershipType("UjustBe");
@@ -134,21 +146,25 @@ export default function AddContentPage() {
 
   const buildFormData = () => ({
     contentCategoryId,
-    contentFiles: mainFile ? [mainFile] : [],
+    contentFiles: isTextFormat ? [] : (mainFile ? [mainFile] : []),
     contentFormat,
     contentName,
     contentType,
     contDiscription,
     ownershipType,
     parternameId,
-    thumbnailFiles: isImageFormat ? [] : (thumbnailFile ? [thumbnailFile] : []),
+    thumbnailFiles: isImageFormat || isTextFormat ? [] : (thumbnailFile ? [thumbnailFile] : []),
   });
 
   useEffect(() => {
-    if (!isImageFormat) return;
+    if (!(isImageFormat || isTextFormat)) return;
     setThumbnailFile(null);
     setThumbnailPreview("");
-  }, [isImageFormat]);
+    if (isTextFormat) {
+      setMainFile(null);
+      setMainPreview("");
+    }
+  }, [isImageFormat, isTextFormat]);
 
   const handleSave = async (status) => {
     const formData = buildFormData();
@@ -161,6 +177,16 @@ export default function AddContentPage() {
 
     setErrors(nextErrors);
     if (Object.keys(nextErrors).length > 0) {
+      return;
+    }
+
+    if (isTextFormat && isRichTextEmpty(contDiscription)) {
+      setErrors((current) => ({ ...current, contDiscription: "Description is required for text content" }));
+      return;
+    }
+
+    if (isTextFormat && isRichTextEmpty(textContent)) {
+      setErrors((current) => ({ ...current, textContent: "Content text is required" }));
       return;
     }
 
@@ -184,7 +210,7 @@ export default function AddContentPage() {
       if (status !== "draft") {
         const contentMaxMb = isVideoFormat ? VIDEO_MAX_MB : DEFAULT_CONTENT_MAX_MB;
         const contentSizeError = validateFileSizes(formData.contentFiles, contentMaxMb);
-        const thumbnailSizeError = isImageFormat
+        const thumbnailSizeError = isImageFormat || isTextFormat
           ? null
           : validateFileSizes(formData.thumbnailFiles, THUMBNAIL_MAX_MB);
         if (contentSizeError || thumbnailSizeError) {
@@ -193,8 +219,8 @@ export default function AddContentPage() {
 
         setUploading(true);
         [contentFileImages, Thumbnail] = await Promise.all([
-          uploadContentFiles(formData.contentFiles, setProgress),
-          isImageFormat ? Promise.resolve([]) : uploadContentFiles(formData.thumbnailFiles, setProgress),
+          isTextFormat ? Promise.resolve([]) : uploadContentFiles(formData.contentFiles, setProgress),
+          isImageFormat || isTextFormat ? Promise.resolve([]) : uploadContentFiles(formData.thumbnailFiles, setProgress),
         ]);
       }
 
@@ -209,6 +235,7 @@ export default function AddContentPage() {
         ownershipType,
         parternameId: ownershipType === "Partner" ? parternameId : "",
         contDiscription,
+        textContentHtml: isTextFormat ? textContent : "",
         contentCategoryId,
         contentCategoryName,
         partnerDesig: ownershipType === "Partner" ? partnerDesig : "",
@@ -241,14 +268,25 @@ export default function AddContentPage() {
       <Card className="space-y-6">
         <Text variant="h1">Add Content</Text>
 
+        {hasErrors ? (
+          <div className="rounded-xl border border-red-300 bg-red-50 px-4 py-3 text-red-700">
+            <p className="text-sm font-semibold">Please fix the highlighted fields before submitting.</p>
+          </div>
+        ) : null}
+
         <div className="grid gap-4 md:grid-cols-2">
           <FormField label="Content Name" error={errors.contentName} required>
-            <Input value={contentName} onChange={(e) => setContentName(e.target.value)} />
+            <Input
+              value={contentName}
+              error={Boolean(errors.contentName)}
+              onChange={(e) => setContentName(e.target.value)}
+            />
           </FormField>
 
           <FormField label="Content Type" error={errors.contentType} required>
             <Select
               value={contentType}
+              error={Boolean(errors.contentType)}
               onChange={setContentType}
               options={CONTENT_TYPES.map((value) => ({ label: value, value }))}
             />
@@ -257,6 +295,7 @@ export default function AddContentPage() {
           <FormField label="Content Format" error={errors.contentFormat} required>
             <Select
               value={contentFormat}
+              error={Boolean(errors.contentFormat)}
               onChange={setContentFormat}
               options={[
                 { label: "Select format", value: "" },
@@ -268,6 +307,7 @@ export default function AddContentPage() {
           <FormField label="Category" error={errors.contentCategoryId} required>
             <Select
               value={contentCategoryId}
+              error={Boolean(errors.contentCategoryId)}
               onChange={(value) => {
                 setContentCategoryId(value);
                 const selected = categories.find((item) => item.id === value);
@@ -298,6 +338,7 @@ export default function AddContentPage() {
           <FormField label="Partner" error={errors.parternameId} required>
             <Select
               value={parternameId}
+              error={Boolean(errors.parternameId)}
               onChange={setPartnerFromDetails}
               options={partnerOptions}
             />
@@ -307,10 +348,19 @@ export default function AddContentPage() {
         <FormField label="Description" error={errors.contDiscription} required>
           <Textarea
             value={contDiscription}
+            error={Boolean(errors.contDiscription)}
             onChange={(e) => setContDiscription(e.target.value)}
             rows={5}
           />
         </FormField>
+
+        {isTextFormat ? (
+          <FormField label="Content Text" error={errors.textContent} required>
+            <div className={errors.textContent ? "rounded-lg border border-red-400 p-1" : ""}>
+              <RichEditor value={textContent} onChange={setTextContent} />
+            </div>
+          </FormField>
+        ) : null}
 
         <FormField label="Tags">
           <TagsInput value={tags} onChange={setTags} />
@@ -326,10 +376,12 @@ export default function AddContentPage() {
           </FormField>
         </div>
 
+      {!isTextFormat ? (
       <div className="grid gap-4 md:grid-cols-2">
           <FormField label="Main File" error={errors.contentFiles} required={ownershipType !== "draft"}>
             <Input
               type="file"
+              error={Boolean(errors.contentFiles)}
               accept={isImageFormat ? "image/*" : isVideoFormat ? "video/*" : undefined}
               onChange={(e) => {
                 const file = e.target.files?.[0] || null;
@@ -344,6 +396,7 @@ export default function AddContentPage() {
             <FormField label="Thumbnail" error={errors.thumbnailFiles} required={ownershipType !== "draft"}>
               <Input
                 type="file"
+                error={Boolean(errors.thumbnailFiles)}
                 accept="image/*"
                 onChange={(e) => {
                   const file = e.target.files?.[0] || null;
@@ -355,6 +408,7 @@ export default function AddContentPage() {
             </FormField>
           ) : null}
         </div>
+      ) : null}
 
         <Checkbox
           checked={switchValue}

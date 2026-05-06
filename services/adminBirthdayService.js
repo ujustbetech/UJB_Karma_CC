@@ -125,3 +125,24 @@ export async function updateBirthdayEntry(id, payload) {
 
   await readApiResponse(response, "Failed to update birthday entry");
 }
+
+export async function fetchAllUserBirthdays() {
+  const response = await fetch("/api/admin/birthday/users", {
+    method: "GET",
+    credentials: "include",
+  });
+
+  const data = await readApiResponse(response, "Failed to load birthday users");
+  return data.users || [];
+}
+
+export async function updateBirthdayStatus(id, status) {
+  const response = await fetch(`/api/admin/birthday/${encodeURIComponent(id)}/status`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ status }),
+  });
+
+  await readApiResponse(response, "Failed to update birthday status");
+}

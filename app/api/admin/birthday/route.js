@@ -6,7 +6,7 @@ import { COLLECTIONS } from "@/lib/utility_collection";
 import {
   fetchBirthdayEntries,
   saveBirthdayEntry,
-} from "@/lib/birthday/adminBirthdayApiWorkflow.mjs";
+} from "@/lib/birthday/adminBirthdayApiWorkflow";
 
 function validateAdmin(req) {
   const auth = requireAdminSession(req, hasAdminAccess);
@@ -33,7 +33,10 @@ export async function GET(req) {
   if (!guard.ok) return guard.response;
 
   try {
-    const entries = await fetchBirthdayEntries(adminDb, COLLECTIONS.birthdayCanva);
+    const { searchParams } = new URL(req.url);
+    const status = searchParams.get("status");
+
+    const entries = await fetchBirthdayEntries(adminDb, COLLECTIONS.userDetail, status);
     return NextResponse.json({ entries });
   } catch (error) {
     return NextResponse.json(
@@ -49,7 +52,7 @@ export async function POST(req) {
 
   try {
     const body = await req.json();
-    await saveBirthdayEntry(adminDb, COLLECTIONS.birthdayCanva, body);
+    await saveBirthdayEntry(adminDb, COLLECTIONS.userDetail, body);
     return NextResponse.json({ success: true });
   } catch (error) {
     return NextResponse.json(

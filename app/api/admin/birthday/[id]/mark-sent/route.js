@@ -3,7 +3,7 @@ import { requireAdminSession } from "@/lib/auth/adminRequestAuth.mjs";
 import { hasAdminAccess } from "@/lib/auth/accessControl";
 import { adminDb } from "@/lib/firebase/firebaseAdmin";
 import { COLLECTIONS } from "@/lib/utility_collection";
-import { markBirthdayMessageSent } from "@/lib/birthday/adminBirthdayApiWorkflow.mjs";
+import { markBirthdayMessageSent } from "@/lib/birthday/adminBirthdayApiWorkflow";
 
 function validateAdmin(req) {
   const auth = requireAdminSession(req, hasAdminAccess);
@@ -27,11 +27,12 @@ export async function PATCH(req, { params }) {
   if (!guard.ok) return guard.response;
 
   try {
+    const { id } = await params;
     const body = await req.json().catch(() => ({}));
     await markBirthdayMessageSent(
       adminDb,
-      COLLECTIONS.birthdayCanva,
-      params?.id,
+      COLLECTIONS.userDetail,
+      id,
       body?.sentDate || ""
     );
     return NextResponse.json({ success: true });

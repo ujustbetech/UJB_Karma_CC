@@ -75,7 +75,7 @@ export const NAV_ITEMS = [
     children: [
       { label: "Dashboard", href: "/admin/birthday" },
       { label: "Birthday List", href: "/admin/birthday/list" },
-      { label: "Add Birthday Canva", href: "/admin/birthday/add" },
+      { label: "Add Canva", href: "/admin/birthday/add" },
     ],
   },
   {
@@ -131,4 +131,3 @@ export const NAV_ITEMS = [
     ],
   },
 ];
-

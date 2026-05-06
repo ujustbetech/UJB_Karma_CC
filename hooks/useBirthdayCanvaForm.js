@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 
 import {
   checkBirthdayEntryExists,
@@ -9,9 +10,10 @@ import { uploadBirthdayImage } from "@/services/birthdayImageUploadService";
 import { getBirthdayDobInfo } from "@/services/birthdayShared";
 
 export function useBirthdayCanvaForm(toast) {
+  const searchParams = useSearchParams();
   const [users, setUsers] = useState([]);
-  const [search, setSearch] = useState("");
-  const [selectedUser, setSelectedUser] = useState("");
+  const [search, setSearch] = useState(searchParams.get("name") || "");
+  const [selectedUser, setSelectedUser] = useState(searchParams.get("id") || "");
   const [dob, setDob] = useState("");
   const [image, setImage] = useState(null);
   const [preview, setPreview] = useState("");
@@ -112,7 +114,7 @@ export function useBirthdayCanvaForm(toast) {
         imageUrl,
       });
 
-      toast?.success("Birthday creative saved successfully");
+      toast?.success("Birthday creative saved successfully (Pending Approval)");
       resetForm();
     } catch (error) {
       console.error(error);

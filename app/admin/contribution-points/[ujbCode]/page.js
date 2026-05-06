@@ -14,7 +14,11 @@ const CATEGORY_OPTIONS = ["All", "R", "H", "W"];
 
 export default function AdminContributionPointDetailsPage() {
   const params = useParams();
-  const ujbCode = params?.ujbCode;
+  const ujbCode = useMemo(() => {
+    const raw = params?.ujbCode;
+    const value = Array.isArray(raw) ? raw[0] : raw;
+    return String(value || "").trim();
+  }, [params]);
   const [summary, setSummary] = useState({
     user: null,
     activities: [],
@@ -25,7 +29,7 @@ export default function AdminContributionPointDetailsPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!ujbCode) {
+    if (!ujbCode || ujbCode === "undefined" || ujbCode === "null") {
       setLoading(false);
       return;
     }

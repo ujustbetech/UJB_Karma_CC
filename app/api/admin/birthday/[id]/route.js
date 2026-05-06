@@ -7,7 +7,7 @@ import {
   deleteBirthdayEntry,
   fetchBirthdayEntry,
   updateBirthdayEntry,
-} from "@/lib/birthday/adminBirthdayApiWorkflow.mjs";
+} from "@/lib/birthday/adminBirthdayApiWorkflow";
 import { parseDobInput } from "@/services/birthdayShared";
 
 function validateAdmin(req) {
@@ -32,7 +32,8 @@ export async function GET(req, { params }) {
   if (!guard.ok) return guard.response;
 
   try {
-    const entry = await fetchBirthdayEntry(adminDb, COLLECTIONS.birthdayCanva, params?.id);
+    const { id } = await params;
+    const entry = await fetchBirthdayEntry(adminDb, COLLECTIONS.userDetail, id);
     if (!entry) {
       return NextResponse.json({ message: "Birthday record not found" }, { status: 404 });
     }
@@ -50,8 +51,9 @@ export async function PATCH(req, { params }) {
   if (!guard.ok) return guard.response;
 
   try {
+    const { id } = await params;
     const body = await req.json();
-    await updateBirthdayEntry(adminDb, COLLECTIONS.birthdayCanva, params?.id, {
+    await updateBirthdayEntry(adminDb, COLLECTIONS.userDetail, id, {
       ...body,
       dobTimestamp: body?.dob ? parseDobInput(body.dob) : undefined,
     });
@@ -69,7 +71,8 @@ export async function DELETE(req, { params }) {
   if (!guard.ok) return guard.response;
 
   try {
-    await deleteBirthdayEntry(adminDb, COLLECTIONS.birthdayCanva, params?.id);
+    const { id } = await params;
+    await deleteBirthdayEntry(adminDb, COLLECTIONS.userDetail, id);
     return NextResponse.json({ success: true });
   } catch (error) {
     return NextResponse.json(
