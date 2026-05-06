@@ -34,6 +34,12 @@ function LoadingState() {
   );
 }
 
+const TAB_ITEMS = [
+  { key: "overview", label: "Overview" },
+  { key: "payments", label: "Payments" },
+  { key: "followups", label: "Followups" },
+];
+
 function getPaymentIdentity(payment, index = 0) {
   return (
     payment?.paymentId ||
@@ -155,7 +161,6 @@ export default function AdminReferralDetailPage() {
     cosmoMentor: Number(referralData?.paidToCosmoMentor || 0),
   };
   const ujbBalance = Number(referralData?.ujbBalance || 0);
-
   const mapName = (name) => {
     if (name === "Orbiter") return orbiter?.name || "Orbiter";
     if (name === "OrbiterMentor") return orbiter?.mentorName || "Orbiter Mentor";
@@ -368,37 +373,69 @@ export default function AdminReferralDetailPage() {
   }
 
   return (
-    <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <Text as="h1" variant="h1">
-            Referral {referralData.referralId || referralData.id}
-          </Text>
-          <Text variant="muted">
-            Admin workflow for status, deal progress, payments, and follow-ups.
-          </Text>
+    <div className="space-y-4 p-3 md:p-4 lg:p-5">
+      <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+          <div className="space-y-2">
+            <div>
+              <Text as="h2" variant="h2">
+                Referral Workspace
+              </Text>
+              <Text variant="muted">
+                Manage status, deal progression, payouts, and followups in one place.
+              </Text>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-medium text-slate-700">
+                ID: {referralData?.referralId || referralData?.id || "-"}
+              </span>
+              <span className="rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-medium text-blue-700">
+                Status: {formState?.dealStatus || "Pending"}
+              </span>
+              <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700">
+                Payments: {safePayments.length}
+              </span>
+              <span className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-medium text-amber-700">
+                Followups: {Array.isArray(followups) ? followups.length : 0}
+              </span>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-end">
+            <Button
+              variant="secondary"
+              onClick={() => router.push("/admin/referral/manage")}
+            >
+              Back to Manage
+            </Button>
+          </div>
         </div>
-        <Button variant="secondary" onClick={() => router.push("/admin/referral/manage")}>
-          Back
-        </Button>
       </div>
 
-      <div className="flex gap-2">
-        <Button variant={activeTab === "overview" ? "primary" : "ghost"} onClick={() => setActiveTab("overview")}>
-          Overview
-        </Button>
-        <Button variant={activeTab === "payments" ? "primary" : "ghost"} onClick={() => setActiveTab("payments")}>
-          Payments
-        </Button>
-        <Button variant={activeTab === "followups" ? "primary" : "ghost"} onClick={() => setActiveTab("followups")}>
-          Followups
-        </Button>
+      <div className="sticky top-2 z-20">
+        <div className="inline-flex w-full rounded-2xl border border-slate-200 bg-white p-1 shadow-sm md:w-auto">
+          {TAB_ITEMS.map((tab) => (
+            <button
+              key={tab.key}
+              type="button"
+              onClick={() => setActiveTab(tab.key)}
+              className={`flex-1 rounded-xl px-3 py-1.5 text-sm font-medium transition md:flex-none ${
+                activeTab === tab.key
+                  ? "bg-slate-900 text-white shadow-sm"
+                  : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       {activeTab === "overview" ? (
-        <>
-          <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
-            <Card>
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+            <Card className="rounded-2xl border border-slate-200 bg-white shadow-sm">
               <StatusCard
                 formState={formState}
                 setFormState={setFormState}
@@ -417,7 +454,7 @@ export default function AdminReferralDetailPage() {
               ) : null}
             </Card>
 
-            <Card>
+            <Card className="rounded-2xl border border-slate-200 bg-white shadow-sm">
               <ReferralInfoCard
                 referralData={referralData}
                 onUploadLeadDoc={uploadLeadDoc}
@@ -425,32 +462,29 @@ export default function AdminReferralDetailPage() {
               />
             </Card>
 
-            <Card>
+            <Card className="rounded-2xl border border-slate-200 bg-white shadow-sm">
               <ServiceDetailsCard
                 referralData={referralData}
                 dealLogs={dealLogs}
                 onSaveDealLog={handleSaveDealLog}
               />
             </Card>
-          </div>
-
-          <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
-            <Card>
+            <Card className="rounded-2xl border border-slate-200 bg-white shadow-sm">
               <OrbiterDetailsCard orbiter={orbiter} referralData={referralData} />
             </Card>
-            <Card>
+            <Card className="rounded-2xl border border-slate-200 bg-white shadow-sm">
               <CosmoOrbiterDetailsCard
                 cosmoOrbiter={cosmoOrbiter}
                 referralData={referralData}
               />
             </Card>
           </div>
-        </>
+        </div>
       ) : null}
 
       {activeTab === "payments" ? (
-        <div className="space-y-6">
-          <Card>
+        <div className="space-y-4">
+          <Card className="rounded-2xl border border-slate-200 bg-white shadow-sm">
             <PaymentSummary
               agreedAmount={agreedAmount}
               cosmoPaid={cosmoPaid}
@@ -462,7 +496,7 @@ export default function AdminReferralDetailPage() {
             />
           </Card>
 
-          <Card>
+          <Card className="rounded-2xl border border-slate-200 bg-white shadow-sm">
             <PaymentHistory
               payments={safePayments}
               mapName={mapName}
@@ -473,8 +507,8 @@ export default function AdminReferralDetailPage() {
       ) : null}
 
       {activeTab === "followups" ? (
-        <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
-          <Card>
+        <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+          <Card className="rounded-2xl border border-slate-200 bg-white shadow-sm">
             <FollowupForm
               form={followupForm}
               setForm={setFollowupForm}
@@ -485,7 +519,7 @@ export default function AdminReferralDetailPage() {
             />
           </Card>
 
-          <Card>
+          <Card className="rounded-2xl border border-slate-200 bg-white shadow-sm">
             <FollowupList
               followups={followups}
               onEdit={(index) => {

@@ -25,6 +25,7 @@ import {
 
 import { useReferral } from "@/hooks/useReferral";
 import { useToast } from "@/components/ui/ToastProvider";
+import { fetchCosmOrbiterDetails } from "@/services/cosmorbitersService";
 import {
   getFirestore,
   doc,
@@ -108,6 +109,8 @@ export default function ReferralDetails() {
   const [referralCount, setReferralCount] = useState(0);
   const [isFavorite, setIsFavorite] = useState(false);
   const [existingReferrals, setExistingReferrals] = useState([]);
+  const [businessLoading, setBusinessLoading] = useState(true);
+  const [businessLoadError, setBusinessLoadError] = useState("");
   const isSelfReferralBlocked =
     Boolean(currentUserUjbCode) &&
     Boolean(userDetails?.ujbCode) &&
@@ -144,59 +147,38 @@ export default function ReferralDetails() {
     if (!id) return;
 
     const fetchBusiness = async () => {
-      const snap = await getDoc(doc(db, COLLECTIONS.userDetail, id));
-      if (!snap.exists()) return;
+      setBusinessLoading(true);
+      setBusinessLoadError("");
 
-      const data = snap.data();
+      try {
+        const details = await fetchCosmOrbiterDetails(id);
 
-      setUserDetails({
-        name: data.Name || "",
-        email: data.Email || "",
-        phone: data.MobileNo || "",
-        ujbCode: data.UJBCode || "",
-        businessName: data.BusinessName || "",
-        businessDetails: data.BusinessHistory || "",
-        profilePic: data.ProfilePhotoURL || "",
-        logo: data.BusinessLogo || "",
-        Locality: data.Locality || "",
-        tagline: data.TagLine || "",
-        category1: data.Category1 || "",
-        category2: data.Category2 || "",
-        businessStage: data.BusinessStage || "",
-        professionType: data.ProfessionType || "",
-        skills: data.Skills || [],
-        languages: normalizeArrayField(data.LanguagesKnown),
-        mentorName: data.MentorName || "",
-        mentorPhone: data.MentorPhone || "",
-        subscriptionStatus: data.subscription?.status || null,
-        subscriptionStart: data.subscription?.startDate || null,
-        website: data.Website || data.website || "",
-      });
+        if (!details?.business) {
+          setBusinessLoadError("CosmOrbiter profile not found.");
+          setUserDetails(null);
+          setServices([]);
+          setProducts([]);
+          return;
+        }
 
-      const rawServices = Object.values(data.services || []);
-      const rawProducts = Object.values(data.products || []);
-
-      setServices(
-        rawServices.map((s, index) => ({
-          id: `service_${index}`,
-          label: s.name || "",
-          description: s.description || "",
-          imageURL: getCoverImage(s),
-          type: "service",
-          raw: s,
-        }))
-      );
-
-      setProducts(
-        rawProducts.map((p, index) => ({
-          id: `product_${index}`,
-          label: p.name || "",
-          description: p.description || "",
-          imageURL: getCoverImage(p),
-          type: "product",
-          raw: p,
-        }))
-      );
+        setUserDetails(details.business);
+        setServices(Array.isArray(details.services) ? details.services : []);
+        setProducts(Array.isArray(details.products) ? details.products : []);
+        setOrbiterDetails(details.orbiter || null);
+        setIsFavorite(Boolean(details.isFavorite));
+        setReferralCount(Number(details.referralCount || 0));
+        setExistingReferrals(Array.isArray(details.existingReferrals) ? details.existingReferrals : []);
+      } catch (error) {
+        console.error("Failed to load CosmOrbiter profile:", error);
+        setUserDetails(null);
+        setServices([]);
+        setProducts([]);
+        setBusinessLoadError(
+          error?.message || "Unable to load this CosmOrbiter profile."
+        );
+      } finally {
+        setBusinessLoading(false);
+      }
     };
 
     fetchBusiness();
@@ -206,19 +188,23 @@ export default function ReferralDetails() {
     if (!currentUserUjbCode) return;
 
     const fetchOrbiter = async () => {
-      const snap = await getDoc(doc(db, COLLECTIONS.userDetail, currentUserUjbCode));
-      if (!snap.exists()) return;
+      try {
+        const snap = await getDoc(doc(db, COLLECTIONS.userDetail, currentUserUjbCode));
+        if (!snap.exists()) return;
 
-      const data = snap.data();
+        const data = snap.data();
 
-      setOrbiterDetails({
-        name: data.Name || "",
-        email: data.Email || "",
-        phone: data.MobileNo || "",
-        ujbCode: data.UJBCode || "",
-        mentorName: data.MentorName || "",
-        mentorPhone: data.MentorPhone || "",
-      });
+        setOrbiterDetails({
+          name: data.Name || "",
+          email: data.Email || "",
+          phone: data.MobileNo || "",
+          ujbCode: data.UJBCode || "",
+          mentorName: data.MentorName || "",
+          mentorPhone: data.MentorPhone || "",
+        });
+      } catch (error) {
+        console.error("Failed to load orbiter details:", error);
+      }
     };
 
     fetchOrbiter();
@@ -353,7 +339,26 @@ export default function ReferralDetails() {
 
   const averageCommission = calculateAverageCommission();
 
-  if (!userDetails) return <BusinessProfileSkeleton />;
+  if (businessLoading) return <BusinessProfileSkeleton />;
+
+  if (!userDetails) {
+    return (
+      <main className="min-h-screen bg-gray-100 p-4">
+        <div className="mx-auto mt-10 max-w-xl rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+          <h2 className="text-xl font-semibold text-slate-900">Unable to open profile</h2>
+          <p className="mt-2 text-sm text-slate-600">
+            {businessLoadError || "This profile is not available right now."}
+          </p>
+          <button
+            onClick={() => router.back()}
+            className="mt-4 rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white"
+          >
+            Go Back
+          </button>
+        </div>
+      </main>
+    );
+  }
 
   return (
     <main className="min-h-screen bg-gray-100 relative">

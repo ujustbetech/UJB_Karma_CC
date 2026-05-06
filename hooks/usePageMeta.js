@@ -31,8 +31,15 @@ export function usePageMeta() {
     const monthlyMeetingMatch = pathname?.match(/^\/admin\/monthlymeeting\/([^/]+)$/);
     const dewdropMatch = pathname?.match(/^\/admin\/dewdrop\/([^/]+)$/);
     const todoViewMatch = pathname?.match(/^\/admin\/tasks\/([^/]+)$/);
+    const referralDetailMatch = pathname?.match(/^\/admin\/referral\/([^/]+)$/);
 
-    if (!prospectMatch && !monthlyMeetingMatch && !dewdropMatch && !todoViewMatch) {
+    if (
+      !prospectMatch &&
+      !monthlyMeetingMatch &&
+      !dewdropMatch &&
+      !todoViewMatch &&
+      !referralDetailMatch
+    ) {
       setDynamicTitle("");
       return () => {
         isMounted = false;
@@ -158,6 +165,48 @@ export function usePageMeta() {
       };
 
       loadTodoTitle();
+    }
+
+    if (referralDetailMatch) {
+      const loadReferralTitle = async () => {
+        try {
+          const referralDocId = decodeURIComponent(referralDetailMatch[1]);
+          const res = await fetch(`/api/admin/referrals/${referralDocId}`, {
+            credentials: "include",
+          });
+          const data = await res.json().catch(() => ({}));
+
+          if (!res.ok) {
+            throw new Error(data.message || "Failed to load referral");
+          }
+
+          if (isMounted) {
+            const referralId = String(data?.referral?.referralId || "").trim();
+            const orbiterName = String(
+              data?.orbiter?.name ||
+              data?.referral?.orbiter?.name ||
+              "Orbiter"
+            ).trim();
+            const cosmoName = String(
+              data?.cosmoOrbiter?.name ||
+              data?.referral?.cosmoOrbiter?.name ||
+              "CosmoOrbiter"
+            ).trim();
+
+            setDynamicTitle(
+              referralId
+                ? `${referralId} passed by ${orbiterName} to ${cosmoName}`
+                : `Referral passed by ${orbiterName} to ${cosmoName}`
+            );
+          }
+        } catch {
+          if (isMounted) {
+            setDynamicTitle("Referral Details");
+          }
+        }
+      };
+
+      loadReferralTitle();
     }
 
     return () => {

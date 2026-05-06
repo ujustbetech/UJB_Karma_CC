@@ -41,6 +41,7 @@ export default function ServiceDetailsCard({
     referralData?.dealLogs?.some(
       (log) => log.dealStatus === "Agreed % Transferred to UJustBe"
     );
+  const isDealWon = String(referralData?.dealStatus || "").trim() === "Deal Won";
 
   /* =========================
      📌 LATEST DEAL LOG
@@ -93,6 +94,11 @@ export default function ServiceDetailsCard({
   ========================= */
 
   const handleSaveDeal = () => {
+    if (!isDealWon) {
+      alert("Set deal status to 'Deal Won' before saving deal calculation.");
+      return;
+    }
+
     if (isDealLocked) {
       alert(
         "Deal is locked. Agreed percentage already transferred to UJustBe."
@@ -217,11 +223,20 @@ export default function ServiceDetailsCard({
       {/* Save Button */}
       {!isDealLocked && (
         <div className="mt-4">
-          <Button variant="primary" onClick={handleSaveDeal}>
+          <Button
+            variant="primary"
+            onClick={handleSaveDeal}
+            disabled={!isDealWon}
+          >
             {dealLogs?.length
               ? "Update Deal Calculation"
               : "Save Deal Calculation"}
           </Button>
+          {!isDealWon && (
+            <Text variant="caption" className="block mt-2 text-slate-500">
+              Save is enabled only when deal status is "Deal Won".
+            </Text>
+          )}
         </div>
       )}
 
