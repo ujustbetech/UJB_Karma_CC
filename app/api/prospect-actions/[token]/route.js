@@ -104,6 +104,30 @@ export async function GET(req, { params }) {
     }
 
     if (action === "choose_to_enroll_need_time") {
+      const existingChoiceLogs = Array.isArray(prospect.authenticChoiceLogs)
+        ? prospect.authenticChoiceLogs
+        : [];
+      await prospectRef.set(
+        {
+          authenticChoiceLogs: [
+            ...existingChoiceLogs,
+            {
+              action: "need_time_link_clicked",
+              source: "prospect_email_action",
+              status: "Need some time",
+              previousStatus: String(prospect.status || "No status yet"),
+              note: "",
+              clickedBy: "Prospect (email action)",
+              clickedAt: new Date(),
+            },
+          ],
+          ...buildProspectEngagementUpdate(
+            "Prospect opened Need Some Time note page from email action."
+          ),
+        },
+        { merge: true }
+      );
+
       const noteToken = await issueProspectActionToken(adminDb, {
         prospectId: prospect.id,
         action: "choose_to_enroll_need_time_note",

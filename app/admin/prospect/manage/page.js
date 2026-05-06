@@ -44,7 +44,7 @@ export default function ProspectsListingPage() {
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [orbiterFilter, setOrbiterFilter] = useState("");
-  const [statusFilter, setStatusFilter] = useState("Active");
+  const [statusFilter, setStatusFilter] = useState("");
 
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [prospectToDelete, setProspectToDelete] = useState(null);
@@ -71,6 +71,10 @@ export default function ProspectsListingPage() {
   }, [search]);
 
   const getProspectStage = (prospect) => {
+    if (String(prospect.currentStage || "").trim()) {
+      return { stage: String(prospect.currentStage).trim(), progress: 35 };
+    }
+
     if (prospect.status === "Choose to enroll") {
       return { stage: "Enrolled", progress: 100 };
     }
@@ -246,7 +250,7 @@ export default function ProspectsListingPage() {
             onClick={() => {
               setSearch("");
               setOrbiterFilter("");
-              setStatusFilter("Active");
+              setStatusFilter("");
             }}
           >
             <div className="flex items-center gap-3">
@@ -330,6 +334,8 @@ export default function ProspectsListingPage() {
                     value={statusFilter}
                     onChange={setStatusFilter}
                     options={[
+                      { label: "All", value: "" },
+                      { label: "Draft", value: "Draft" },
                       { label: "Active", value: "Active" },
                       { label: "Archive", value: "Archive" },
                     ]}
@@ -341,7 +347,7 @@ export default function ProspectsListingPage() {
                   onClick={() => {
                     setSearch("");
                     setOrbiterFilter("");
-                    setStatusFilter("Active");
+                    setStatusFilter("");
                   }}
                 >
                   Clear

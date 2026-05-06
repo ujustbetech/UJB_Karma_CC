@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { adminDb, getFirebaseAdminInitError } from "@/lib/firebase/firebaseAdmin";
 import { consumeProspectActionToken } from "@/lib/prospectAutomation/actionTokens.mjs";
-import { createRuleTodoIfMissing } from "@/lib/prospectAutomation/service.mjs";
 import { sendAuthenticChoiceProspectEmail } from "@/lib/prospectAutomation/notifications.mjs";
 import { buildProspectEngagementUpdate } from "@/lib/prospectEngagement";
 import { publicEnv } from "@/lib/config/publicEnv";
@@ -58,6 +57,8 @@ export async function POST(req, { params }) {
         authenticChoiceLogs: [
           ...existingLogs,
           {
+            action: "need_time_note_submitted",
+            source: "prospect_email_action",
             status: "Need some time",
             previousStatus: String(prospect.status || "No status yet"),
             note,
@@ -74,13 +75,6 @@ export async function POST(req, { params }) {
       prospect,
       variantKey: "need_some_time",
       variables: { note },
-    });
-
-    await createRuleTodoIfMissing({
-      db: adminDb,
-      prospect,
-      ruleKey: "need_time_followup_after_button",
-      followUpDate: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
     });
 
     return NextResponse.json({ success: true });

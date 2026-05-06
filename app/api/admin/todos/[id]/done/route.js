@@ -50,6 +50,8 @@ export async function POST(req, { params }) {
     const authResult = getAdminOrError(req);
     if (!authResult.ok) return authResult.response;
 
+    const body = await req.json().catch(() => ({}));
+    const completionNote = String(body?.note || "").trim();
     const { id } = await params;
     const todoRef = buildTodoCollection(dbResult.db).doc(id);
     const todoSnap = await todoRef.get();
@@ -101,6 +103,10 @@ export async function POST(req, { params }) {
         status: "Done",
         completion_date: endTime,
         completion_time: diffMinutes,
+        completion_note: completionNote,
+        discussion_details: [String(todo.discussion_details || "").trim(), completionNote]
+          .filter(Boolean)
+          .join("\n\n"),
         updated_at: endTime,
       },
       { merge: true }

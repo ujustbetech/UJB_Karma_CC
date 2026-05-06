@@ -8,6 +8,7 @@ import { getFallbackJourneyWhatsAppTemplate } from '@/lib/journey/journey_whatsa
 
 const DEFAULT_EVENT_MODE = 'online';
 const MIN_NO_RECORDING_REASON_LENGTH = 10;
+const MIN_RESCHEDULE_REASON_LENGTH = 3;
 const MEETING_LOGS_TEMPLATE_ID = 'meeting_logs';
 const DEFAULT_MEETING_LOGS_TEMPLATE = {
   channels: {
@@ -522,6 +523,10 @@ const Followup = ({ id, data = { comments: [], event: [] } }) => {
       return alert('Enter venue');
     }
 
+    if (rescheduleMode && String(rescheduleReason || '').trim().length < MIN_RESCHEDULE_REASON_LENGTH) {
+      return alert(`Please provide a reschedule reason (minimum ${MIN_RESCHEDULE_REASON_LENGTH} characters).`);
+    }
+
     const formattedEventDate = formatReadableDate(eventDate);
     const newEvent = {
       id: rescheduleMode && latestMeeting
@@ -534,7 +539,7 @@ const Followup = ({ id, data = { comments: [], event: [] } }) => {
       venue: resolvedLocation.venue,
       status: 'Scheduled',
       completed: false,
-      createdAt: latestMeeting?.createdAt || Date.now(),
+      createdAt: rescheduleMode && latestMeeting ? latestMeeting?.createdAt || Date.now() : Date.now(),
       rescheduleHistory: latestMeeting?.rescheduleHistory || [],
       NTMemberName: latestMeeting?.NTMemberName || data.orbiterName || '',
       NTMemberPhone: latestMeeting?.NTMemberPhone || data.orbiterContact || '',

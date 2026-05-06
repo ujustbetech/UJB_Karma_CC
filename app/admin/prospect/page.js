@@ -1,7 +1,5 @@
-"use client";
+import ProspectDashboardPage from "@/components/admin/prospect/ProspectDashboardPage";
 
-import ProspectDashboard from "@/components/admin/prospect/ProspectDashboard";
-
-export default function Page() {
-  return <ProspectDashboard />;
+export default function ProspectDashboardRoute() {
+  return <ProspectDashboardPage />;
 }

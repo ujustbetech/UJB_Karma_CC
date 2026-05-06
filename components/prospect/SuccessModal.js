@@ -2,7 +2,7 @@
 
 import { CheckCircle } from "lucide-react";
 
-export default function SuccessModal({ open, onClose }) {
+export default function SuccessModal({ open, onClose, messageTrigger }) {
   if (!open) return null;
 
   return (
@@ -19,11 +19,15 @@ export default function SuccessModal({ open, onClose }) {
           <CheckCircle className="h-12 w-12 text-green-500" />
 
           <h2 className="text-lg font-semibold text-slate-800">
-            Prospect Added Successfully
+            Prospect Enrolled Successfully
           </h2>
 
           <p className="text-sm text-slate-500">
-            Your prospect has been registered successfully.
+            Your prospect has been enrolled successfully.
+          </p>
+
+          <p className="text-xs text-slate-500">
+            Assessment messaging has been initiated.
           </p>
 
           <button
