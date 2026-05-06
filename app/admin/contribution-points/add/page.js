@@ -20,6 +20,18 @@ export default function ContributionPointAddPage() {
   const [loadingMembers, setLoadingMembers] = useState(false);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
+  const [errors, setErrors] = useState({});
+
+  const getFormErrors = () => {
+    const nextErrors = {};
+    if (!searchName.trim() || !selectedMember) {
+      nextErrors.member = "Please select a member from the search results.";
+    }
+    if (!selectedActivity) {
+      nextErrors.activity = "Please select an activity.";
+    }
+    return nextErrors;
+  };
 
   const loadActivities = async () => {
     if (cpActivities.length > 0) {
@@ -40,6 +52,7 @@ export default function ContributionPointAddPage() {
     setSearchName(value);
     setSelectedMember(null);
     setMessage("");
+    setErrors((current) => ({ ...current, member: "" }));
 
     if (value.trim().length < 2) {
       setSearchResults([]);
@@ -64,12 +77,14 @@ export default function ContributionPointAddPage() {
     setSelectedMember(member);
     setSearchName(member.name);
     setSearchResults([]);
+    setErrors((current) => ({ ...current, member: "" }));
   };
 
   const handleActivityChange = async (event) => {
     const nextId = event.target.value;
     setSelectedActivityId(nextId);
     setMessage("");
+    setErrors((current) => ({ ...current, activity: "" }));
 
     await loadActivities();
 
@@ -83,9 +98,10 @@ export default function ContributionPointAddPage() {
 
   const handleSubmit = async (event) => {
     event.preventDefault();
-
-    if (!selectedMember || !selectedActivity) {
-      setMessage("Please select both a member and an activity.");
+    const nextErrors = getFormErrors();
+    if (Object.keys(nextErrors).length > 0) {
+      setErrors(nextErrors);
+      setMessage("Please fix the form errors before submitting.");
       return;
     }
 
@@ -95,8 +111,12 @@ export default function ContributionPointAddPage() {
     try {
       await assignCpActivityToMember(selectedMember, selectedActivity);
       setMessage("Activity added successfully.");
+      setSearchName("");
+      setSearchResults([]);
+      setSelectedMember(null);
       setSelectedActivityId("");
       setSelectedActivity(null);
+      setErrors({});
     } catch (error) {
       console.error("Failed to assign CP activity", error);
       setMessage(error.message || "Could not add the activity.");
@@ -108,15 +128,28 @@ export default function ContributionPointAddPage() {
   return (
     <div className="space-y-6">
       <div>
-
         <Text variant="muted">
           Assign an active contribution point activity to a member.
         </Text>
       </div>
 
       {message ? (
-        <Card className="border border-orange-200 bg-orange-50 shadow-sm">
-          <Text className="text-orange-700">{message}</Text>
+        <Card
+          className={`border shadow-sm ${
+            message.toLowerCase().includes("success")
+              ? "border-emerald-200 bg-emerald-50"
+              : "border-orange-200 bg-orange-50"
+          }`}
+        >
+          <Text
+            className={
+              message.toLowerCase().includes("success")
+                ? "text-emerald-700"
+                : "text-orange-700"
+            }
+          >
+            {message}
+          </Text>
         </Card>
       ) : null}
 
@@ -130,7 +163,9 @@ export default function ContributionPointAddPage() {
                 value={searchName}
                 onChange={handleSearchChange}
                 placeholder="Type member name"
-                className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-slate-400"
+                className={`w-full rounded-xl border px-4 py-3 text-sm outline-none focus:border-slate-400 ${
+                  errors.member ? "border-rose-300 bg-rose-50" : "border-slate-200"
+                }`}
               />
 
               {searchResults.length > 0 ? (
@@ -153,6 +188,7 @@ export default function ContributionPointAddPage() {
             </div>
 
             {loadingMembers ? <Text variant="caption">Searching members...</Text> : null}
+            {errors.member ? <Text className="text-xs text-rose-600">{errors.member}</Text> : null}
           </div>
 
           <div className="grid gap-4 md:grid-cols-2">
@@ -183,15 +219,20 @@ export default function ContributionPointAddPage() {
               value={selectedActivityId}
               onChange={handleActivityChange}
               onFocus={handleFocusActivity}
-              className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none focus:border-slate-400"
+              className={`w-full rounded-xl border bg-white px-4 py-3 text-sm outline-none focus:border-slate-400 ${
+                errors.activity ? "border-rose-300 bg-rose-50" : "border-slate-200"
+              }`}
             >
               <option value="">Select Activity</option>
               {cpActivities.map((activity) => (
                 <option key={activity.id} value={activity.id}>
-                  {activity.activityName}
+                  {activity.activityName} ({activity.activityNo || activity.id})
                 </option>
               ))}
             </select>
+            {errors.activity ? (
+              <Text className="text-xs text-rose-600">{errors.activity}</Text>
+            ) : null}
           </div>
 
           <div className="grid gap-4 md:grid-cols-3">
@@ -211,6 +252,16 @@ export default function ContributionPointAddPage() {
                 type="text"
                 readOnly
                 value={selectedActivity?.points ?? ""}
+                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Text variant="caption">Mentor Points</Text>
+              <input
+                type="text"
+                readOnly
+                value={selectedActivity?.mentorPoints ?? 0}
                 className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600"
               />
             </div>
@@ -237,7 +288,11 @@ export default function ContributionPointAddPage() {
           </div>
 
           <div className="flex justify-end">
-            <Button type="submit" loading={saving}>
+            <Button
+              type="submit"
+              loading={saving}
+              disabled={!selectedMember || !selectedActivity || saving}
+            >
               Add Activity
             </Button>
           </div>

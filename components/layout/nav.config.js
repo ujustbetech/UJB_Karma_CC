@@ -94,7 +94,6 @@ export const NAV_ITEMS = [
     children: [
       { label: "CP Members", href: "/admin/contribution-points" },
       { label: "Add Activity Entry", href: "/admin/contribution-points/add" },
-      { label: "Import Activity", href: "/admin/contribution-points/activity" },
       { label: "Manage Activity", href: "/admin/contribution-points/manage" },
     ],
   },

@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Card from "@/components/ui/Card";
 import Text from "@/components/ui/Text";
 import Button from "@/components/ui/Button";
+import { Pencil, Power, Trash2 } from "lucide-react";
 import {
   deleteCpActivityDefinition,
   fetchCpActivityDefinitions,
@@ -13,8 +14,10 @@ import {
 
 const EMPTY_FORM = {
   activityName: "",
+  activityNo: "",
   category: "R",
   points: "",
+  mentorPoints: "",
   purpose: "",
   automationType: "AUTO",
   status: "ACTIVE",
@@ -28,11 +31,18 @@ export default function ContributionPointActivityManagePage() {
   const [activeTab, setActiveTab] = useState("ALL");
   const [editingId, setEditingId] = useState(null);
   const [search, setSearch] = useState("");
-  const [sortBy, setSortBy] = useState("name");
+  const [sortBy, setSortBy] = useState("activityNo");
   const [form, setForm] = useState(EMPTY_FORM);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const formCardRef = useRef(null);
+
+  const scrollFormIntoView = () => {
+    requestAnimationFrame(() => {
+      formCardRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  };
 
   const loadActivities = async () => {
     setLoading(true);
@@ -70,6 +80,18 @@ export default function ContributionPointActivityManagePage() {
         return true;
       })
       .sort((left, right) => {
+        if (sortBy === "activityNo") {
+          const leftNo = Number(left.activityNo);
+          const rightNo = Number(right.activityNo);
+          const leftIsNumeric = Number.isFinite(leftNo);
+          const rightIsNumeric = Number.isFinite(rightNo);
+
+          if (leftIsNumeric && rightIsNumeric) {
+            return leftNo - rightNo;
+          }
+
+          return String(left.activityNo || "").localeCompare(String(right.activityNo || ""));
+        }
         if (sortBy === "points") return Number(right.points || 0) - Number(left.points || 0);
         if (sortBy === "usage") return Number(right.usageCount || 0) - Number(left.usageCount || 0);
         return String(left.activityName || "").localeCompare(String(right.activityName || ""));
@@ -81,25 +103,34 @@ export default function ContributionPointActivityManagePage() {
     setEditingId(null);
     setShowForm(true);
     setError("");
+    scrollFormIntoView();
   };
 
   const openEditForm = (activity) => {
     setEditingId(activity.id);
     setForm({
       activityName: activity.activityName || "",
+      activityNo: activity.activityNo || "",
       category: activity.category || activity.categories?.[0] || "R",
       points: activity.points || "",
+      mentorPoints: activity.mentorPoints ?? "",
       purpose: activity.purpose || "",
       automationType: activity.automationType || "AUTO",
       status: activity.status || "ACTIVE",
     });
     setShowForm(true);
     setError("");
+    scrollFormIntoView();
   };
 
   const handleSave = async () => {
-    if (!form.activityName.trim() || form.points === "") {
-      setError("Activity name and points are required.");
+    if (!form.activityName.trim() || !form.activityNo.trim() || form.points === "") {
+      setError("Activity name, activity code, and points are required.");
+      return;
+    }
+
+    if (Number(form.points) < 0 || Number(form.mentorPoints || 0) < 0) {
+      setError("Points and mentor points cannot be negative.");
       return;
     }
 
@@ -183,6 +214,7 @@ export default function ContributionPointActivityManagePage() {
           onChange={(event) => setSortBy(event.target.value)}
           className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none focus:border-slate-400"
         >
+          <option value="activityNo">Sort by Activity Code (Ascending)</option>
           <option value="name">Sort by Name</option>
           <option value="points">Sort by Points</option>
           <option value="usage">Sort by Usage</option>
@@ -196,7 +228,7 @@ export default function ContributionPointActivityManagePage() {
       ) : null}
 
       {showForm ? (
-        <Card className="space-y-4 shadow-sm">
+        <Card ref={formCardRef} className="space-y-4 shadow-sm">
           <div className="flex items-center justify-between">
             <Text as="h2" variant="h2">
               {editingId ? "Edit Activity" : "Add Activity"}
@@ -235,12 +267,36 @@ export default function ContributionPointActivityManagePage() {
             </div>
 
             <div className="space-y-2">
+              <Text variant="caption">CP Activity Code</Text>
+              <input
+                type="text"
+                value={form.activityNo}
+                onChange={(event) =>
+                  setForm((current) => ({ ...current, activityNo: event.target.value }))
+                }
+                className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-slate-400"
+              />
+            </div>
+
+            <div className="space-y-2">
               <Text variant="caption">Points</Text>
               <input
                 type="number"
                 value={form.points}
                 onChange={(event) =>
                   setForm((current) => ({ ...current, points: event.target.value }))
+                }
+                className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-slate-400"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Text variant="caption">Mentor Points</Text>
+              <input
+                type="number"
+                value={form.mentorPoints}
+                onChange={(event) =>
+                  setForm((current) => ({ ...current, mentorPoints: event.target.value }))
                 }
                 className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-slate-400"
               />
@@ -308,8 +364,10 @@ export default function ContributionPointActivityManagePage() {
                 <tr className="text-left text-slate-500">
                   <th className="px-4 py-3 font-medium">#</th>
                   <th className="px-4 py-3 font-medium">Activity</th>
+                  <th className="px-4 py-3 font-medium">CP Code</th>
                   <th className="px-4 py-3 font-medium">Cat</th>
-                  <th className="px-4 py-3 font-medium">Points</th>
+                  <th className="px-4 py-3 font-medium">Points (Self)</th>
+                  <th className="px-4 py-3 font-medium">Mentor Points</th>
                   <th className="px-4 py-3 font-medium">Automation</th>
                   <th className="px-4 py-3 font-medium">Status</th>
                   <th className="px-4 py-3 font-medium">Usage</th>
@@ -326,34 +384,46 @@ export default function ContributionPointActivityManagePage() {
                   >
                     <td className="px-4 py-3">{index + 1}</td>
                     <td className="px-4 py-3">{activity.activityName}</td>
+                    <td className="px-4 py-3">{activity.activityNo || "-"}</td>
                     <td className="px-4 py-3">{activity.category}</td>
                     <td className="px-4 py-3">{activity.points}</td>
+                    <td className="px-4 py-3">{activity.mentorPoints ?? 0}</td>
                     <td className="px-4 py-3">{activity.automationType}</td>
                     <td className="px-4 py-3">{activity.status}</td>
                     <td className="px-4 py-3">{activity.usageCount}</td>
                     <td className="px-4 py-3">
-                      <div className="flex flex-wrap gap-2">
+                      <div className="flex items-center gap-2 whitespace-nowrap">
                         <Button
                           variant="outline"
                           size="sm"
                           onClick={() => openEditForm(activity)}
+                          className="inline-flex h-8 w-8 items-center justify-center p-0"
+                          title="Edit"
                         >
-                          Edit
+                          <Pencil className="h-4 w-4" />
                         </Button>
                         <Button
                           size="sm"
                           variant={activity.status === "ACTIVE" ? "secondary" : "primary"}
                           onClick={() => handleToggleStatus(activity)}
+                          className="inline-flex h-8 w-8 items-center justify-center p-0"
+                          title={activity.status === "ACTIVE" ? "Deactivate" : "Activate"}
                         >
-                          {activity.status === "ACTIVE" ? "Deactivate" : "Activate"}
+                          <Power className="h-4 w-4" />
                         </Button>
                         <Button
                           size="sm"
                           variant="danger"
                           onClick={() => handleDelete(activity)}
                           disabled={activity.usageCount > 0}
+                          className="inline-flex h-8 w-8 items-center justify-center p-0"
+                          title={
+                            activity.usageCount > 0
+                              ? "Cannot delete used activity"
+                              : "Delete"
+                          }
                         >
-                          Delete
+                          <Trash2 className="h-4 w-4" />
                         </Button>
                       </div>
                     </td>

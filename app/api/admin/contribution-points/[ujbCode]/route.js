@@ -29,14 +29,18 @@ function validateAdmin(req) {
   return { ok: true };
 }
 
-export async function GET(req, { params }) {
+export async function GET(req, context) {
   const guard = validateAdmin(req);
   if (!guard.ok) {
     return guard.response;
   }
 
   try {
-    const ujbCode = String(params?.ujbCode || "").trim();
+    const params = await context?.params;
+    const rawUjbCode = Array.isArray(params?.ujbCode)
+      ? params.ujbCode[0]
+      : params?.ujbCode;
+    const ujbCode = String(rawUjbCode || "").trim();
     if (!ujbCode) {
       return NextResponse.json({ message: "Missing ujbCode" }, { status: 400 });
     }
